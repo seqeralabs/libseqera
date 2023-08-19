@@ -7,6 +7,6 @@ pluginManagement {
 
 
 rootProject.name = 'libseqera'
+include('lib-mail')
 include('wave-api')
 include('wave-utils')
-include('wave-mail')
