@@ -1,0 +1,78 @@
+name: Libseqera CI
+on:
+  push:
+    branches:
+      - '*'
+      - '!refs/tags/.*'
+    tags-ignore:
+      - '*'
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+
+jobs:
+  build:
+    name: Libseqera
+    if: "github.event == 'push' || github.repository != github.event.pull_request.head.repo.full_name"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        java_version: [17]
+
+    steps:
+      - name: Environment
+        run: env | sort
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Setup Java ${{ matrix.java_version }}
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{matrix.java_version}}
+          distribution: 'adopt'
+          architecture: x64
+          cache: gradle
+
+      - name: Compile
+        run: |
+          ./gradlew compileJava
+        env:
+          GRADLE_OPTS: '-Dorg.gradle.daemon=false'
+
+      - name: Tests
+        if: "!contains(github.event.head_commit.message, '[skip test]')"
+        run: |
+          ./gradlew check
+        env:
+          GRADLE_OPTS: '-Dorg.gradle.daemon=false'
+          GITHUB_TOKEN: ${{ secrets.GH_SEQERA_TOKEN }}
+
+      - name: Release
+        if: "contains(github.event.head_commit.message, '[release]')"
+        run: |
+          bash publish.sh wave-api
+          bash publish.sh wave-utils
+        env:
+          GRADLE_OPTS: '-Dorg.gradle.daemon=false'
+          AWS_ACCESS_KEY_ID: ${{secrets.TOWER_CI_AWS_ACCESS}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.TOWER_CI_AWS_SECRET}}
+          PUBLISH_REPO_URL: "s3://maven.seqera.io/releases"
+
+      - name: Publish tests report
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-reports-jdk-${{ matrix.java_version }}
+          path: |
+            **/build/reports/tests/test
