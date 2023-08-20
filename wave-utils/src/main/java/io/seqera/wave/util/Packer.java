@@ -52,6 +52,8 @@ public class Packer {
      */
     private static final int FILE_MODE = 0100000;
 
+    private static final int DEFAULT_FILE_MODE = 0644;
+
     private Predicate<Path> filter;
 
 
@@ -90,8 +92,10 @@ public class Packer {
     }
 
     private int getMode(Path path) throws IOException {
+        final boolean isUnix = "UnixPath".equals(path.getClass().getSimpleName());
         final int mode = Files.isDirectory(path) ? DIR_MODE : FILE_MODE;
-        return mode + FileUtils.getPermissionsMode(path);
+        final int permissions = isUnix ? FileUtils.getPermissionsMode(path) : DEFAULT_FILE_MODE;
+        return mode + permissions;
     }
 
     protected <T extends OutputStream> T makeGzip(InputStream source, T target) throws IOException {

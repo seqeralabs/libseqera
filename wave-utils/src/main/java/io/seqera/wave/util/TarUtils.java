@@ -32,7 +32,8 @@ import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
 
 /**
- *
+ * Implements TAR utility methods
+ * 
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 public class TarUtils {
@@ -46,7 +47,7 @@ public class TarUtils {
     }
 
     static public List<Path> untar(final InputStream is, final Path outputDir) throws IOException {
-
+        final boolean isUnix = "UnixPath".equals(outputDir.getClass().getSimpleName());
         final List<Path> untaredFiles = new LinkedList<>();
         try ( TarArchiveInputStream tarInputStream = (TarArchiveInputStream) new ArchiveStreamFactory().createArchiveInputStream("tar", is) ) {
             TarArchiveEntry entry;
@@ -55,7 +56,8 @@ public class TarUtils {
                 if (entry.isDirectory()) {
                     if (!Files.exists(outputFile)) {
                         Files.createDirectories(outputFile);
-                        FileUtils.setPermissionsMode( outputFile, entry.getMode() );
+                        if( isUnix )
+                            FileUtils.setPermissionsMode( outputFile, entry.getMode() );
                         FileUtils.setLastModified( outputFile, entry.getLastModifiedDate().getTime() );
                     }
                 }
@@ -65,7 +67,8 @@ public class TarUtils {
                     final OutputStream outputFileStream = Files.newOutputStream(outputFile, CREATE, APPEND);
                     tarInputStream.transferTo(outputFileStream);
                     outputFileStream.close();
-                    FileUtils.setPermissionsMode(outputFile, entry.getMode());
+                    if( isUnix )
+                        FileUtils.setPermissionsMode(outputFile, entry.getMode());
                     FileUtils.setLastModified( outputFile, entry.getLastModifiedDate().getTime() );
                 }
                 untaredFiles.add(outputFile);
