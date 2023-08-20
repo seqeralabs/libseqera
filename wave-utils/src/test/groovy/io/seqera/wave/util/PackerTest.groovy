@@ -126,15 +126,15 @@ class PackerTest extends Specification {
             FileUtils.setPermissionsMode(it, mode)
         }
         and:
-        Set<String> ignorePatterns = new ArrayList<>()
+        List<String> ignorePatterns = new ArrayList<>()
         ignorePatterns.add("*/ignore*");
         ignorePatterns.add("main.??")
         ignorePatterns.add("*/*/exclude*")
         and:
-        def packer = new Packer()
+        def packer = new Packer().withFilter(DockerIgnoreFilter.from(ignorePatterns))
 
         when:
-        def layer = packer.layer(rootPath, ignorePatterns)
+        def layer = packer.layer(rootPath)
 
         then:
         def gzip = layer.location.replace('data:','').decodeBase64()

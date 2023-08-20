@@ -27,8 +27,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 
 import io.seqera.wave.api.ContainerLayer;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
@@ -51,6 +51,8 @@ public class Packer {
      * See {@link TarArchiveEntry#DEFAULT_FILE_MODE}
      */
     private static final int FILE_MODE = 0100000;
+
+    private Predicate<Path> filter;
 
 
     <T extends OutputStream> T makeTar(Path root, List<Path> files, T target) throws IOException {
@@ -101,10 +103,6 @@ public class Packer {
     }
 
     public ContainerLayer layer(Path root) throws IOException {
-        return layer(root, Set.of());
-    }
-
-    public ContainerLayer layer(Path root, Set<String> ignorePatterns) throws IOException {
         final List<Path> files = new ArrayList<>();
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
@@ -115,20 +113,15 @@ public class Packer {
         });
 
         Collections.sort(files);
-        return layer(root, files, ignorePatterns);
+        return layer(root, files);
     }
 
     public ContainerLayer layer(Path root, List<Path> files) throws IOException {
-        return layer(root, files, Set.of());
-    }
-
-    public ContainerLayer layer(Path root, List<Path> files, Set<String> ignorePatterns) throws IOException {
         final Map<String,Path> entries = new HashMap<>();
 
-        DockerIgnorePathFilter pathFilter = new DockerIgnorePathFilter(ignorePatterns);
         for( Path it : files ){
             Path relative = root.relativize(it);
-            if(pathFilter.accept(relative)){
+            if( filter==null || filter.test(relative) ){
                 entries.put(relative.toString(), it);
             }
         }
@@ -146,6 +139,11 @@ public class Packer {
         final String data = "data:" + new String(Base64.getEncoder().encode(gzipBytes));
 
         return new ContainerLayer(data, gzipDigest, gzipSize, tarDigest);
+    }
+
+    public Packer withFilter(Predicate<Path> filter) {
+        this.filter = filter;
+        return this;
     }
 
 }
