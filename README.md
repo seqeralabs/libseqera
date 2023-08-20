@@ -1,6 +1,6 @@
 # libseqera
 
-Seqera Library for modules shared across Java projects
+Library for Java & Groovy modules shared across Seqera projects
 
 ## Get started 
 
