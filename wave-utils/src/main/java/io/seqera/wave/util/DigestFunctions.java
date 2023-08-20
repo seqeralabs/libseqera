@@ -25,15 +25,12 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
 
-import com.google.common.io.BaseEncoding;
-
 /**
  * @author : jorge <jorge.aguilera@seqera.io>
  **/
 public class DigestFunctions {
 
     final private static char PADDING = '_';
-    final private static BaseEncoding BASE32 = BaseEncoding.base32() .withPadChar(PADDING);
 
     private static MessageDigest getSha256() {
         try {
@@ -121,19 +118,6 @@ public class DigestFunctions {
     public static String digest(Path path) throws IOException {
         final byte[] digest = getSha256().digest(Files.readAllBytes(path));
         return "sha256:"+bytesToHex(digest);
-    }
-
-    public static String encodeBase32(String str, boolean padding) {
-        final String result = BASE32.encode(str.getBytes()).toLowerCase();
-        if( padding )
-            return result;
-        final int p = result.indexOf(PADDING);
-        return p == -1 ? result : result.substring(0,p);
-    }
-
-    public static String decodeBase32(String encoded) {
-        final byte[] result = BASE32.decode(encoded.toUpperCase());
-        return new String(result);
     }
 
     public static String randomString(int len) {
