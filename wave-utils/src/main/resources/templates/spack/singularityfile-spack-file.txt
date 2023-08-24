@@ -1,0 +1,8 @@
+Bootstrap: docker
+From: {{spack_runner_image}}
+%files
+    /opt/spack-env /opt/spack-env
+    /opt/software /opt/software
+    /opt/._view /opt/._view
+%post
+    {{add_commands}}
