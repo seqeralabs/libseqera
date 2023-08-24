@@ -109,6 +109,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
      */
     public String format;
 
+    /**
+     * When {@code true} build requests are carried out in dry-run mode.
+     */
+    public Boolean dryRun;
+
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
             final SubmitContainerTokenRequest copy = (SubmitContainerTokenRequest) this.clone();
@@ -146,6 +151,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.buildContext = (BuildContext) opts.get("buildContext");
             if( opts.containsKey("format") )
                 copy.format = (String) opts.get("format");
+            if( opts.containsKey("dryRun") )
+                copy.dryRun = (Boolean) opts.get("dryRun");
             // done
             return copy;
         }
@@ -244,6 +251,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    public SubmitContainerTokenRequest withDryRun(Boolean dryRun) {
+        this.dryRun = dryRun;
+        return this;
+    }
+
     public boolean formatSingularity() {
          return "sif".equals(format);
     }
@@ -268,6 +280,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", freeze=" + freeze +
                 ", buildContext=" + buildContext +
                 ", type=" + format +
+                ", dryRun=" + dryRun +
                 '}';
     }
 }
