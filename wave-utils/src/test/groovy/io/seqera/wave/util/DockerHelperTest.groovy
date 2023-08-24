@@ -510,4 +510,20 @@ class DockerHelperTest extends Specification {
                     apt-get update -y && apt-get install -y procps
                 '''.stripIndent()
     }
+
+    def 'should create singularity content from spack file'(){
+        given:
+        def SPACK_OPTS = [ commands:['USER hola']]
+        expect:
+        DockerHelper.spackFileToSingularityFile(new SpackOpts(SPACK_OPTS)) =='''\
+            Bootstrap: docker
+            From: {{spack_runner_image}}
+            %files
+                /opt/spack-env /opt/spack-env
+                /opt/software /opt/software
+                /opt/._view /opt/._view
+            %post
+                USER hola'''.stripIndent()
+
+    }
 }
