@@ -617,9 +617,9 @@ class DockerHelperTest extends Specification {
                 BootStrap: docker
                 From: mambaorg/micromamba:1.4.9
                 %files
-                    {{wave_context_dir}}/conda.yml /tmp/conda.yml
+                    {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
-                    micromamba install -y -n base -f /tmp/conda.yml \\
+                    micromamba install -y -n base -f /scratch/conda.yml \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba clean -a -y
                 %environment
@@ -634,9 +634,9 @@ class DockerHelperTest extends Specification {
                 BootStrap: docker
                 From: mambaorg/micromamba:1.4.9
                 %files
-                    {{wave_context_dir}}/conda.yml /tmp/conda.yml
+                    {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
-                    micromamba install -y -n base -f /tmp/conda.yml \\
+                    micromamba install -y -n base -f /scratch/conda.yml \\
                     && micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
