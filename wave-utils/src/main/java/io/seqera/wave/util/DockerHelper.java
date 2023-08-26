@@ -251,7 +251,6 @@ public class DockerHelper {
         return binding;
     }
 
-    @Deprecated
     static public String condaPackagesToDockerFile(String packages, List<String> condaChannels, CondaOpts opts) {
         return condaPackagesTemplate0(
                 "/templates/conda/dockerfile-conda-packages.txt",
@@ -260,7 +259,6 @@ public class DockerHelper {
                 opts);
     }
 
-    @Deprecated
     static public String condaPackagesToSingularityFile(String packages, List<String> condaChannels, CondaOpts opts) {
         return condaPackagesTemplate0(
                 "/templates/conda/singularityfile-conda-packages.txt",
