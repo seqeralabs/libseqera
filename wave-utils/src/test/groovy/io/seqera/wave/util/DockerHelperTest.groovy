@@ -518,7 +518,9 @@ class DockerHelperTest extends Specification {
         DockerHelper.spackFileToSingularityFile(new SpackOpts(SPACK_OPTS)) =='''\
             Bootstrap: docker
             From: {{spack_runner_image}}
-            %files
+            stage: final
+            
+            %files from build
                 /opt/spack-env /opt/spack-env
                 /opt/software /opt/software
                 /opt/._view /opt/._view
