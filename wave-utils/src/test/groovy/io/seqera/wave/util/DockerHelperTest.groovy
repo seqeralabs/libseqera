@@ -23,13 +23,47 @@ import spock.lang.Specification
  */
 class DockerHelperTest extends Specification {
 
+    def 'should trim a string' () {
+        expect:
+        DockerHelper.trim0(STR) == EXPECTED
+
+        where:
+        STR         | EXPECTED
+        null        | null
+        "foo"       | "foo"
+        " foo  "    | "foo"
+        "'foo"      | "'foo"
+        '"foo'      | '"foo'
+        and:
+        "'foo'"     | "foo"
+        "''foo''"   | "foo"
+        " 'foo' "   | "foo"
+        " ' foo ' " | " foo "
+        and:
+        '"foo"'     | 'foo'
+        '""foo""'   | 'foo'
+        ' "foo" '   | 'foo'
+    }
+
+    def 'should convert conda packages to list' () {
+        expect:
+        DockerHelper.condaPackagesToList(STR) == EXPECTED
+
+        where:
+        STR                 | EXPECTED
+        "foo"               | ["foo"]
+        "foo bar"           | ["foo", "bar"]
+        "foo 'bar'"         | ["foo", "bar"]
+        "foo    'bar'  "    | ["foo", "bar"]
+    }
+
     def 'should create conda yaml file' () {
         expect:
-        DockerHelper.condaPackagesToCondaYaml('foo=1.0 bar=2.0', null, new CondaOpts())
+        DockerHelper.condaPackagesToCondaYaml("foo=1.0 'bar>=2.0'", null, new CondaOpts())
             ==  '''\
                 dependencies:
                 - foo=1.0
-                - bar=2.0
+                - bar>=2.0
                 '''.stripIndent(true)
 
         and:
@@ -521,9 +555,12 @@ class DockerHelperTest extends Specification {
         PACKAGES            | EXPECTED
          null               | null
         'alpha'             | ['alpha']
+        "'alpha@1.0'"       | ['alpha@1.0']
+        "alpha 'delta@1.0'" | ['alpha', 'delta@1.0']
         'alpha delta'       | ['alpha', 'delta']
         'alpha delta gamma' | ['alpha', 'delta', 'gamma']
         'alpha 1aa'         | ['alpha', '1aa']
+        'alpha    2bb  '    | ['alpha', '2bb']
         and:
         'alpha x=1'         | ['alpha x=1']
         'alpha x=1 delta'   | ['alpha x=1', 'delta']

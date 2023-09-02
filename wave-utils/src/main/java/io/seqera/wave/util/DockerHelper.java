@@ -64,7 +64,21 @@ public class DockerHelper {
     static List<String> condaPackagesToList(String packages) {
         if (packages == null || packages.isEmpty())
             return null;
-        return Arrays.asList(packages.split(" "));
+        return Arrays
+                .stream(packages.split(" "))
+                .filter(it -> !StringUtils.isEmpty(it))
+                .map(it -> trim0(it)).collect(Collectors.toList());
+    }
+
+    protected static String trim0(String value) {
+        if( value==null )
+            return null;
+        value = value.trim();
+        while( value.startsWith("'") && value.endsWith("'") )
+            value = value.substring(1,value.length()-1);
+        while( value.startsWith("\"") && value.endsWith("\"") )
+            value = value.substring(1,value.length()-1);
+        return value;
     }
 
     static String condaPackagesToCondaYaml(String packages, List<String> channels, CondaOpts opts) {
@@ -168,7 +182,8 @@ public class DockerHelper {
     static public List<String> spackPackagesToList(String packages) {
         if( packages==null || packages.isEmpty() )
             return null;
-        final List<String> entries = Arrays.asList(packages.split(" "));
+        final List<String> entries = Arrays
+                .stream(packages.split(" ")).map(it -> trim0(it)).collect(Collectors.toList());
         final List<String> result = new ArrayList<>();
         List<String> current = new ArrayList<>();
         for( String it : entries ) {
