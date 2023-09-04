@@ -11,19 +11,285 @@
 
 package io.seqera.wave.util
 
-import spock.lang.Specification
 
 import java.nio.file.Files
 
 import io.seqera.wave.config.CondaOpts
 import io.seqera.wave.config.SpackOpts
-
+import spock.lang.Specification
 /**
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 class DockerHelperTest extends Specification {
 
+    def 'should trim a string' () {
+        expect:
+        DockerHelper.trim0(STR) == EXPECTED
+
+        where:
+        STR         | EXPECTED
+        null        | null
+        "foo"       | "foo"
+        " foo  "    | "foo"
+        "'foo"      | "'foo"
+        '"foo'      | '"foo'
+        and:
+        "'foo'"     | "foo"
+        "''foo''"   | "foo"
+        " 'foo' "   | "foo"
+        " ' foo ' " | " foo "
+        and:
+        '"foo"'     | 'foo'
+        '""foo""'   | 'foo'
+        ' "foo" '   | 'foo'
+    }
+
+    def 'should convert conda packages to list' () {
+        expect:
+        DockerHelper.condaPackagesToList(STR) == EXPECTED
+
+        where:
+        STR                 | EXPECTED
+        "foo"               | ["foo"]
+        "foo bar"           | ["foo", "bar"]
+        "foo 'bar'"         | ["foo", "bar"]
+        "foo    'bar'  "    | ["foo", "bar"]
+    }
+
+    def 'should create conda yaml file' () {
+        expect:
+        DockerHelper.condaPackagesToCondaYaml("foo=1.0 'bar>=2.0'", null, new CondaOpts())
+            ==  '''\
+                dependencies:
+                - foo=1.0
+                - bar>=2.0
+                '''.stripIndent(true)
+
+        and:
+        DockerHelper.condaPackagesToCondaYaml('foo=1.0 bar=2.0', null, new CondaOpts(basePackages: 'alpha=0.1 omega=0.9'))
+                ==  '''\
+                dependencies:
+                - foo=1.0
+                - bar=2.0
+                - alpha=0.1
+                - omega=0.9
+                '''.stripIndent(true)
+
+        and:
+        DockerHelper.condaPackagesToCondaYaml(null, null, new CondaOpts(basePackages: 'alpha=0.1 omega=0.9'))
+                ==  '''\
+                dependencies:
+                - alpha=0.1
+                - omega=0.9
+                '''.stripIndent(true)
+
+        and:
+        DockerHelper.condaPackagesToCondaYaml('foo=1.0 bar=2.0', ['channel_a','channel_b'], new CondaOpts())
+                ==  '''\
+                channels:
+                - channel_a
+                - channel_b
+                dependencies:
+                - foo=1.0
+                - bar=2.0
+                '''.stripIndent(true)
+
+    }
+
+    def 'should add conda packages to conda file /1' () {
+        given:
+        def condaFile = Files.createTempFile('conda','yaml')
+        condaFile.text = '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts())
+        then:
+        result.text == '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['ch1', 'ch2'], new CondaOpts())
+        then:
+        result.text == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             channels:
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts(basePackages: 'foo=1.0 alpha=1 omega=2'))
+        then:
+        result.text == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             - alpha=1
+             - omega=2
+            '''.stripIndent(true)
+
+
+        when:
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['bioconda'], new CondaOpts(basePackages: 'alpha=1 omega=2'))
+        then:
+        result.text == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             - alpha=1
+             - omega=2
+             channels:
+             - bioconda
+            '''.stripIndent(true)
+
+
+        cleanup:
+        if( condaFile ) Files.delete(condaFile)
+    }
+
+    def 'should add conda packages to conda file /2' () {
+        given:
+        def condaFile = Files.createTempFile('conda', 'yaml')
+        condaFile.text = '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts())
+        then:
+        result.text == '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['ch1', 'ch2'], new CondaOpts())
+        then:
+        result.text == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             channels:
+             - hola
+             - ciao
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts(basePackages: 'foo=1.0 alpha=1 omega=2'))
+        then:
+        result.text == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             - alpha=1
+             - omega=2
+             channels:
+             - hola
+             - ciao
+            '''.stripIndent(true)
+
+
+        when:
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['bioconda'], new CondaOpts(basePackages: 'alpha=1 omega=2'))
+        then:
+        result.text == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             - alpha=1
+             - omega=2
+             channels:
+             - hola
+             - ciao
+             - bioconda
+            '''.stripIndent(true)
+
+
+        cleanup:
+        if (condaFile) Files.delete(condaFile)
+    }
+
+    def 'should add conda packages to conda file /3' () {
+        given:
+        def condaFile = Files.createTempFile('conda', 'yaml')
+        condaFile.text = '''\
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts())
+        then:
+        result.text == '''\
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['ch1', 'ch2'], new CondaOpts())
+        then:
+        result.text == '''\
+             channels:
+             - hola
+             - ciao
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts(basePackages: 'foo=1.0 alpha=1 omega=2'))
+        then:
+        result.text == '''\
+             channels:
+             - hola
+             - ciao
+             dependencies:
+             - foo=1.0
+             - alpha=1
+             - omega=2
+            '''.stripIndent(true)
+
+
+        when:
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['bioconda'], new CondaOpts(basePackages: 'alpha=1 omega=2'))
+        then:
+        result.text == '''\
+             channels:
+             - hola
+             - ciao
+             - bioconda
+             dependencies:
+             - alpha=1
+             - omega=2
+            '''.stripIndent(true)
+
+        cleanup:
+        if (condaFile) Files.delete(condaFile)
+    }
+    
     def 'should create dockerfile content from conda file' () {
         given:
         def CONDA_OPTS = new CondaOpts([basePackages: 'conda-forge::procps-ng'])
@@ -289,9 +555,12 @@ class DockerHelperTest extends Specification {
         PACKAGES            | EXPECTED
          null               | null
         'alpha'             | ['alpha']
+        "'alpha@1.0'"       | ['alpha@1.0']
+        "alpha 'delta@1.0'" | ['alpha', 'delta@1.0']
         'alpha delta'       | ['alpha', 'delta']
         'alpha delta gamma' | ['alpha', 'delta', 'gamma']
         'alpha 1aa'         | ['alpha', '1aa']
+        'alpha    2bb  '    | ['alpha', '2bb']
         and:
         'alpha x=1'         | ['alpha x=1']
         'alpha x=1 delta'   | ['alpha x=1', 'delta']
@@ -385,9 +654,9 @@ class DockerHelperTest extends Specification {
                 BootStrap: docker
                 From: mambaorg/micromamba:1.4.9
                 %files
-                    {{wave_context_dir}}/conda.yml /tmp/conda.yml
+                    {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
-                    micromamba install -y -n base -f /tmp/conda.yml \\
+                    micromamba install -y -n base -f /scratch/conda.yml \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba clean -a -y
                 %environment
@@ -402,9 +671,9 @@ class DockerHelperTest extends Specification {
                 BootStrap: docker
                 From: mambaorg/micromamba:1.4.9
                 %files
-                    {{wave_context_dir}}/conda.yml /tmp/conda.yml
+                    {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
-                    micromamba install -y -n base -f /tmp/conda.yml \\
+                    micromamba install -y -n base -f /scratch/conda.yml \\
                     && micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"

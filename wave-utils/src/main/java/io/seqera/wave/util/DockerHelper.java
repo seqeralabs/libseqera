@@ -30,7 +30,9 @@ import java.util.stream.Collectors;
 import io.seqera.wave.config.CondaOpts;
 import io.seqera.wave.config.SpackOpts;
 import org.apache.commons.lang3.StringUtils;
+import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.representer.Representer;
 
 /**
  * Helper class to create Dockerfile for Conda and Spack package managers
@@ -39,10 +41,149 @@ import org.yaml.snakeyaml.Yaml;
  */
 public class DockerHelper {
 
+    /**
+     * Create a Conda environment file starting from one or more Conda package names
+     *
+     * @param packages
+     *      A string listing or more Conda package names separated with a blank character
+     *      e.g. {@code samtools=1.0 bedtools=2.0}
+     * @param condaChannels
+     *      A list of Conda channels
+     * @param opts
+     *      An instance of {@link CondaOpts} object holding the options for the Conda environment.
+     * @return
+     *      A path to the Conda environment YAML file. The file is automatically deleted then the JVM exit.
+     */
+    static public Path condaFileFromPackages(String packages, List<String> condaChannels, CondaOpts opts) {
+        final String yaml = condaPackagesToCondaYaml(packages, condaChannels, opts);
+        if (yaml == null || yaml.length() == 0)
+            return null;
+        return toYamlTempFile(yaml);
+    }
+
+    static List<String> condaPackagesToList(String packages) {
+        if (packages == null || packages.isEmpty())
+            return null;
+        return Arrays
+                .stream(packages.split(" "))
+                .filter(it -> !StringUtils.isEmpty(it))
+                .map(it -> trim0(it)).collect(Collectors.toList());
+    }
+
+    protected static String trim0(String value) {
+        if( value==null )
+            return null;
+        value = value.trim();
+        while( value.startsWith("'") && value.endsWith("'") )
+            value = value.substring(1,value.length()-1);
+        while( value.startsWith("\"") && value.endsWith("\"") )
+            value = value.substring(1,value.length()-1);
+        return value;
+    }
+
+    static String condaPackagesToCondaYaml(String packages, List<String> channels, CondaOpts opts) {
+        final List<String> base = condaPackagesToList(opts.basePackages);
+        final List<String> custom = condaPackagesToList(packages);
+        if (base == null && custom == null)
+            return null;
+
+        final List<String> deps = new ArrayList<>();
+        if (custom != null)
+            deps.addAll(custom);
+        if (base != null)
+            deps.addAll(base);
+
+        final Map<String, Object> conda = new LinkedHashMap<>();
+        if (channels != null && channels.size() > 0) {
+            conda.put("channels", channels);
+        }
+        conda.put("dependencies", deps);
+
+        return dumpCondaYaml(conda);
+    }
+
+    static private String dumpCondaYaml(Map<String, Object> conda) {
+        DumperOptions dumperOpts = new DumperOptions();
+        dumperOpts.setPrettyFlow(false); // Disable pretty formatting
+        dumperOpts.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK); // Use block style
+        return new Yaml(new Representer(dumperOpts), dumperOpts).dump(conda);
+    }
+
+    /**
+     * Get a Conda environment file from a string path.
+     *
+     * @param condaFile
+     *      A file system path where the Conda environment file is located.
+     * @param channels
+     *      A list of Conda channels. If provided the channels are added to the ones
+     *      specified in the Conda environment files.
+     * @param opts
+     *      An instance of {@link CondaOpts} holding the options for the Conda environment.
+     * @return
+     *      A {@link Path} to the Conda environment file. It can be the same file as specified
+     *      via the condaFile argument or a temporary file if the environment was modified due to
+     *      the channels or options specified. 
+     */
+    public static Path condaFileFromPath(String condaFile, List<String> channels, CondaOpts opts) {
+        if( StringUtils.isEmpty(condaFile) )
+            throw new IllegalArgumentException("Argument 'condaFile' cannot be empty");
+        
+        final Path condaEnvPath = Path.of(condaFile);
+
+        // make sure the file exists
+        if( !Files.exists(condaEnvPath) ) {
+            throw new IllegalArgumentException("The specified Conda environment file cannot be found: " + condaFile);
+        }
+
+        // if there's nothing to be marged just return the conda file path
+        if( StringUtils.isEmpty(opts.basePackages) && channels==null ) {
+            return condaEnvPath;
+        }
+
+        // => parse the conda file yaml, add the base packages to it
+        final Yaml yaml = new Yaml();
+        try {
+            // 1. parse the file
+            Map<String,Object> root = yaml.load(new FileReader(condaFile));
+            // 2. parse the base packages
+            final List<String> base = condaPackagesToList(opts.basePackages);
+            // 3. append to the specs
+            if( base!=null ) {
+                List<String> dependencies0 = (List<String>)root.get("dependencies");
+                if( dependencies0==null ) {
+                    dependencies0 = new ArrayList<>();
+                    root.put("dependencies", dependencies0);
+                }
+                for( String it : base ) {
+                    if( !dependencies0.contains(it) )
+                        dependencies0.add(it);
+                }
+            }
+            // 4. append channels
+            if( channels!=null ) {
+                List<String> channels0 = (List<String>)root.get("channels");
+                if( channels0==null ) {
+                    channels0 = new ArrayList<>();
+                    root.put("channels", channels0);
+                }
+                for( String it : channels ) {
+                    if( !channels0.contains(it) )
+                        channels0.add(it);
+                }
+            }
+            // 5. return it as a new temp file
+            return toYamlTempFile( dumpCondaYaml(root) );
+        }
+        catch (FileNotFoundException e) {
+            throw new IllegalArgumentException("The specified Conda environment file cannot be found: " + condaFile, e);
+        }
+    }
+
     static public List<String> spackPackagesToList(String packages) {
         if( packages==null || packages.isEmpty() )
             return null;
-        final List<String> entries = Arrays.asList(packages.split(" "));
+        final List<String> entries = Arrays
+                .stream(packages.split(" ")).map(it -> trim0(it)).collect(Collectors.toList());
         final List<String> result = new ArrayList<>();
         List<String> current = new ArrayList<>();
         for( String it : entries ) {
@@ -94,19 +235,19 @@ public class DockerHelper {
         final String yaml = spackPackagesToSpackYaml(packages, opts);
         if( yaml==null || yaml.length()==0 )
             return null;
-        return toYamlFile(yaml);
+        return toYamlTempFile(yaml);
     }
 
-    static private Path toYamlFile(String yaml) {
+    static private Path toYamlTempFile(String yaml) {
         try {
-            final File tempFile = File.createTempFile("nf-spack", ".yaml");
+            final File tempFile = File.createTempFile("nf-temp", ".yaml");
             tempFile.deleteOnExit();
             final Path result = tempFile.toPath();
             Files.write(result, yaml.getBytes());
             return result;
         }
         catch (IOException e) {
-            throw new IllegalStateException("Unable to write temporary Spack environment file - Reason: " + e.getMessage(), e);
+            throw new IllegalStateException("Unable to write temporary file - Reason: " + e.getMessage(), e);
         }
     }
 
@@ -250,7 +391,7 @@ public class DockerHelper {
 
         // make sure the file exists
         if( !Files.exists(spackEnvPath) ) {
-            throw new IllegalArgumentException("The specific Spack environment file cannot be found: " + spackFile);
+            throw new IllegalArgumentException("The specified Spack environment file cannot be found: " + spackFile);
         }
 
         // Case C - if not base packages are given just return the spack file as a path
@@ -278,10 +419,10 @@ public class DockerHelper {
             }
             specs.addAll(base);
             // 5. return it as a new temp file
-            return toYamlFile( yaml.dump(data) );
+            return toYamlTempFile( yaml.dump(data) );
         }
         catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("The specific Spack environment file cannot be found: " + spackFile, e);
+            throw new IllegalArgumentException("The specified Spack environment file cannot be found: " + spackFile, e);
         }
     }
 
