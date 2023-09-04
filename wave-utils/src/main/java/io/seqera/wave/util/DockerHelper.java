@@ -260,6 +260,15 @@ public class DockerHelper {
         return renderTemplate0("/templates/spack/dockerfile-spack-file.txt", binding, ignore);
     }
 
+    static public String spackFileToSingularityFile(SpackOpts opts){
+        // create bindings
+        final Map<String,String> binding = spackBinding(opts);
+        // final ignored variables
+        final List<String> ignore = List.of("spack_runner_image");
+        //  return the template
+        return renderTemplate0("/templates/spack/singularityfile-spack-file.txt", binding, ignore);
+    }
+
     static private Map<String,String> spackBinding(SpackOpts opts) {
         final Map<String,String> binding = new HashMap<>();
         binding.put("add_commands", joinCommands(opts.commands));
