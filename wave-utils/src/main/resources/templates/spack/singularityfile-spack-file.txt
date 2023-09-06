@@ -15,4 +15,4 @@ stage: final
     {{add_commands}}
 
 %runscript
-    /opt/spack-env/spack_entrypoint.sh
+    /opt/spack-env/spack_docker_entrypoint.sh

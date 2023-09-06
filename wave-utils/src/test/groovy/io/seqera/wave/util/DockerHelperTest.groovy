@@ -802,6 +802,7 @@ class DockerHelperTest extends Specification {
                 USER hola
             
             %runscript
-                /opt/spack-env/spack_entrypoint.sh'''.stripIndent()
+                /opt/spack-env/spack_docker_entrypoint.sh
+            '''.stripIndent()
     }
 }
