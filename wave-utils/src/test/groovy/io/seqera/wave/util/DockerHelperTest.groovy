@@ -788,21 +788,15 @@ class DockerHelperTest extends Specification {
             Bootstrap: docker
             From: {{spack_runner_image}}
             stage: final
-            
+
             %files from build
                 /opt/spack-env /opt/spack-env
                 /opt/software /opt/software
                 /opt/._view /opt/._view
+                /opt/spack-env/z10_spack_environment.sh /.singularity.d/env/91-environment.sh
             
             %post
-                mkdir -p /.singularity.d/env
-                cp -p /opt/spack-env/z10_spack_environment.sh /.singularity.d/env/91-environment.sh
-                echo "#!/usr/bin/env bash\\n\\nset -ef -o pipefail\\nsource /opt/spack-env/z10_spack_environment.sh\\nexec \\"\\$@\\"" \\
-                    >/opt/spack-env/spack_docker_entrypoint.sh && chmod a+x /opt/spack-env/spack_docker_entrypoint.sh
                 USER hola
-            
-            %runscript
-                /opt/spack-env/spack_docker_entrypoint.sh
             '''.stripIndent()
     }
 }
