@@ -295,6 +295,7 @@ public class DockerHelper {
         final List<String> channels0 = condaChannels!=null ? condaChannels : List.of();
         final String channelsOpts = channels0.stream().map(it -> "-c "+it).collect(Collectors.joining(" "));
         final String image = opts.mambaImage;
+        final boolean singularity = template.contains("/singularityfile");
         final String target = packages.startsWith("http://") || packages.startsWith("https://")
                 ? "-f " + packages
                 : packages;
@@ -302,10 +303,10 @@ public class DockerHelper {
         binding.put("base_image", image);
         binding.put("channel_opts", channelsOpts);
         binding.put("target", target);
-        binding.put("base_packages", mambaInstallBasePackage0(opts.basePackages));
+        binding.put("base_packages", mambaInstallBasePackage0(opts.basePackages,singularity));
 
         final String result = renderTemplate0(template, binding) ;
-        return addCommands(result, opts.commands, template.contains("/singularityfile"));
+        return addCommands(result, opts.commands, singularity);
     }
 
 
@@ -318,13 +319,14 @@ public class DockerHelper {
     }
 
     static protected String condaFileTemplate0(String template, CondaOpts opts) {
+        final boolean singularity = template.contains("/singularityfile");
         // create the binding map
         final Map<String,String> binding = new HashMap<>();
         binding.put("base_image", opts.mambaImage);
-        binding.put("base_packages", mambaInstallBasePackage0(opts.basePackages));
+        binding.put("base_packages", mambaInstallBasePackage0(opts.basePackages,singularity));
 
         final String result = renderTemplate0(template, binding, List.of("wave_context_dir"));
-        return addCommands(result, opts.commands, template.contains("/singularityfile"));
+        return addCommands(result, opts.commands, singularity);
     }
 
     static private String renderTemplate0(String templatePath, Map<String,String> binding) {
@@ -346,10 +348,13 @@ public class DockerHelper {
         }
     }
 
-    private static String mambaInstallBasePackage0(String basePackages) {
-        return !StringUtils.isEmpty(basePackages)
-                ? String.format("&& micromamba install -y -n base %s \\", basePackages)
+    private static String mambaInstallBasePackage0(String basePackages, boolean singularity) {
+        String result = !StringUtils.isEmpty(basePackages)
+                ? String.format("micromamba install -y -n base %s", basePackages)
                 : null;
+        return result==null || singularity
+                ? result
+                : "&& " + result + " \\";
     }
 
     static private String addCommands(String result, List<String> commands, boolean singularity) {

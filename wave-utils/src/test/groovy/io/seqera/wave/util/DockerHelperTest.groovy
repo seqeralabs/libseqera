@@ -292,7 +292,7 @@ class DockerHelperTest extends Specification {
     
     def 'should create dockerfile content from conda file' () {
         given:
-        def CONDA_OPTS = new CondaOpts([basePackages: 'conda-forge::procps-ng'])
+        def CONDA_OPTS = new CondaOpts([basePackages: 'foo::bar'])
 
         expect:
         DockerHelper.condaFileToDockerFile(CONDA_OPTS)== '''\
@@ -300,6 +300,7 @@ class DockerHelperTest extends Specification {
                 COPY --chown=$MAMBA_USER:$MAMBA_USER conda.yml /tmp/conda.yml
                 RUN micromamba install -y -n base -f /tmp/conda.yml \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
+                    && micromamba install -y -n base foo::bar \\
                     && micromamba clean -a -y
                 USER root
                 '''.stripIndent()
@@ -312,6 +313,7 @@ class DockerHelperTest extends Specification {
                 FROM mambaorg/micromamba:1.4.9
                 COPY --chown=$MAMBA_USER:$MAMBA_USER conda.yml /tmp/conda.yml
                 RUN micromamba install -y -n base -f /tmp/conda.yml \\
+                    && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba clean -a -y
                 USER root
                 '''.stripIndent()
@@ -326,8 +328,8 @@ class DockerHelperTest extends Specification {
         DockerHelper.condaPackagesToDockerFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
                 FROM mambaorg/micromamba:1.4.9
                 RUN \\
-                    micromamba install -y -n base -c conda-forge -c defaults \\
-                    bwa=0.7.15 salmon=1.1.1 \\
+                    micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
+                    && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba clean -a -y
                 USER root
                 '''.stripIndent()
@@ -343,8 +345,8 @@ class DockerHelperTest extends Specification {
         DockerHelper.condaPackagesToDockerFile(PACKAGES, CHANNELS, CONDA_OPTS) == '''\
                 FROM mambaorg/micromamba:1.4.9
                 RUN \\
-                    micromamba install -y -n base -c conda-forge -c defaults \\
-                    bwa=0.7.15 salmon=1.1.1 \\
+                    micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
+                    && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba install -y -n base foo::one bar::two \\
                     && micromamba clean -a -y
                 USER root
@@ -360,8 +362,8 @@ class DockerHelperTest extends Specification {
         DockerHelper.condaPackagesToDockerFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
                 FROM mambaorg/micromamba:1.4.9
                 RUN \\
-                    micromamba install -y -n base -c foo -c bar \\
-                    bwa=0.7.15 salmon=1.1.1 \\
+                    micromamba install -y -n base -c foo -c bar bwa=0.7.15 salmon=1.1.1 \\
+                    && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba clean -a -y
                 USER root
                 '''.stripIndent()
@@ -377,8 +379,8 @@ class DockerHelperTest extends Specification {
         DockerHelper.condaPackagesToDockerFile(PACKAGES, CHANNELS, new CondaOpts(CONDA_OPTS)) == '''\
                 FROM my-base:123
                 RUN \\
-                    micromamba install -y -n base -c conda-forge -c defaults \\
-                    bwa=0.7.15 salmon=1.1.1 \\
+                    micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
+                    && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba clean -a -y
                 USER root
                 USER my-user
@@ -397,8 +399,8 @@ class DockerHelperTest extends Specification {
         DockerHelper.condaPackagesToDockerFile(PACKAGES, CHANNELS, new CondaOpts(OPTS)) == '''\
                 FROM my-base:123
                 RUN \\
-                    micromamba install -y -n base -c conda-forge -c defaults \\
-                    -f https://foo.com/some/conda-lock.yml \\
+                    micromamba install -y -n base -c conda-forge -c defaults -f https://foo.com/some/conda-lock.yml \\
+                    && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba clean -a -y
                 USER root
                 USER my-user
@@ -647,7 +649,7 @@ class DockerHelperTest extends Specification {
 
     def 'should create singularity content from conda file' () {
         given:
-        def CONDA_OPTS = new CondaOpts([basePackages: 'conda-forge::procps-ng'])
+        def CONDA_OPTS = new CondaOpts([basePackages: 'foo::bar=1.0'])
 
         expect:
         DockerHelper.condaFileToSingularityFile(CONDA_OPTS)== '''\
@@ -656,9 +658,10 @@ class DockerHelperTest extends Specification {
                 %files
                     {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
-                    micromamba install -y -n base -f /scratch/conda.yml \\
-                    && micromamba install -y -n base conda-forge::procps-ng \\
-                    && micromamba clean -a -y
+                    micromamba install -y -n base -f /scratch/conda.yml
+                    micromamba install -y -n base conda-forge::procps-ng
+                    micromamba install -y -n base foo::bar=1.0
+                    micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
                 '''.stripIndent()
@@ -673,8 +676,9 @@ class DockerHelperTest extends Specification {
                 %files
                     {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
-                    micromamba install -y -n base -f /scratch/conda.yml \\
-                    && micromamba clean -a -y
+                    micromamba install -y -n base -f /scratch/conda.yml
+                    micromamba install -y -n base conda-forge::procps-ng
+                    micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
                 '''.stripIndent()
@@ -690,9 +694,9 @@ class DockerHelperTest extends Specification {
                 BootStrap: docker
                 From: mambaorg/micromamba:1.4.9
                 %post
-                    micromamba install -y -n base -c conda-forge -c defaults \\
-                    bwa=0.7.15 salmon=1.1.1 \\
-                    && micromamba clean -a -y
+                    micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
+                    micromamba install -y -n base conda-forge::procps-ng
+                    micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
                 '''.stripIndent()
@@ -709,10 +713,10 @@ class DockerHelperTest extends Specification {
                 BootStrap: docker
                 From: mambaorg/micromamba:1.4.9
                 %post
-                    micromamba install -y -n base -c conda-forge -c defaults \\
-                    bwa=0.7.15 salmon=1.1.1 \\
-                    && micromamba install -y -n base foo::one bar::two \\
-                    && micromamba clean -a -y
+                    micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
+                    micromamba install -y -n base conda-forge::procps-ng
+                    micromamba install -y -n base foo::one bar::two
+                    micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
                 '''.stripIndent()
@@ -728,9 +732,9 @@ class DockerHelperTest extends Specification {
                 BootStrap: docker
                 From: mambaorg/micromamba:1.4.9
                 %post
-                    micromamba install -y -n base -c foo -c bar \\
-                    bwa=0.7.15 salmon=1.1.1 \\
-                    && micromamba clean -a -y
+                    micromamba install -y -n base -c foo -c bar bwa=0.7.15 salmon=1.1.1
+                    micromamba install -y -n base conda-forge::procps-ng
+                    micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
                 '''.stripIndent()
@@ -747,9 +751,9 @@ class DockerHelperTest extends Specification {
                 BootStrap: docker
                 From: my-base:123
                 %post
-                    micromamba install -y -n base -c conda-forge -c defaults \\
-                    bwa=0.7.15 salmon=1.1.1 \\
-                    && micromamba clean -a -y
+                    micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
+                    micromamba install -y -n base conda-forge::procps-ng
+                    micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
                 %post
@@ -770,9 +774,9 @@ class DockerHelperTest extends Specification {
                 BootStrap: docker
                 From: my-base:123
                 %post
-                    micromamba install -y -n base -c conda-forge -c defaults \\
-                    -f https://foo.com/some/conda-lock.yml \\
-                    && micromamba clean -a -y
+                    micromamba install -y -n base -c conda-forge -c defaults -f https://foo.com/some/conda-lock.yml
+                    micromamba install -y -n base conda-forge::procps-ng
+                    micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
                 %post

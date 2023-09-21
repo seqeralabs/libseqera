@@ -3,8 +3,9 @@ From: {{base_image}}
 %files
     {{wave_context_dir}}/conda.yml /scratch/conda.yml
 %post
-    micromamba install -y -n base -f /scratch/conda.yml \
+    micromamba install -y -n base -f /scratch/conda.yml
+    micromamba install -y -n base conda-forge::procps-ng
     {{base_packages}}
-    && micromamba clean -a -y
+    micromamba clean -a -y
 %environment
     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
