@@ -38,7 +38,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 fingerprint: 'a14',
                 freeze: true,
                 format: 'sif',
-                dryRun: true
+                towerWorkflowId: 'id123'
         )
 
         when:
@@ -60,9 +60,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         copy.fingerprint == req.fingerprint
         copy.freeze == req.freeze
         copy.format == req.format
-        copy.dryRun == req.dryRun
-        and:
-        copy.formatSingularity()
+        copy.towerWorkflowId == req.towerWorkflowId
 
         when:
         def other = req.copyWith(
@@ -82,7 +80,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 fingerprint: 'b14',
                 freeze: false,
                 format: 'foo',
-                dryRun: false
+                towerWorkflowId: 'id123'
         )
         then:
         other.towerAccessToken == 'b1'
@@ -101,9 +99,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.fingerprint == 'b14'
         other.freeze == false
         other.format == 'foo'
-        other.dryRun == false
-        and:
-        !other.formatSingularity()
+        other.towerWorkflowId == 'id123'
     }
 
 }
