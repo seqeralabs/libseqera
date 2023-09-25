@@ -110,6 +110,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
     public String format;
 
     /**
+     * When {@code true} build requests are carried out in dry-run mode.
+     * Id of workflow in tower
+     */
+    public Boolean dryRun;
+    /**
      * Id of workflow in tower
      */
     public String towerWorkflowId;
@@ -248,6 +253,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    public SubmitContainerTokenRequest withDryRun(Boolean dryRun) {
+        this.dryRun = dryRun;
+        return this;
+    }
+
     public boolean formatSingularity() {
         return "sif".equals(format);
     }
@@ -272,6 +282,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", freeze=" + freeze +
                 ", buildContext=" + buildContext +
                 ", type=" + format +
+                ", dryRun=" + dryRun +
                 ", towerWorkflowId=" + towerWorkflowId +
                 '}';
     }
