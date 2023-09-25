@@ -114,10 +114,12 @@ public class SubmitContainerTokenRequest implements Cloneable {
      * Id of workflow in tower
      */
     public Boolean dryRun;
+
     /**
-     * Id of workflow in tower
+     * Id of compute workflow environment in tower
      */
     public String towerWorkflowId;
+
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
             final SubmitContainerTokenRequest copy = (SubmitContainerTokenRequest) this.clone();
@@ -155,6 +157,10 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.buildContext = (BuildContext) opts.get("buildContext");
             if( opts.containsKey("format") )
                 copy.format = (String) opts.get("format");
+            if( opts.containsKey("dryRun") )
+                copy.dryRun = (Boolean) opts.get("dryRun");
+            if( opts.containsKey("towerWorkflowId") )
+                copy.towerWorkflowId = (String) opts.get("towerWorkflowId");
             // done
             return copy;
         }

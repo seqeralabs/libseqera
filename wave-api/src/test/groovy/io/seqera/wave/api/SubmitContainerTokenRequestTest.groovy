@@ -38,7 +38,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 fingerprint: 'a14',
                 freeze: true,
                 format: 'sif',
-                dryRun: false,
+                dryRun: true,
                 towerWorkflowId: 'id123'
         )
 
@@ -82,9 +82,9 @@ class SubmitContainerTokenRequestTest extends Specification {
                 cacheRepository: 'b12',
                 timestamp: 'b13',
                 fingerprint: 'b14',
-                dryRun: false,
                 freeze: false,
                 format: 'foo',
+                dryRun: false,
                 towerWorkflowId: 'id123'
         )
         then:
