@@ -59,34 +59,15 @@ class DockerHelperTest extends Specification {
 
     def 'should create conda yaml file' () {
         expect:
-        DockerHelper.condaPackagesToCondaYaml("foo=1.0 'bar>=2.0'", null, new CondaOpts())
+        DockerHelper.condaPackagesToCondaYaml("foo=1.0 'bar>=2.0'", null)
             ==  '''\
                 dependencies:
                 - foo=1.0
                 - bar>=2.0
-                - conda-forge::procps-ng
                 '''.stripIndent(true)
 
-        and:
-        DockerHelper.condaPackagesToCondaYaml('foo=1.0 bar=2.0', null, new CondaOpts(basePackages: 'alpha=0.1 omega=0.9'))
-                ==  '''\
-                dependencies:
-                - foo=1.0
-                - bar=2.0
-                - alpha=0.1
-                - omega=0.9
-                '''.stripIndent(true)
 
-        and:
-        DockerHelper.condaPackagesToCondaYaml(null, null, new CondaOpts(basePackages: 'alpha=0.1 omega=0.9'))
-                ==  '''\
-                dependencies:
-                - alpha=0.1
-                - omega=0.9
-                '''.stripIndent(true)
-
-        and:
-        DockerHelper.condaPackagesToCondaYaml('foo=1.0 bar=2.0', ['channel_a','channel_b'], new CondaOpts())
+        DockerHelper.condaPackagesToCondaYaml('foo=1.0 bar=2.0', ['channel_a','channel_b'] )
                 ==  '''\
                 channels:
                 - channel_a
@@ -94,7 +75,6 @@ class DockerHelperTest extends Specification {
                 dependencies:
                 - foo=1.0
                 - bar=2.0
-                - conda-forge::procps-ng
                 '''.stripIndent(true)
 
     }
@@ -109,53 +89,25 @@ class DockerHelperTest extends Specification {
         '''.stripIndent(true)
 
         when:
-        def result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts())
+        def result = DockerHelper.condaFileFromPath(condaFile.toString(), null)
         then:
         result.text == '''\
          dependencies:
          - foo=1.0
          - bar=2.0
-         - conda-forge::procps-ng
         '''.stripIndent(true)
 
         when:
-        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['ch1', 'ch2'], new CondaOpts())
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['ch1', 'ch2'])
         then:
         result.text == '''\
              dependencies:
              - foo=1.0
              - bar=2.0
-             - conda-forge::procps-ng
              channels:
              - ch1
              - ch2
             '''.stripIndent(true)
-
-        when:
-        result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts(basePackages: 'foo=1.0 alpha=1 omega=2'))
-        then:
-        result.text == '''\
-             dependencies:
-             - foo=1.0
-             - bar=2.0
-             - alpha=1
-             - omega=2
-            '''.stripIndent(true)
-
-
-        when:
-        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['bioconda'], new CondaOpts(basePackages: 'alpha=1 omega=2'))
-        then:
-        result.text == '''\
-             dependencies:
-             - foo=1.0
-             - bar=2.0
-             - alpha=1
-             - omega=2
-             channels:
-             - bioconda
-            '''.stripIndent(true)
-
 
         cleanup:
         if( condaFile ) Files.delete(condaFile)
@@ -174,63 +126,30 @@ class DockerHelperTest extends Specification {
         '''.stripIndent(true)
 
         when:
-        def result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts())
+        def result = DockerHelper.condaFileFromPath(condaFile.toString(), null)
         then:
         result.text == '''\
          dependencies:
          - foo=1.0
          - bar=2.0
-         - conda-forge::procps-ng
          channels:
          - hola
          - ciao
         '''.stripIndent(true)
 
         when:
-        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['ch1', 'ch2'], new CondaOpts())
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['ch1', 'ch2'])
         then:
         result.text == '''\
              dependencies:
              - foo=1.0
              - bar=2.0
-             - conda-forge::procps-ng
              channels:
              - hola
              - ciao
              - ch1
              - ch2
             '''.stripIndent(true)
-
-        when:
-        result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts(basePackages: 'foo=1.0 alpha=1 omega=2'))
-        then:
-        result.text == '''\
-             dependencies:
-             - foo=1.0
-             - bar=2.0
-             - alpha=1
-             - omega=2
-             channels:
-             - hola
-             - ciao
-            '''.stripIndent(true)
-
-
-        when:
-        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['bioconda'], new CondaOpts(basePackages: 'alpha=1 omega=2'))
-        then:
-        result.text == '''\
-             dependencies:
-             - foo=1.0
-             - bar=2.0
-             - alpha=1
-             - omega=2
-             channels:
-             - hola
-             - ciao
-             - bioconda
-            '''.stripIndent(true)
-
 
         cleanup:
         if (condaFile) Files.delete(condaFile)
@@ -246,7 +165,7 @@ class DockerHelperTest extends Specification {
         '''.stripIndent(true)
 
         when:
-        def result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts(basePackages: null))
+        def result = DockerHelper.condaFileFromPath(condaFile.toString(), null)
         then:
         result.text == '''\
          channels:
@@ -255,7 +174,7 @@ class DockerHelperTest extends Specification {
         '''.stripIndent(true)
 
         when:
-        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['ch1', 'ch2'], new CondaOpts(basePackages: null))
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['ch1', 'ch2'])
         then:
         result.text == '''\
              channels:
@@ -266,30 +185,13 @@ class DockerHelperTest extends Specification {
             '''.stripIndent(true)
 
         when:
-        result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts(basePackages: 'foo=1.0 alpha=1 omega=2'))
-        then:
-        result.text == '''\
-             channels:
-             - hola
-             - ciao
-             dependencies:
-             - foo=1.0
-             - alpha=1
-             - omega=2
-            '''.stripIndent(true)
-
-
-        when:
-        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['bioconda'], new CondaOpts(basePackages: 'alpha=1 omega=2'))
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['bioconda'])
         then:
         result.text == '''\
              channels:
              - hola
              - ciao
              - bioconda
-             dependencies:
-             - alpha=1
-             - omega=2
             '''.stripIndent(true)
 
         cleanup:

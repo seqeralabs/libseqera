@@ -49,16 +49,19 @@ public class DockerHelper {
      *      e.g. {@code samtools=1.0 bedtools=2.0}
      * @param condaChannels
      *      A list of Conda channels
-     * @param opts
-     *      An instance of {@link CondaOpts} object holding the options for the Conda environment.
      * @return
      *      A path to the Conda environment YAML file. The file is automatically deleted then the JVM exit.
      */
-    static public Path condaFileFromPackages(String packages, List<String> condaChannels, CondaOpts opts) {
-        final String yaml = condaPackagesToCondaYaml(packages, condaChannels, opts);
-        if (yaml == null || yaml.length() == 0)
+    static public Path condaFileFromPackages(String packages, List<String> condaChannels) {
+        final String yaml = condaPackagesToCondaYaml(packages, condaChannels);
+        if (yaml == null || yaml.isEmpty())
             return null;
         return toYamlTempFile(yaml);
+    }
+
+    @Deprecated
+    static public Path condaFileFromPackages(String packages, List<String> condaChannels, CondaOpts opts) {
+        return condaFileFromPackages(packages, condaChannels);
     }
 
     static List<String> condaPackagesToList(String packages) {
@@ -81,17 +84,19 @@ public class DockerHelper {
         return value;
     }
 
+    @Deprecated
     static String condaPackagesToCondaYaml(String packages, List<String> channels, CondaOpts opts) {
-        final List<String> base = condaPackagesToList(opts.basePackages);
+        return condaPackagesToCondaYaml(packages, channels);
+    }
+
+    static String condaPackagesToCondaYaml(String packages, List<String> channels) {
         final List<String> custom = condaPackagesToList(packages);
-        if (base == null && custom == null)
+        if (custom == null)
             return null;
 
         final List<String> deps = new ArrayList<>();
         if (custom != null)
             deps.addAll(custom);
-        if (base != null)
-            deps.addAll(base);
 
         final Map<String, Object> conda = new LinkedHashMap<>();
         if (channels != null && channels.size() > 0) {
@@ -117,14 +122,12 @@ public class DockerHelper {
      * @param channels
      *      A list of Conda channels. If provided the channels are added to the ones
      *      specified in the Conda environment files.
-     * @param opts
-     *      An instance of {@link CondaOpts} holding the options for the Conda environment.
      * @return
      *      A {@link Path} to the Conda environment file. It can be the same file as specified
      *      via the condaFile argument or a temporary file if the environment was modified due to
      *      the channels or options specified. 
      */
-    public static Path condaFileFromPath(String condaFile, List<String> channels, CondaOpts opts) {
+    public static Path condaFileFromPath(String condaFile, List<String> channels) {
         if( StringUtils.isEmpty(condaFile) )
             throw new IllegalArgumentException("Argument 'condaFile' cannot be empty");
         
@@ -135,8 +138,8 @@ public class DockerHelper {
             throw new IllegalArgumentException("The specified Conda environment file cannot be found: " + condaFile);
         }
 
-        // if there's nothing to be marged just return the conda file path
-        if( StringUtils.isEmpty(opts.basePackages) && channels==null ) {
+        // if there's nothing to be merged just return the conda file path
+        if( channels==null ) {
             return condaEnvPath;
         }
 
@@ -145,21 +148,7 @@ public class DockerHelper {
         try {
             // 1. parse the file
             Map<String,Object> root = yaml.load(new FileReader(condaFile));
-            // 2. parse the base packages
-            final List<String> base = condaPackagesToList(opts.basePackages);
-            // 3. append to the specs
-            if( base!=null ) {
-                List<String> dependencies0 = (List<String>)root.get("dependencies");
-                if( dependencies0==null ) {
-                    dependencies0 = new ArrayList<>();
-                    root.put("dependencies", dependencies0);
-                }
-                for( String it : base ) {
-                    if( !dependencies0.contains(it) )
-                        dependencies0.add(it);
-                }
-            }
-            // 4. append channels
+            // 2. append channels
             if( channels!=null ) {
                 List<String> channels0 = (List<String>)root.get("channels");
                 if( channels0==null ) {
@@ -171,12 +160,17 @@ public class DockerHelper {
                         channels0.add(it);
                 }
             }
-            // 5. return it as a new temp file
+            // 3. return it as a new temp file
             return toYamlTempFile( dumpCondaYaml(root) );
         }
         catch (FileNotFoundException e) {
             throw new IllegalArgumentException("The specified Conda environment file cannot be found: " + condaFile, e);
         }
+    }
+
+    @Deprecated
+    public static Path condaFileFromPath(String condaFile, List<String> channels, CondaOpts opts) {
+        return condaFileFromPath(condaFile, channels);
     }
 
     static public List<String> spackPackagesToList(String packages) {
@@ -233,7 +227,7 @@ public class DockerHelper {
 
     static public Path spackPackagesToSpackFile(String packages, SpackOpts opts) {
         final String yaml = spackPackagesToSpackYaml(packages, opts);
-        if( yaml==null || yaml.length()==0 )
+        if( yaml==null || yaml.isEmpty())
             return null;
         return toYamlTempFile(yaml);
     }
