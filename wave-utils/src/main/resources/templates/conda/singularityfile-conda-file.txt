@@ -4,7 +4,6 @@ From: {{base_image}}
     {{wave_context_dir}}/conda.yml /scratch/conda.yml
 %post
     micromamba install -y -n base -f /scratch/conda.yml
-    micromamba install -y -n base conda-forge::procps-ng
     {{base_packages}}
     micromamba clean -a -y
 %environment

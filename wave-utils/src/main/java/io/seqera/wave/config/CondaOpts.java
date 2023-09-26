@@ -21,6 +21,7 @@ import java.util.Map;
  */
 public class CondaOpts {
     final public static String DEFAULT_MAMBA_IMAGE = "mambaorg/micromamba:1.4.9";
+    final public static String DEFAULT_PACKAGES = "conda-forge::procps-ng";
 
     public String mambaImage;
     public List<String> commands;
@@ -32,7 +33,7 @@ public class CondaOpts {
     public CondaOpts(Map<String,?> opts) {
         this.mambaImage = opts.containsKey("mambaImage") ? opts.get("mambaImage").toString(): DEFAULT_MAMBA_IMAGE;
         this.commands = opts.containsKey("commands") ? (List<String>)opts.get("commands") : null;
-        this.basePackages = (String)opts.get("basePackages");
+        this.basePackages = opts.containsKey("basePackages") ? (String)opts.get("basePackages") : DEFAULT_PACKAGES;
     }
 
     public CondaOpts withMambaImage(String value) {

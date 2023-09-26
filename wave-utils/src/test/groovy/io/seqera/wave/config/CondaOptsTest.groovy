@@ -24,7 +24,7 @@ class CondaOptsTest extends Specification {
         def opts = new CondaOpts([:])
         then:
         opts.mambaImage == CondaOpts.DEFAULT_MAMBA_IMAGE
-        !opts.basePackages
+        opts.basePackages == 'conda-forge::procps-ng'
         !opts.commands
 
         when:
@@ -37,5 +37,14 @@ class CondaOptsTest extends Specification {
         opts.mambaImage == 'foo:latest'
         opts.basePackages == 'some::more-package'
         opts.commands == ['this','that']
+
+
+        when:
+        opts = new CondaOpts([
+                basePackages: null
+        ])
+        then:
+        !opts.basePackages
+        !opts.commands
     }
 }

@@ -64,6 +64,7 @@ class DockerHelperTest extends Specification {
                 dependencies:
                 - foo=1.0
                 - bar>=2.0
+                - conda-forge::procps-ng
                 '''.stripIndent(true)
 
         and:
@@ -93,6 +94,7 @@ class DockerHelperTest extends Specification {
                 dependencies:
                 - foo=1.0
                 - bar=2.0
+                - conda-forge::procps-ng
                 '''.stripIndent(true)
 
     }
@@ -113,6 +115,7 @@ class DockerHelperTest extends Specification {
          dependencies:
          - foo=1.0
          - bar=2.0
+         - conda-forge::procps-ng
         '''.stripIndent(true)
 
         when:
@@ -122,6 +125,7 @@ class DockerHelperTest extends Specification {
              dependencies:
              - foo=1.0
              - bar=2.0
+             - conda-forge::procps-ng
              channels:
              - ch1
              - ch2
@@ -176,6 +180,7 @@ class DockerHelperTest extends Specification {
          dependencies:
          - foo=1.0
          - bar=2.0
+         - conda-forge::procps-ng
          channels:
          - hola
          - ciao
@@ -188,6 +193,7 @@ class DockerHelperTest extends Specification {
              dependencies:
              - foo=1.0
              - bar=2.0
+             - conda-forge::procps-ng
              channels:
              - hola
              - ciao
@@ -240,7 +246,7 @@ class DockerHelperTest extends Specification {
         '''.stripIndent(true)
 
         when:
-        def result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts())
+        def result = DockerHelper.condaFileFromPath(condaFile.toString(), null, new CondaOpts(basePackages: null))
         then:
         result.text == '''\
          channels:
@@ -249,7 +255,7 @@ class DockerHelperTest extends Specification {
         '''.stripIndent(true)
 
         when:
-        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['ch1', 'ch2'], new CondaOpts())
+        result = DockerHelper.condaFileFromPath(condaFile.toString(), ['ch1', 'ch2'], new CondaOpts(basePackages: null))
         then:
         result.text == '''\
              channels:
@@ -299,7 +305,6 @@ class DockerHelperTest extends Specification {
                 FROM mambaorg/micromamba:1.4.9
                 COPY --chown=$MAMBA_USER:$MAMBA_USER conda.yml /tmp/conda.yml
                 RUN micromamba install -y -n base -f /tmp/conda.yml \\
-                    && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba install -y -n base foo::bar \\
                     && micromamba clean -a -y
                 USER root
@@ -346,7 +351,6 @@ class DockerHelperTest extends Specification {
                 FROM mambaorg/micromamba:1.4.9
                 RUN \\
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
-                    && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba install -y -n base foo::one bar::two \\
                     && micromamba clean -a -y
                 USER root
@@ -659,7 +663,6 @@ class DockerHelperTest extends Specification {
                     {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
                     micromamba install -y -n base -f /scratch/conda.yml
-                    micromamba install -y -n base conda-forge::procps-ng
                     micromamba install -y -n base foo::bar=1.0
                     micromamba clean -a -y
                 %environment
@@ -714,7 +717,6 @@ class DockerHelperTest extends Specification {
                 From: mambaorg/micromamba:1.4.9
                 %post
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
-                    micromamba install -y -n base conda-forge::procps-ng
                     micromamba install -y -n base foo::one bar::two
                     micromamba clean -a -y
                 %environment
