@@ -20,7 +20,7 @@ import java.util.Map;
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 public class CondaOpts {
-    final public static String DEFAULT_MAMBA_IMAGE = "mambaorg/micromamba:1.4.9";
+    final public static String DEFAULT_MAMBA_IMAGE = "mambaorg/micromamba:1.5.1";
     final public static String DEFAULT_PACKAGES = "conda-forge::procps-ng";
 
     public String mambaImage;
