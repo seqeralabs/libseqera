@@ -25,7 +25,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
     /**
      * Tower access token required to enable the service
      */
-   public  String towerAccessToken;
+    public  String towerAccessToken;
 
     /**
      * Tower refresh token used to refresh the authorization
@@ -111,8 +111,14 @@ public class SubmitContainerTokenRequest implements Cloneable {
 
     /**
      * When {@code true} build requests are carried out in dry-run mode.
+     * Id of workflow in tower
      */
     public Boolean dryRun;
+
+    /**
+     * Id of compute workflow environment in tower
+     */
+    public String towerWorkflowId;
 
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
@@ -153,6 +159,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.format = (String) opts.get("format");
             if( opts.containsKey("dryRun") )
                 copy.dryRun = (Boolean) opts.get("dryRun");
+            if( opts.containsKey("towerWorkflowId") )
+                copy.towerWorkflowId = (String) opts.get("towerWorkflowId");
             // done
             return copy;
         }
@@ -257,7 +265,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
     }
 
     public boolean formatSingularity() {
-         return "sif".equals(format);
+        return "sif".equals(format);
     }
 
     @Override
@@ -281,7 +289,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", buildContext=" + buildContext +
                 ", type=" + format +
                 ", dryRun=" + dryRun +
+                ", towerWorkflowId=" + towerWorkflowId +
                 '}';
     }
 }
-
