@@ -50,4 +50,13 @@ public class CondaOpts {
         this.basePackages = value;
         return this;
     }
+
+    @Override
+    public String toString() {
+        return String.format("CondaOpts(mambaImage=%s; basePackages=%s, commands=%s)",
+                mambaImage,
+                basePackages,
+                commands != null ? String.join(",", commands) : "null"
+                );
+    }
 }

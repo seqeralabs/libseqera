@@ -48,4 +48,12 @@ public class SpackOpts {
         this.basePackages = value;
         return this;
     }
+
+    @Override
+    public String toString() {
+        return String.format("SpackOpts(basePackages=%s, commands=%s)",
+                String.valueOf(basePackages),
+                commands != null ? String.join(",", commands) : "null"
+        );
+    }
 }

@@ -12,6 +12,7 @@
 package io.seqera.wave.config
 
 import spock.lang.Specification
+import spock.lang.Unroll
 
 /**
  *
@@ -46,5 +47,16 @@ class CondaOptsTest extends Specification {
         then:
         !opts.basePackages
         !opts.commands
+    }
+
+    @Unroll
+    def "should convert to string" () {
+        expect:
+        new CondaOpts(OPTS).toString() == EXPECTED
+        where:
+        OPTS    | EXPECTED
+        [:]     | "CondaOpts(mambaImage=mambaorg/micromamba:1.5.1; basePackages=conda-forge::procps-ng, commands=null)"
+        [mambaImage: 'foo:1.0', basePackages: 'this that', commands: ['X','Y']] \
+                | "CondaOpts(mambaImage=foo:1.0; basePackages=this that, commands=X,Y)"
     }
 }

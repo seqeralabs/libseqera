@@ -12,6 +12,7 @@
 package io.seqera.wave.config
 
 import spock.lang.Specification
+import spock.lang.Unroll
 
 /**
  *
@@ -38,5 +39,16 @@ class SpackOptsTest extends Specification {
         opts.commands == ['run','--this','--that']
         and:
         opts.basePackages == 'foo bar'
+    }
+
+    @Unroll
+    def "should convert to string" () {
+        expect:
+        new SpackOpts(OPTS).toString() == EXPECTED
+        where:
+        OPTS    | EXPECTED
+        [:]     | "SpackOpts(basePackages=null, commands=null)"
+        [basePackages: 'this that', commands: ['X','Y']] \
+                | "SpackOpts(basePackages=this that, commands=X,Y)"
     }
 }
