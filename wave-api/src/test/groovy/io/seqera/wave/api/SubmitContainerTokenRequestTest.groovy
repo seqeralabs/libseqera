@@ -39,7 +39,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 freeze: true,
                 format: 'sif',
                 dryRun: true,
-                towerWorkflowId: 'id123'
+                workflowId: 'id123'
         )
 
         when:
@@ -62,7 +62,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         copy.freeze == req.freeze
         copy.format == req.format
         copy.dryRun == req.dryRun
-        copy.towerWorkflowId == req.towerWorkflowId
+        copy.workflowId == req.workflowId
         and:
         copy.formatSingularity()
 
@@ -85,7 +85,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 freeze: false,
                 format: 'foo',
                 dryRun: false,
-                towerWorkflowId: 'id123'
+                workflowId: 'id123'
         )
         then:
         other.towerAccessToken == 'b1'
@@ -105,7 +105,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.freeze == false
         other.format == 'foo'
         other.dryRun == false
-        other.towerWorkflowId == 'id123'
+        other.workflowId == 'id123'
         and:
         !other.formatSingularity()
     }
