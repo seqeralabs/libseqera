@@ -3,7 +3,7 @@ plugins {
     id 'io.seqera.groovy-library-conventions'
     // Micronaut minimal lib
     // https://micronaut-projects.github.io/micronaut-gradle-plugin/latest/
-    id "io.micronaut.minimal.library" version '4.1.0'
+    id 'io.micronaut.minimal.library' version '4.1.0'
 }
 
 repositories {
@@ -14,17 +14,17 @@ repositories {
 }
 
 dependencies {
-    compileOnly "io.micronaut:micronaut-inject-groovy"
-    implementation "io.seqera:wave-utils:0.5.0"
-    implementation "ch.qos.logback:logback-classic:1.2.11"
+    compileOnly 'io.micronaut:micronaut-inject-groovy'
+    implementation 'io.seqera:wave-utils:0.5.0'
+    implementation 'ch.qos.logback:logback-classic:1.2.11'
     implementation 'org.apache.groovy:groovy:4.0.15'
     implementation 'org.apache.groovy:groovy-nio:4.0.15'
     implementation 'org.apache.groovy:groovy-templates:4.0.15'
-    api "com.sun.mail:javax.mail:1.6.2"
-    api "org.jsoup:jsoup:1.15.3"
-    implementation("io.micronaut:micronaut-runtime")
+    api 'com.sun.mail:javax.mail:1.6.2'
+    api 'org.jsoup:jsoup:1.15.3'
+    implementation 'io.micronaut:micronaut-runtime'
 
-    testImplementation "org.subethamail:subethasmtp:3.1.7"
+    testImplementation 'org.subethamail:subethasmtp:3.1.7'
 }
 
 group = 'io.seqera'
