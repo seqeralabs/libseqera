@@ -168,4 +168,35 @@ class PackerTest extends Specification {
         cleanup:
         folder?.deleteDir()
     }
+
+    def 'should create tar with file name longer than 100 chars'(){
+        given:
+        def LAST_MODIFIED = FileTime.fromMillis(1_000_000_000_000)
+        def folder = Files.createTempDirectory('test')
+        and:
+        def rootPath = folder.resolve('bundle'); Files.createDirectories(rootPath)
+        Files.createDirectories(rootPath.resolve('this/that'))
+        and:
+        Files.write(rootPath.resolve('this/that/this_is_a_file_name_that_is_exactly_100_characters_long_and_contains_letters_numbers_and_underscores.txt'), "Ciao".bytes)
+        and:
+        def files = new ArrayList<Path>()
+        files << rootPath.resolve('this')
+        files << rootPath.resolve('this/that')
+        files << rootPath.resolve('this/that/this_is_a_file_name_that_is_exactly_100_characters_long_and_contains_letters_numbers_and_underscores.txt')
+        and:
+        for( Path it : files ) {
+            Files.setLastModifiedTime(it, LAST_MODIFIED)
+            final mode = Files.isDirectory(it) ? 0700 : 0600
+            FileUtils.setPermissionsMode(it, mode)
+        }
+        and:
+        def packer = new Packer()
+
+        when:
+        def buffer = new ByteArrayOutputStream()
+        packer.makeTar(rootPath, files, buffer)
+
+        then:
+        noExceptionThrown()
+    }
 }
