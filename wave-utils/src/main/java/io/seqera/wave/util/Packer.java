@@ -74,6 +74,7 @@ public class Packer {
 
     <T extends OutputStream> T makeTar(Map<String,Path> entries, T target) throws IOException  {
         try ( final TarArchiveOutputStream archive = new TarArchiveOutputStream(target) ) {
+            archive.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
             final TreeSet<String> sorted = new TreeSet<>(entries.keySet());
             for (String name : sorted ) {
                 final Path targetPath = entries.get(name);
