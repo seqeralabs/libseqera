@@ -210,7 +210,7 @@ class DockerHelperTest extends Specification {
 
         expect:
         DockerHelper.condaFileToDockerFile(CONDA_OPTS)== '''\
-                FROM mambaorg/micromamba:1.5.1
+                FROM mambaorg/micromamba:1.5.5
                 COPY --chown=$MAMBA_USER:$MAMBA_USER conda.yml /tmp/conda.yml
                 RUN micromamba install -y -n base -f /tmp/conda.yml \\
                     && micromamba install -y -n base foo::bar \\
@@ -224,7 +224,7 @@ class DockerHelperTest extends Specification {
 
         expect:
         DockerHelper.condaFileToDockerFile(new CondaOpts([:]))== '''\
-                FROM mambaorg/micromamba:1.5.1
+                FROM mambaorg/micromamba:1.5.5
                 COPY --chown=$MAMBA_USER:$MAMBA_USER conda.yml /tmp/conda.yml
                 RUN micromamba install -y -n base -f /tmp/conda.yml \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
@@ -241,7 +241,7 @@ class DockerHelperTest extends Specification {
         def CHANNELS = ['conda-forge', 'defaults']
         expect:
         DockerHelper.condaPackagesToDockerFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
-                FROM mambaorg/micromamba:1.5.1
+                FROM mambaorg/micromamba:1.5.5
                 RUN \\
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
@@ -259,7 +259,7 @@ class DockerHelperTest extends Specification {
 
         expect:
         DockerHelper.condaPackagesToDockerFile(PACKAGES, CHANNELS, CONDA_OPTS) == '''\
-                FROM mambaorg/micromamba:1.5.1
+                FROM mambaorg/micromamba:1.5.5
                 RUN \\
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base foo::one bar::two \\
@@ -276,7 +276,7 @@ class DockerHelperTest extends Specification {
 
         expect:
         DockerHelper.condaPackagesToDockerFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
-                FROM mambaorg/micromamba:1.5.1
+                FROM mambaorg/micromamba:1.5.5
                 RUN \\
                     micromamba install -y -n base -c foo -c bar bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
@@ -573,7 +573,7 @@ class DockerHelperTest extends Specification {
         expect:
         DockerHelper.condaFileToSingularityFile(CONDA_OPTS)== '''\
                 BootStrap: docker
-                From: mambaorg/micromamba:1.5.1
+                From: mambaorg/micromamba:1.5.5
                 %files
                     {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
@@ -590,7 +590,7 @@ class DockerHelperTest extends Specification {
         expect:
         DockerHelper.condaFileToSingularityFile(new CondaOpts([:]))== '''\
                 BootStrap: docker
-                From: mambaorg/micromamba:1.5.1
+                From: mambaorg/micromamba:1.5.5
                 %files
                     {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
@@ -610,7 +610,7 @@ class DockerHelperTest extends Specification {
         expect:
         DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
                 BootStrap: docker
-                From: mambaorg/micromamba:1.5.1
+                From: mambaorg/micromamba:1.5.5
                 %post
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base conda-forge::procps-ng
@@ -629,7 +629,7 @@ class DockerHelperTest extends Specification {
         expect:
         DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, CONDA_OPTS) == '''\
                 BootStrap: docker
-                From: mambaorg/micromamba:1.5.1
+                From: mambaorg/micromamba:1.5.5
                 %post
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base foo::one bar::two
@@ -647,7 +647,7 @@ class DockerHelperTest extends Specification {
         expect:
         DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
                 BootStrap: docker
-                From: mambaorg/micromamba:1.5.1
+                From: mambaorg/micromamba:1.5.5
                 %post
                     micromamba install -y -n base -c foo -c bar bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base conda-forge::procps-ng
