@@ -31,9 +31,11 @@ class TarUtilsTest extends Specification {
         given:
         def folder = Files.createTempDirectory('test')
         def source = folder.resolve('source')
-        def target = folder.resolve('target')
+        def target1 = folder.resolve('target1')
+        def target2 = folder.resolve('target2')
         Files.createDirectory(source)
-        Files.createDirectory(target)
+        Files.createDirectory(target1)
+        Files.createDirectory(target2)
         and:
         source.resolve('foo.txt').text  = 'Foo'
         source.resolve('bar.txt').text  = 'Bar'
@@ -47,22 +49,46 @@ class TarUtilsTest extends Specification {
         FileUtils.setLastModified(source.resolve('bar.txt'), 1_691_200_000)
         FileUtils.setLastModified(source.resolve('subdir/baz.txt'), 1_691_300_000)
 
+        /*
+         * should tar file without preserving file timestamps
+         */
         when:
         def layer = new Packer().layer(source)
         and:
         def gzip = layer.location.replace('data:','').decodeBase64()
         and:
-        TarUtils.untarGzip( new ByteArrayInputStream(gzip), target)
+        TarUtils.untarGzip( new ByteArrayInputStream(gzip), target1)
         then:
-        target.resolve('foo.txt').text == 'Foo'
-        target.resolve('bar.txt').text == 'Bar'
-        target.resolve('subdir/baz.txt').text == 'Baz'
+        target1.resolve('foo.txt').text == 'Foo'
+        target1.resolve('bar.txt').text == 'Bar'
+        target1.resolve('subdir/baz.txt').text == 'Baz'
         and:
-        FileUtils.getPermissions(target.resolve('bar.txt')) == 'rwx------'
+        FileUtils.getPermissions(target1.resolve('bar.txt')) == 'rwx------'
         and:
-        Files.getLastModifiedTime(target.resolve('foo.txt')).toMillis() == 1_691_100_000
-        Files.getLastModifiedTime(target.resolve('bar.txt')).toMillis() == 1_691_200_000
-        Files.getLastModifiedTime(target.resolve('subdir/baz.txt')).toMillis() ==  1_691_300_000
+        Files.getLastModifiedTime(target1.resolve('foo.txt')).toMillis() == 0
+        Files.getLastModifiedTime(target1.resolve('bar.txt')).toMillis() == 0
+        Files.getLastModifiedTime(target1.resolve('subdir/baz.txt')).toMillis() == 0
+
+
+        /*
+        * should tar file preserving file timestamps
+        */
+        when:
+        layer = new Packer(preserveFileTimestamp: true).layer(source)
+        and:
+        gzip = layer.location.replace('data:','').decodeBase64()
+        and:
+        TarUtils.untarGzip( new ByteArrayInputStream(gzip), target2)
+        then:
+        target2.resolve('foo.txt').text == 'Foo'
+        target2.resolve('bar.txt').text == 'Bar'
+        target2.resolve('subdir/baz.txt').text == 'Baz'
+        and:
+        FileUtils.getPermissions(target2.resolve('bar.txt')) == 'rwx------'
+        and:
+        Files.getLastModifiedTime(target2.resolve('foo.txt')).toMillis() == 1_691_100_000
+        Files.getLastModifiedTime(target2.resolve('bar.txt')).toMillis() == 1_691_200_000
+        Files.getLastModifiedTime(target2.resolve('subdir/baz.txt')).toMillis() == 1_691_300_000
 
         cleanup:
         folder?.deleteDir()

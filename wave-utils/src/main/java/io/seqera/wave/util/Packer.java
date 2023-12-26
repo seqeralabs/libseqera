@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -60,8 +61,23 @@ public class Packer {
 
     private static final int DEFAULT_FILE_MODE = 0644;
 
+    /**
+     * Timestamp when {@link #preserveFileTimestamp} is false
+     */
+    private static final FileTime ZERO = FileTime.fromMillis(0);
+
+    /**
+     * Whenever the timestamp of compressed files should be preserved.
+     * By default, it is used the timestamp ZERO to guarantee reproducible builds
+     */
+    private boolean preserveFileTimestamp;
+
     private Predicate<Path> filter;
 
+    public Packer withPreserveFileTimestamp(boolean value) {
+        this.preserveFileTimestamp = value;
+        return this;
+    }
 
     <T extends OutputStream> T makeTar(Path root, List<Path> files, T target) throws IOException {
         final HashMap<String,Path>entries = new HashMap<>();
@@ -78,12 +94,14 @@ public class Packer {
             final TreeSet<String> sorted = new TreeSet<>(entries.keySet());
             for (String name : sorted ) {
                 final Path targetPath = entries.get(name);
-                final BasicFileAttributes attrs = Files.readAttributes(targetPath, BasicFileAttributes.class);
+                final FileTime ftime = preserveFileTimestamp
+                        ? Files.readAttributes(targetPath, BasicFileAttributes.class).lastModifiedTime()
+                        : ZERO;
                 final TarArchiveEntry entry = new TarArchiveEntry(targetPath, name);
                 entry.setIds(0,0);
                 entry.setGroupName("root");
                 entry.setUserName("root");
-                entry.setModTime(attrs.lastModifiedTime());
+                entry.setModTime(ftime);
                 entry.setMode(getMode(targetPath));
                 // file permissions
                 archive.putArchiveEntry(entry);

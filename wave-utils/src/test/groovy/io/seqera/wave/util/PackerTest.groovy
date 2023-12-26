@@ -29,8 +29,75 @@ import spock.lang.Specification
  */
 class PackerTest extends Specification {
 
-
     def 'should tar bundle' () {
+        given:
+        def folder = Files.createTempDirectory('test')
+        and:
+        def result = folder.resolve('result')
+        def result2 = folder.resolve('result2')
+        and:
+        def rootPath = folder.resolve('bundle'); Files.createDirectories(rootPath)
+        rootPath.resolve('main.nf').text = "I'm the main file"
+        Files.createDirectories(rootPath.resolve('this/that'))
+        and:
+        Files.write(rootPath.resolve('this/hola.txt'), "Hola".bytes)
+        Files.write(rootPath.resolve('this/hello.txt'), "Hello".bytes)
+        Files.write(rootPath.resolve('this/that/ciao.txt'), "Ciao".bytes)
+        and:
+        def files = new ArrayList<Path>()
+        files << rootPath.resolve('this')
+        files << rootPath.resolve('this/hola.txt')
+        files << rootPath.resolve('this/hello.txt')
+        files << rootPath.resolve('this/that')
+        files << rootPath.resolve('this/that/ciao.txt')
+        files << rootPath.resolve('main.nf')
+        and:
+        for( Path it : files ) {
+            final mode = Files.isDirectory(it) ? 0700 : 0600
+            FileUtils.setPermissionsMode(it, mode)
+        }
+        and:
+        def packer = new Packer()
+
+        when:
+        def buffer = new ByteArrayOutputStream()
+        packer.makeTar(rootPath, files, buffer)
+        and:
+        TarUtils.untar( new ByteArrayInputStream(buffer.toByteArray()), result )
+        then:
+        result.resolve('main.nf').text == rootPath.resolve('main.nf').text
+        result.resolve('this/hola.txt').text == rootPath.resolve('this/hola.txt').text
+        result.resolve('this/hello.txt').text == rootPath.resolve('this/hello.txt').text
+        result.resolve('this/that/ciao.txt').text == rootPath.resolve('this/that/ciao.txt').text
+        and:
+        FileUtils.getPermissionsMode(result.resolve('main.nf')) == 0600
+        FileUtils.getPermissionsMode(result.resolve('this/hola.txt')) == 0600
+        FileUtils.getPermissionsMode(result.resolve('this/that')) == 0700
+        and:
+        Files.getLastModifiedTime(result.resolve('main.nf')).toMillis() == 0
+
+        when:
+        def layer = packer.layer(rootPath, files)
+        then:
+        layer.tarDigest == 'sha256:f556b94e9b6f5f72b86e44833614b465df9f65cb4210e3f4416292dca1618360'
+        layer.gzipDigest == 'sha256:e58685a82452a11faa926843e7861c94bdb93e2c8f098b5c5354ec9b6fee2b68'
+        layer.gzipSize == 251
+        and:
+        def gzip = layer.location.replace('data:','').decodeBase64()
+        TarUtils.untarGzip( new ByteArrayInputStream(gzip), result2)
+        and:
+        result2.resolve('main.nf').text == rootPath.resolve('main.nf').text
+        result2.resolve('this/hola.txt').text == rootPath.resolve('this/hola.txt').text
+        result2.resolve('this/hello.txt').text == rootPath.resolve('this/hello.txt').text
+        result2.resolve('this/that/ciao.txt').text == rootPath.resolve('this/that/ciao.txt').text
+        and:
+        Files.getLastModifiedTime(result2.resolve('main.nf')).toMillis() == 0
+
+        cleanup:
+        folder?.deleteDir()
+    }
+
+    def 'should tar bundle and preserve timestamps' () {
         given:
         def LAST_MODIFIED = FileTime.fromMillis(1_000_000_000_000)
         def folder = Files.createTempDirectory('test')
@@ -60,7 +127,7 @@ class PackerTest extends Specification {
             FileUtils.setPermissionsMode(it, mode)
         }
         and:
-        def packer = new Packer()
+        def packer = new Packer(preserveFileTimestamp: true)
 
         when:
         def buffer = new ByteArrayOutputStream()
