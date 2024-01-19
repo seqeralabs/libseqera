@@ -347,6 +347,11 @@ class DockerHelperTest extends Specification {
                 COPY --from=builder /opt/software /opt/software
                 COPY --from=builder /opt/._view /opt/._view
                 
+                # General utility OS packages
+                RUN apt update -y && \
+                    apt install -y procps libgomp1 && \
+                    rm -rf /var/lib/apt/lists/*
+                
                 # Entrypoint for Singularity
                 RUN mkdir -p /.singularity.d/env && \\
                     cp -p /opt/spack-env/z10_spack_environment.sh /.singularity.d/env/91-environment.sh
@@ -380,6 +385,11 @@ class DockerHelperTest extends Specification {
                 COPY --from=builder /opt/software /opt/software
                 COPY --from=builder /opt/._view /opt/._view
                 
+                # General utility OS packages
+                RUN apt update -y && \
+                    apt install -y procps libgomp1 && \
+                    rm -rf /var/lib/apt/lists/*
+                
                 # Entrypoint for Singularity
                 RUN mkdir -p /.singularity.d/env && \\
                     cp -p /opt/spack-env/z10_spack_environment.sh /.singularity.d/env/91-environment.sh
@@ -404,6 +414,11 @@ class DockerHelperTest extends Specification {
                 COPY --from=builder /opt/spack-env /opt/spack-env
                 COPY --from=builder /opt/software /opt/software
                 COPY --from=builder /opt/._view /opt/._view
+                
+                # General utility OS packages
+                RUN apt update -y && \
+                    apt install -y procps libgomp1 && \
+                    rm -rf /var/lib/apt/lists/*
                 
                 # Entrypoint for Singularity
                 RUN mkdir -p /.singularity.d/env && \\
@@ -717,6 +732,9 @@ class DockerHelperTest extends Specification {
                 /opt/spack-env/z10_spack_environment.sh /.singularity.d/env/91-environment.sh
             
             %post
+                apt update -y
+                apt install -y procps libgomp1
+                rm -rf /var/lib/apt/lists/*
                 USER hola
             '''.stripIndent()
     }

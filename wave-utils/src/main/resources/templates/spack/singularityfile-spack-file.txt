@@ -9,4 +9,7 @@ stage: final
     /opt/spack-env/z10_spack_environment.sh /.singularity.d/env/91-environment.sh
 
 %post
+    apt update -y
+    apt install -y procps libgomp1
+    rm -rf /var/lib/apt/lists/*
     {{add_commands}}
