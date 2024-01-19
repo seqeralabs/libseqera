@@ -348,10 +348,10 @@ class DockerHelperTest extends Specification {
                 COPY --from=builder /opt/._view /opt/._view
                 
                 # General utility OS packages
-                RUN apt update -y && \
-                    apt install -y procps libgomp1 && \
+                RUN apt update -y && \\
+                    apt install -y procps libgomp1 && \\
                     rm -rf /var/lib/apt/lists/*
-                
+
                 # Entrypoint for Singularity
                 RUN mkdir -p /.singularity.d/env && \\
                     cp -p /opt/spack-env/z10_spack_environment.sh /.singularity.d/env/91-environment.sh
@@ -386,8 +386,8 @@ class DockerHelperTest extends Specification {
                 COPY --from=builder /opt/._view /opt/._view
                 
                 # General utility OS packages
-                RUN apt update -y && \
-                    apt install -y procps libgomp1 && \
+                RUN apt update -y && \\
+                    apt install -y procps libgomp1 && \\
                     rm -rf /var/lib/apt/lists/*
                 
                 # Entrypoint for Singularity
@@ -416,8 +416,8 @@ class DockerHelperTest extends Specification {
                 COPY --from=builder /opt/._view /opt/._view
                 
                 # General utility OS packages
-                RUN apt update -y && \
-                    apt install -y procps libgomp1 && \
+                RUN apt update -y && \\
+                    apt install -y procps libgomp1 && \\
                     rm -rf /var/lib/apt/lists/*
                 
                 # Entrypoint for Singularity
