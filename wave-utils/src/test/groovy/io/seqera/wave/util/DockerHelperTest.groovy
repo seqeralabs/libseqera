@@ -63,6 +63,18 @@ class DockerHelperTest extends Specification {
         "foo    'bar'  "    | ["foo", "bar"]
     }
 
+    def 'should convert pip packages to list' () {
+        expect:
+        DockerHelper.pipPackagesToList(STR) == EXPECTED
+
+        where:
+        STR                 | EXPECTED
+        "foo"               | ["foo"]
+        "foo bar"           | ["foo", "bar"]
+        "foo 'bar'"         | ["foo", "bar"]
+        "foo    'bar'  "    | ["foo", "bar"]
+    }
+
     def 'should create conda yaml file' () {
         expect:
         DockerHelper.condaPackagesToCondaYaml("foo=1.0 'bar>=2.0'", null)
@@ -719,5 +731,56 @@ class DockerHelperTest extends Specification {
             %post
                 USER hola
             '''.stripIndent()
+    }
+
+    def 'should map pip packages to conda yaml' () {
+        expect:
+        DockerHelper.pipPackagesToCondaYaml('numpy panda matplotlib', ['defaults']) ==
+                '''\
+                channels:
+                - defaults
+                dependencies:
+                - pip
+                - pip:
+                  - numpy
+                  - panda
+                  - matplotlib
+                '''.stripIndent()
+
+        and:
+        DockerHelper.pipPackagesToCondaYaml(null, ['foo']) == null
+        DockerHelper.pipPackagesToCondaYaml('  ', ['foo']) == null
+    }
+
+    def 'should create conda file for pip packages' () {
+        when:
+        def file = DockerHelper.condaFileFromPipPackages('numpy')
+        then:
+        file.text ==
+                '''\
+                channels:
+                - defaults
+                dependencies:
+                - pip
+                - pip:
+                  - numpy
+                '''.stripIndent()
+
+        when:
+        def file2 = DockerHelper.condaFileFromPipPackages('numpy panda matplotlib', ['this', 'that'])
+        then:
+        file2.text ==
+                '''\
+                channels:
+                - this
+                - that
+                dependencies:
+                - pip
+                - pip:
+                  - numpy
+                  - panda
+                  - matplotlib
+                '''.stripIndent()
+
     }
 }

@@ -47,6 +47,38 @@ import org.yaml.snakeyaml.representer.Representer;
  */
 public class DockerHelper {
 
+
+    static public Path condaFileFromPipPackages(String packages) {
+        return condaFileFromPipPackages(packages, List.of("defaults"));
+    }
+
+    static public Path condaFileFromPipPackages(String packages, List<String> channels) {
+        final String yaml = pipPackagesToCondaYaml(packages, channels);
+        if (yaml == null || yaml.isEmpty())
+            return null;
+        return toYamlTempFile(yaml);
+    }
+
+    static String pipPackagesToCondaYaml(String packages, List<String> channels) {
+        if( packages==null || StringUtils.isBlank(packages) )
+            return null;
+
+        Map<String,Object> pipPackages = new HashMap<>();
+        pipPackages.put("pip", pipPackagesToList(packages));
+
+        final List deps = new ArrayList(10);
+        deps.add("pip");
+        deps.add(pipPackages);
+
+        final Map<String, Object> conda = new LinkedHashMap<>();
+        if (channels != null && channels.size() > 0) {
+            conda.put("channels", channels);
+        }
+        conda.put("dependencies", deps);
+
+        return dumpCondaYaml(conda);
+    }
+
     /**
      * Create a Conda environment file starting from one or more Conda package names
      *
@@ -78,6 +110,11 @@ public class DockerHelper {
                 .filter(it -> !StringUtils.isEmpty(it))
                 .map(it -> trim0(it)).collect(Collectors.toList());
     }
+
+    static List<String> pipPackagesToList(String packages) {
+        return condaPackagesToList(packages);
+    }
+
 
     protected static String trim0(String value) {
         if( value==null )
