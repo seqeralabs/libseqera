@@ -28,10 +28,31 @@ import static io.seqera.wave.api.ObjectUtils.isEmpty;
  */
 public class ContainerLayer {
 
+    /**
+     * the layer location, it can be either `http:` or `https:` prefixed URI
+     * or a `data:` pseudo-protocol followed by a base64 encoded tar gzipped layer payload
+     */
     public String location;
+
+    /**
+     * The layer gzip sha256 checksum
+     */
     public String gzipDigest;
+
+    /**
+     * The layer gzip size in bytes
+     */
     public Integer gzipSize;
+
+    /**
+     * The layer tar sha256 checksum
+     */
     public String tarDigest;
+
+    /**
+     * When {@code this layer is not added in the final config fingerprint}
+     */
+    public Boolean skipHashing;
 
     public ContainerLayer() {}
 
