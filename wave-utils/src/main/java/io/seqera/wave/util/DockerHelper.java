@@ -47,38 +47,6 @@ import org.yaml.snakeyaml.representer.Representer;
  */
 public class DockerHelper {
 
-
-    static public Path condaFileFromPipPackages(String packages) {
-        return condaFileFromPipPackages(packages, List.of("defaults"));
-    }
-
-    static public Path condaFileFromPipPackages(String packages, List<String> channels) {
-        final String yaml = pipPackagesToCondaYaml(packages, channels);
-        if (yaml == null || yaml.isEmpty())
-            return null;
-        return toYamlTempFile(yaml);
-    }
-
-    static String pipPackagesToCondaYaml(String packages, List<String> channels) {
-        if( packages==null || StringUtils.isBlank(packages) )
-            return null;
-
-        Map<String,Object> pipPackages = new HashMap<>();
-        pipPackages.put("pip", pipPackagesToList(packages));
-
-        final List deps = new ArrayList(10);
-        deps.add("pip");
-        deps.add(pipPackages);
-
-        final Map<String, Object> conda = new LinkedHashMap<>();
-        if (channels != null && channels.size() > 0) {
-            conda.put("channels", channels);
-        }
-        conda.put("dependencies", deps);
-
-        return dumpCondaYaml(conda);
-    }
-
     /**
      * Create a Conda environment file starting from one or more Conda package names
      *
@@ -95,11 +63,6 @@ public class DockerHelper {
         if (yaml == null || yaml.isEmpty())
             return null;
         return toYamlTempFile(yaml);
-    }
-
-    @Deprecated
-    static public Path condaFileFromPackages(String packages, List<String> condaChannels, CondaOpts opts) {
-        return condaFileFromPackages(packages, condaChannels);
     }
 
     static List<String> condaPackagesToList(String packages) {
@@ -127,26 +90,39 @@ public class DockerHelper {
         return value;
     }
 
-    @Deprecated
-    static String condaPackagesToCondaYaml(String packages, List<String> channels, CondaOpts opts) {
-        return condaPackagesToCondaYaml(packages, channels);
-    }
-
     static String condaPackagesToCondaYaml(String packages, List<String> channels) {
-        final List<String> custom = condaPackagesToList(packages);
-        if (custom == null)
+        if( packages==null || packages.isBlank() )
             return null;
 
-        final List<String> deps = new ArrayList<>();
-        if (custom != null)
-            deps.addAll(custom);
+        final List<Object> deps = new ArrayList<>(20);
+        final List<Object> condaPackages = new ArrayList<>(10);
+        final List<Object> pipPackages = new ArrayList<>(10);
+        // split conda package by pip prefixed packages
+        for( String it : condaPackagesToList(packages) ) {
+            if( it.startsWith("pip:") )
+                pipPackages.add(it.substring(4));
+            else
+                condaPackages.add(it);
+        }
 
+        // add all conda packages
+        if( !condaPackages.isEmpty() )
+            deps.addAll(condaPackages);
+
+        // add all pip packages
+        if( !pipPackages.isEmpty() ) {
+            deps.add("pip");
+            deps.add(Map.of("pip", pipPackages));
+        }
+
+        // add the channels
         final Map<String, Object> conda = new LinkedHashMap<>();
-        if (channels != null && channels.size() > 0) {
+        if (channels != null && !channels.isEmpty() ) {
             conda.put("channels", channels);
         }
-        conda.put("dependencies", deps);
 
+        // assemble the final yaml
+        conda.put("dependencies", deps);
         return dumpCondaYaml(conda);
     }
 
@@ -209,11 +185,6 @@ public class DockerHelper {
         catch (FileNotFoundException e) {
             throw new IllegalArgumentException("The specified Conda environment file cannot be found: " + condaFile, e);
         }
-    }
-
-    @Deprecated
-    public static Path condaFileFromPath(String condaFile, List<String> channels, CondaOpts opts) {
-        return condaFileFromPath(condaFile, channels);
     }
 
     static public List<String> spackPackagesToList(String packages) {

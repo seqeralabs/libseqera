@@ -95,6 +95,38 @@ class DockerHelperTest extends Specification {
                 - bar=2.0
                 '''.stripIndent(true)
 
+        DockerHelper.condaPackagesToCondaYaml('foo=1.0 bar=2.0 pip:numpy pip:pandas', ['channel_a','channel_b'] )
+                ==  '''\
+                channels:
+                - channel_a
+                - channel_b
+                dependencies:
+                - foo=1.0
+                - bar=2.0
+                - pip
+                - pip:
+                  - numpy
+                  - pandas
+                '''.stripIndent(true)
+    }
+
+    def 'should map pip packages to conda yaml' () {
+        expect:
+        DockerHelper.condaPackagesToCondaYaml('pip:numpy pip:panda pip:matplotlib', ['defaults']) ==
+                '''\
+                channels:
+                - defaults
+                dependencies:
+                - pip
+                - pip:
+                  - numpy
+                  - panda
+                  - matplotlib
+                '''.stripIndent()
+
+        and:
+        DockerHelper.condaPackagesToCondaYaml(null, ['foo']) == null
+        DockerHelper.condaPackagesToCondaYaml('  ', ['foo']) == null
     }
 
     def 'should add conda packages to conda file /1' () {
@@ -733,54 +765,4 @@ class DockerHelperTest extends Specification {
             '''.stripIndent()
     }
 
-    def 'should map pip packages to conda yaml' () {
-        expect:
-        DockerHelper.pipPackagesToCondaYaml('numpy panda matplotlib', ['defaults']) ==
-                '''\
-                channels:
-                - defaults
-                dependencies:
-                - pip
-                - pip:
-                  - numpy
-                  - panda
-                  - matplotlib
-                '''.stripIndent()
-
-        and:
-        DockerHelper.pipPackagesToCondaYaml(null, ['foo']) == null
-        DockerHelper.pipPackagesToCondaYaml('  ', ['foo']) == null
-    }
-
-    def 'should create conda file for pip packages' () {
-        when:
-        def file = DockerHelper.condaFileFromPipPackages('numpy')
-        then:
-        file.text ==
-                '''\
-                channels:
-                - defaults
-                dependencies:
-                - pip
-                - pip:
-                  - numpy
-                '''.stripIndent()
-
-        when:
-        def file2 = DockerHelper.condaFileFromPipPackages('numpy panda matplotlib', ['this', 'that'])
-        then:
-        file2.text ==
-                '''\
-                channels:
-                - this
-                - that
-                dependencies:
-                - pip
-                - pip:
-                  - numpy
-                  - panda
-                  - matplotlib
-                '''.stripIndent()
-
-    }
 }
