@@ -37,7 +37,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 containerConfig: new ContainerConfig(entrypoint: ['this','that']),
                 condaFile: 'a8',
                 spackFile: 'a9',
-                spackArch: 'a10',
+                spackTarget: 'a10',
                 containerPlatform: 'a11',
                 buildRepository: 'a12',
                 cacheRepository: 'a13',
@@ -61,7 +61,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         copy.containerConfig == req.containerConfig
         copy.condaFile == req.condaFile
         copy.spackFile == req.spackFile
-        copy.spackArch == req.spackArch
+        copy.spackTarget == req.spackTarget
         copy.containerPlatform == req.containerPlatform
         copy.buildRepository == req.buildRepository
         copy.cacheRepository == req.cacheRepository
@@ -85,7 +85,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 containerConfig: new ContainerConfig(entrypoint: ['foo','bar']),
                 condaFile: 'b8',
                 spackFile: 'b9',
-                spackArch: 'b10',
+                spackTarget: 'b10',
                 containerPlatform: 'b11',
                 buildRepository: 'b12',
                 cacheRepository: 'b13',
@@ -106,7 +106,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.containerConfig == new ContainerConfig(entrypoint: ['foo','bar'])
         other.condaFile == 'b8'
         other.spackFile == 'b9'
-        other.spackArch == 'b10'
+        other.spackTarget == 'b10'
         other.containerPlatform == 'b11'
         other.buildRepository == 'b12'
         other.cacheRepository == 'b13'
