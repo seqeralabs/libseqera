@@ -42,4 +42,12 @@ class ObjectUtils {
     static public boolean isEmpty(Map value) {
         return value==null || value.size()==0;
     }
+
+    public static String toString(List list) {
+        if( list==null )
+            return null;
+        if( list.isEmpty() )
+            return "(empty)";
+        return String.join(",",list);
+    }
 }

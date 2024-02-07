@@ -19,6 +19,7 @@ package io.seqera.wave.api;
 
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -126,6 +127,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
      */
     public String workflowId;
 
+    /**
+     * One or more container should be included in upstream container request
+     */
+    public List<String> containerIncludes;
+
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
             final SubmitContainerTokenRequest copy = (SubmitContainerTokenRequest) this.clone();
@@ -167,6 +173,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.dryRun = (Boolean) opts.get("dryRun");
             if( opts.containsKey("workflowId") )
                 copy.workflowId = (String) opts.get("workflowId");
+            if( opts.containsKey("containerIncludes"))
+                copy.containerIncludes = (List<String>) opts.get("containerIncludes");
             // done
             return copy;
         }
@@ -270,6 +278,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    public SubmitContainerTokenRequest withContainerIncludes(List<String> containerIncludes) {
+        this.containerIncludes = containerIncludes;
+        return this;
+    }
+
     public boolean formatSingularity() {
         return "sif".equals(format);
     }
@@ -296,6 +309,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", type=" + format +
                 ", dryRun=" + dryRun +
                 ", workflowId=" + workflowId +
+                ", containerIncludes=" + ObjectUtils.toString(containerIncludes) +
                 '}';
     }
 }
