@@ -132,6 +132,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
      */
     public List<String> containerIncludes;
 
+    /**
+     * Image name of the container
+     */
+    public String imageName;
+
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
             final SubmitContainerTokenRequest copy = (SubmitContainerTokenRequest) this.clone();
@@ -175,6 +180,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.workflowId = (String) opts.get("workflowId");
             if( opts.containsKey("containerIncludes"))
                 copy.containerIncludes = (List<String>) opts.get("containerIncludes");
+            if(opts.containsKey("imageName"))
+                copy.imageName = (String) opts.get("imageName");
             // done
             return copy;
         }
@@ -283,6 +290,16 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    public SubmitContainerTokenRequest withWorkflowId(String workflowId) {
+        this.workflowId = workflowId;
+        return this;
+    }
+
+    public SubmitContainerTokenRequest withImageName(String imageName) {
+        this.imageName = imageName;
+        return this;
+    }
+
     public boolean formatSingularity() {
         return "sif".equals(format);
     }
@@ -310,6 +327,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", dryRun=" + dryRun +
                 ", workflowId=" + workflowId +
                 ", containerIncludes=" + ObjectUtils.toString(containerIncludes) +
+                ", imageName=" + imageName +
                 '}';
     }
 }

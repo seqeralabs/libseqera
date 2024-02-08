@@ -94,7 +94,8 @@ class SubmitContainerTokenRequestTest extends Specification {
                 format: 'foo',
                 dryRun: false,
                 workflowId: 'id123',
-                containerIncludes: ['other:image']
+                containerIncludes: ['other:image'],
+                imageName: 'testImageName'
         )
         then:
         other.towerAccessToken == 'b1'
@@ -116,6 +117,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.dryRun == false
         other.workflowId == 'id123'
         other.containerIncludes == ['other:image']
+        other.imageName== 'testImageName'
         and:
         !other.formatSingularity()
     }
