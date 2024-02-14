@@ -41,12 +41,12 @@ class FusionVersionTest extends Specification {
         new FusionVersion('2.1.33','arm64')     | 'https://foo.com/v2.1.33-arm64.json'
         new FusionVersion('2.1.3a','arm64')     | 'https://foo.com/v2.1.3a-arm64.json'
         new FusionVersion('2.1.3.a','arm64')    | 'https://foo.com/v2.1.3.a-arm64.json'
-        new FusionVersion('2.2.8','amd64')      | 'https://foo.com//releases/pkg/2/2/8/fusion-amd64.tar.gz'
-        new FusionVersion('2.2.8','arm64')      | 'https://foo.com//releases/pkg/2/2/8/fusion-arm64.tar.gz'
-        new FusionVersion('2.2','arm64')        | 'https://foo.com//releases/pkg/2/2/fusion-arm64.tar.gz'
-        new FusionVersion('2.22','arm64')       | 'https://foo.com//releases/pkg/2/22/fusion-arm64.tar.gz'
-        new FusionVersion('2.2.33','arm64')     | 'https://foo.com//releases/pkg/2/2/33/fusion-arm64.tar.gz'
-        new FusionVersion('2.2.8.a','arm64')    | 'https://foo.com//releases/pkg/2/2/8/a/fusion-arm64.tar.gz'
+        new FusionVersion('2.2.8','amd64')      | 'https://foo.com/releases/pkg/2/2/8/fusion-amd64.tar.gz'
+        new FusionVersion('2.2.8','arm64')      | 'https://foo.com/releases/pkg/2/2/8/fusion-arm64.tar.gz'
+        new FusionVersion('2.2','arm64')        | 'https://foo.com/releases/pkg/2/2/fusion-arm64.tar.gz'
+        new FusionVersion('2.22','arm64')       | 'https://foo.com/releases/pkg/2/22/fusion-arm64.tar.gz'
+        new FusionVersion('2.2.33','arm64')     | 'https://foo.com/releases/pkg/2/2/33/fusion-arm64.tar.gz'
+        new FusionVersion('2.2.8.a','arm64')    | 'https://foo.com/releases/pkg/2/2/8/a/fusion-arm64.tar.gz'
     }
 
 }
