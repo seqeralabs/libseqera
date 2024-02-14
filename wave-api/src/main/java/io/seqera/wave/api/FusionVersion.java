@@ -30,8 +30,8 @@ import static io.seqera.wave.api.ObjectUtils.isEmpty;
  */
 public class FusionVersion {
 
-    static final private Pattern VERSION_REGEX = Pattern.compile(".*/v(\\d+(?:\\.\\w+)*)-(\\w*)\\.json$");
-    static final private Pattern VERSION_REGEX2 = Pattern.compile(".*/pkg\\/(\\d+(?:\\/\\w+)+)\\/fusion-(\\w+)\\.tar\\.gz$");
+    static final private Pattern VERSION_JSON = Pattern.compile(".*/v(\\d+(?:\\.\\w+)*)-(\\w*)\\.json$");
+    static final private Pattern VERSION_TARGZ = Pattern.compile(".*/pkg\\/(\\d+(?:\\/\\w+)+)\\/fusion-(\\w+)\\.tar\\.gz$");
 
     final public String number;
 
@@ -58,11 +58,11 @@ public class FusionVersion {
     static FusionVersion from(String uri) {
         if( isEmpty(uri) )
             return null;
-        final Matcher matcher = VERSION_REGEX.matcher(uri);
+        final Matcher matcher = VERSION_JSON.matcher(uri);
         if( matcher.matches() ) {
             return new FusionVersion(matcher.group(1), matcher.group(2));
         }
-        final Matcher matcher2 = VERSION_REGEX2.matcher(uri);
+        final Matcher matcher2 = VERSION_TARGZ.matcher(uri);
         if( matcher2.matches() ) {
             return new FusionVersion(matcher2.group(1).replaceAll("/", "."), matcher2.group(2));
         }
