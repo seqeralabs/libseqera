@@ -58,13 +58,14 @@ public class FusionVersion {
     static FusionVersion from(String uri) {
         if( isEmpty(uri) )
             return null;
-        final Matcher matcher = VERSION_JSON.matcher(uri);
-        if( matcher.matches() ) {
-            return new FusionVersion(matcher.group(1), matcher.group(2));
+        final Matcher matcher_json = VERSION_JSON.matcher(uri);
+        if( matcher_json.matches() ) {
+            return new FusionVersion(matcher_json.group(1), matcher_json.group(2));
         }
-        final Matcher matcher2 = VERSION_TARGZ.matcher(uri);
-        if( matcher2.matches() ) {
-            return new FusionVersion(matcher2.group(1).replaceAll("/", "."), matcher2.group(2));
+        final Matcher matcher_targz = VERSION_TARGZ.matcher(uri);
+        if( matcher_targz.matches() ) {
+            return new FusionVersion(matcher_targz.group(1).replaceAll("/", "."),
+                    matcher_targz.group(2));
         }
         return null;
     }
