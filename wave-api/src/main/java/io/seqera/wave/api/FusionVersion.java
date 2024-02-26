@@ -33,9 +33,9 @@ public class FusionVersion {
     static final private Pattern VERSION_JSON = Pattern.compile(".*/v(\\d+(?:\\.\\w+)*)-(\\w*)\\.json$");
     static final private Pattern VERSION_TARGZ = Pattern.compile(".*/pkg\\/(\\d+(?:\\/\\w+)+)\\/fusion-(\\w+)\\.tar\\.gz$");
 
-    final public String number;
+    public String number;
 
-    final public String arch;
+    public String arch;
 
     FusionVersion(String number, String arch) {
         this.number = number;
@@ -68,5 +68,9 @@ public class FusionVersion {
                     matcher_targz.group(2));
         }
         return null;
+    }
+
+    /* required by jackson deserialization - do not remove */
+    public FusionVersion() {
     }
 }
