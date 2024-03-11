@@ -4,3 +4,4 @@ RUN \
     {{base_packages}}
     && micromamba clean -a -y
 USER root
+ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"

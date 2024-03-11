@@ -1,5 +1,5 @@
 /*
- * Copyright 2023, Seqera Labs
+ * Copyright 2024, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import java.util.Map;
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 public class CondaOpts {
-    final public static String DEFAULT_MAMBA_IMAGE = "mambaorg/micromamba:1.5.1";
+    final public static String DEFAULT_MAMBA_IMAGE = "mambaorg/micromamba:1.5.5";
     final public static String DEFAULT_PACKAGES = "conda-forge::procps-ng";
 
     public String mambaImage;

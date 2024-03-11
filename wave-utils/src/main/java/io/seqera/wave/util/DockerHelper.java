@@ -1,5 +1,5 @@
 /*
- * Copyright 2023, Seqera Labs
+ * Copyright 2024, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,11 +65,6 @@ public class DockerHelper {
         return toYamlTempFile(yaml);
     }
 
-    @Deprecated
-    static public Path condaFileFromPackages(String packages, List<String> condaChannels, CondaOpts opts) {
-        return condaFileFromPackages(packages, condaChannels);
-    }
-
     static List<String> condaPackagesToList(String packages) {
         if (packages == null || packages.isEmpty())
             return null;
@@ -78,6 +73,11 @@ public class DockerHelper {
                 .filter(it -> !StringUtils.isEmpty(it))
                 .map(it -> trim0(it)).collect(Collectors.toList());
     }
+
+    static List<String> pipPackagesToList(String packages) {
+        return condaPackagesToList(packages);
+    }
+
 
     protected static String trim0(String value) {
         if( value==null )
@@ -90,26 +90,39 @@ public class DockerHelper {
         return value;
     }
 
-    @Deprecated
-    static String condaPackagesToCondaYaml(String packages, List<String> channels, CondaOpts opts) {
-        return condaPackagesToCondaYaml(packages, channels);
-    }
-
     static String condaPackagesToCondaYaml(String packages, List<String> channels) {
-        final List<String> custom = condaPackagesToList(packages);
-        if (custom == null)
+        if( packages==null || packages.isBlank() )
             return null;
 
-        final List<String> deps = new ArrayList<>();
-        if (custom != null)
-            deps.addAll(custom);
+        final List<Object> deps = new ArrayList<>(20);
+        final List<Object> condaPackages = new ArrayList<>(10);
+        final List<Object> pipPackages = new ArrayList<>(10);
+        // split conda package by pip prefixed packages
+        for( String it : condaPackagesToList(packages) ) {
+            if( it.startsWith("pip:") )
+                pipPackages.add(it.substring(4));
+            else
+                condaPackages.add(it);
+        }
 
+        // add all conda packages
+        if( !condaPackages.isEmpty() )
+            deps.addAll(condaPackages);
+
+        // add all pip packages
+        if( !pipPackages.isEmpty() ) {
+            deps.add("pip");
+            deps.add(Map.of("pip", pipPackages));
+        }
+
+        // add the channels
         final Map<String, Object> conda = new LinkedHashMap<>();
-        if (channels != null && channels.size() > 0) {
+        if (channels != null && !channels.isEmpty() ) {
             conda.put("channels", channels);
         }
-        conda.put("dependencies", deps);
 
+        // assemble the final yaml
+        conda.put("dependencies", deps);
         return dumpCondaYaml(conda);
     }
 
@@ -172,11 +185,6 @@ public class DockerHelper {
         catch (FileNotFoundException e) {
             throw new IllegalArgumentException("The specified Conda environment file cannot be found: " + condaFile, e);
         }
-    }
-
-    @Deprecated
-    public static Path condaFileFromPath(String condaFile, List<String> channels, CondaOpts opts) {
-        return condaFileFromPath(condaFile, channels);
     }
 
     static public List<String> spackPackagesToList(String packages) {

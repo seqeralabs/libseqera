@@ -1,5 +1,5 @@
 /*
- * Copyright 2023, Seqera Labs
+ * Copyright 2024, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@
 
 package io.seqera.wave.api
 
+
 import spock.lang.Specification
 import spock.lang.Unroll
-
 /**
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
@@ -79,5 +79,17 @@ class ObjectUtilsTest extends Specification {
         null        | true
         [:]         | true
         [foo:1]     | false
+    }
+
+    def 'should render a list as a string'  () {
+        expect:
+        ObjectUtils.toString(LIST) == EXPECTED
+
+        where:
+        LIST            | EXPECTED
+        null            | null
+        []              | '(empty)'
+        ['1']           | '1'
+        ['1','2','3']   | '1,2,3'
     }
 }

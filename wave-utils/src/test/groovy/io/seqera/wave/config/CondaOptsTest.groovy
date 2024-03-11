@@ -1,5 +1,5 @@
 /*
- * Copyright 2023, Seqera Labs
+ * Copyright 2024, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ class CondaOptsTest extends Specification {
         new CondaOpts(OPTS).toString() == EXPECTED
         where:
         OPTS    | EXPECTED
-        [:]     | "CondaOpts(mambaImage=mambaorg/micromamba:1.5.1; basePackages=conda-forge::procps-ng, commands=null)"
+        [:]     | "CondaOpts(mambaImage=mambaorg/micromamba:1.5.5; basePackages=conda-forge::procps-ng, commands=null)"
         [mambaImage: 'foo:1.0', basePackages: 'this that', commands: ['X','Y']] \
                 | "CondaOpts(mambaImage=foo:1.0; basePackages=this that, commands=X,Y)"
     }

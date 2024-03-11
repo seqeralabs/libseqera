@@ -1,5 +1,5 @@
 /*
- * Copyright 2023, Seqera Labs
+ * Copyright 2024, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,10 +28,31 @@ import static io.seqera.wave.api.ObjectUtils.isEmpty;
  */
 public class ContainerLayer {
 
+    /**
+     * the layer location, it can be either `http:` or `https:` prefixed URI
+     * or a `data:` pseudo-protocol followed by a base64 encoded tar gzipped layer payload
+     */
     public String location;
+
+    /**
+     * The layer gzip sha256 checksum
+     */
     public String gzipDigest;
+
+    /**
+     * The layer gzip size in bytes
+     */
     public Integer gzipSize;
+
+    /**
+     * The layer tar sha256 checksum
+     */
     public String tarDigest;
+
+    /**
+     * When {@code this layer is not added in the final config fingerprint}
+     */
+    public Boolean skipHashing;
 
     public ContainerLayer() {}
 
