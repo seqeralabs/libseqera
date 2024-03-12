@@ -47,7 +47,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 dryRun: true,
                 workflowId: 'id123',
                 containerIncludes: ['busybox:latest'],
-                labels: ['sif', 'busybox']
+                labels: ['format':'sif', 'image':'busybox']
         )
 
         when:
@@ -97,7 +97,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 dryRun: false,
                 workflowId: 'id123',
                 containerIncludes: ['other:image'],
-                labels: ['foo', 'other']
+                labels: ['format':'foo', 'image':'other']
         )
         then:
         other.towerAccessToken == 'b1'
@@ -119,7 +119,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.dryRun == false
         other.workflowId == 'id123'
         other.containerIncludes == ['other:image']
-        other.labels == ['foo', 'other']
+        other.labels == ['format':'foo', 'image':'other']
         and:
         !other.formatSingularity()
     }

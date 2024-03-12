@@ -135,7 +135,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
     /**
      * Labels to be added in conda and spack build images
      */
-    public List<String> labels;
+    public Map<String, String> labels;
 
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
@@ -181,7 +181,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
             if( opts.containsKey("containerIncludes"))
                 copy.containerIncludes = (List<String>) opts.get("containerIncludes");
             if( opts.containsKey("labels"))
-                copy.labels = (List<String>) opts.get("labels");
+                copy.labels = (Map<String, String>) opts.get("labels");
             // done
             return copy;
         }
@@ -290,7 +290,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
-    public SubmitContainerTokenRequest withLabels(List<String> labels) {
+    public SubmitContainerTokenRequest withLabels(Map<String, String> labels) {
         this.labels = labels;
         return this;
     }
@@ -322,7 +322,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", dryRun=" + dryRun +
                 ", workflowId=" + workflowId +
                 ", containerIncludes=" + ObjectUtils.toString(containerIncludes) +
-                ", labels=" + ObjectUtils.toString(labels) +
+                ", labels=" + labels +
                 '}';
     }
 }
