@@ -59,11 +59,12 @@ public class SubmitContainerTokenResponse {
 
     public SubmitContainerTokenResponse() { }
 
-    public SubmitContainerTokenResponse(String token, String target, Instant expiration, String containerImage, String buildId) {
+    public SubmitContainerTokenResponse(String token, String target, Instant expiration, String containerImage, String buildId, Boolean cached) {
         this.containerToken = token;
         this.targetImage = target;
         this.expiration = expiration;
         this.containerImage = containerImage;
         this.buildId = buildId;
+        this.cached = cached;
     }
 }

@@ -292,6 +292,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    public SubmitContainerTokenRequest withPackages(PackagesSpec packages) {
+        this.packages = packages;
+        return this;
+    }
+
     public boolean formatSingularity() {
         return "sif".equals(format);
     }
