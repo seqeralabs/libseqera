@@ -52,6 +52,11 @@ public class SubmitContainerTokenResponse {
      */
     public String buildId;
 
+    /**
+     * Whenever it's a cached build image. Only supported by API version v1alpha2  
+     */
+    public Boolean cached;
+
     public SubmitContainerTokenResponse() { }
 
     public SubmitContainerTokenResponse(String token, String target, Instant expiration, String containerImage, String buildId) {
