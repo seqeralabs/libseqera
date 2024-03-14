@@ -765,4 +765,14 @@ class DockerHelperTest extends Specification {
             '''.stripIndent()
     }
 
+    def "should check and return a base64 encoded string"() {
+        expect:
+        DockerHelper.encodeStringBase64("Hello, World!") == "SGVsbG8sIFdvcmxkIQ=="
+
+        and:
+        DockerHelper.encodeStringBase64("") == null
+
+        and:
+        DockerHelper.encodeStringBase64(null) == null
+    }
 }

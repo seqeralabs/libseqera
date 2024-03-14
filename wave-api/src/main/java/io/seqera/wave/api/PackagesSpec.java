@@ -30,7 +30,7 @@ import io.seqera.wave.config.SpackOpts;
  */
 public class PackagesSpec {
 
-    enum Type { CONDA, SPACK }
+    public enum Type { CONDA, SPACK }
 
     public Type type;
 

@@ -25,12 +25,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import io.seqera.wave.config.CondaOpts;
@@ -437,6 +432,13 @@ public class DockerHelper {
         catch (FileNotFoundException e) {
             throw new IllegalArgumentException("The specified Spack environment file cannot be found: " + spackFile, e);
         }
+    }
+
+    public static String encodeStringBase64(String value) {
+        if( value == null || value.isEmpty() )
+            return null;
+        else
+            return Base64.getEncoder().encodeToString(value.getBytes());
     }
 
 }
