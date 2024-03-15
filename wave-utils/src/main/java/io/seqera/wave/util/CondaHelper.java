@@ -9,13 +9,13 @@ import java.util.Optional;
  */
 public class CondaHelper {
     public static String condaLock(List<String> packages) {
-        if( packages==null || packages.size()==0 )
+        if( packages==null || packages.isEmpty() )
             return null;
         Optional<String> result = packages
                 .stream()
                 .filter(it->it.startsWith("http://") || it.startsWith("https://"))
                 .findFirst();
-        if( !result.isPresent() )
+        if( result.isEmpty() )
             return null;
         if( packages.size()!=1 ) {
             throw new IllegalArgumentException("No more than one Conda lock remote file can be specified at the same time");
