@@ -59,15 +59,6 @@ public class PackagesSpec {
      */
     public List<String> channels;
 
-    public PackagesSpec(String type, String envFile, List<String> packages, CondaOpts condaOpts, SpackOpts spackOpts, List<String> channels) {
-        this.type = Type.valueOf(type);
-        this.envFile = envFile;
-        this.packages = packages;
-        this.condaOpts = condaOpts;
-        this.spackOpts = spackOpts;
-        this.channels = channels;
-    }
-
     @Override
     public boolean equals(Object object) {
         if (this == object) return true;

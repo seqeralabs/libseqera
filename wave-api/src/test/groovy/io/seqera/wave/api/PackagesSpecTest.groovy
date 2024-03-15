@@ -5,9 +5,9 @@ import spock.lang.Specification
 class PackagesSpecTest extends Specification {
     def 'should check equals and hashcode' () {
         given:
-        def packages1 = new PackagesSpec('CONDA', 'bar', ['baz'], null, null, ['1', '2'])
-        def packages2 = new PackagesSpec('CONDA', 'bar', ['baz'], null, null, ['1', '2'])
-        def packages3 = new PackagesSpec('SPACK', 'bar', ['baz'], null, null, null)
+        def packages1 = new PackagesSpec(type: PackagesSpec.Type.CONDA, envFile: 'foo', packages: ['bar'], channels: ['1', '2'])
+        def packages2 = new PackagesSpec(type: PackagesSpec.Type.CONDA, envFile: 'foo', packages: ['bar'], channels: ['1', '2'])
+        def packages3 = new PackagesSpec(type: PackagesSpec.Type.SPACK, envFile: 'foo', packages: ['bar'])
 
         expect:
         packages1 == packages2
@@ -20,8 +20,8 @@ class PackagesSpecTest extends Specification {
 
     def 'should infer the correct type' () {
         given:
-        def packages1 = new PackagesSpec('CONDA', 'bar', ['baz'], null, null, ['1', '2'])
-        def packages2 = new PackagesSpec('SPACK', 'bar', ['baz'], null, null, null)
+        def packages1 = new PackagesSpec(type: PackagesSpec.Type.CONDA, envFile: 'foo', packages: ['bar'], channels: ['1', '2'])
+        def packages2 = new PackagesSpec(type: PackagesSpec.Type.SPACK, envFile: 'foo', packages: ['bar'])
 
         expect:
         packages1.type == PackagesSpec.Type.CONDA
