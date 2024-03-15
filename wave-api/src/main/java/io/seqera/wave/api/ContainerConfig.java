@@ -18,9 +18,7 @@
 package io.seqera.wave.api;
 
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static io.seqera.wave.api.ObjectUtils.isEmpty;
@@ -42,6 +40,11 @@ public class ContainerConfig {
 
     public List<ContainerLayer> layers;
 
+    /**
+     * Labels to be added in conda and spack build images
+     */
+    public Map<String, String> labels;
+
     public ContainerConfig() {
         entrypoint = null;
         cmd = null;
@@ -50,12 +53,13 @@ public class ContainerConfig {
         layers = new ArrayList<>();
     }
 
-    public ContainerConfig(List<String> entrypoint, List<String> cmd, List<String> env, String workDir, List<ContainerLayer> layers) {
+    public ContainerConfig(List<String> entrypoint, List<String> cmd, List<String> env, String workDir, List<ContainerLayer> layers, Map<String, String> labels) {
         this.entrypoint = entrypoint;
         this.cmd = cmd;
         this.env = env;
         this.workingDir = workDir;
         this.layers = layers;
+        this.labels = labels;
     }
 
     /**
@@ -72,7 +76,8 @@ public class ContainerConfig {
                 isEmpty(cmd) &&
                 isEmpty(env) &&
                 isEmpty(workingDir) &&
-                isEmpty(layers);
+                isEmpty(layers) &&
+                isEmpty(labels);
     }
 
     public void validate(){
@@ -103,7 +108,7 @@ public class ContainerConfig {
 
     @Override
     public String toString() {
-        return String.format("ContainerConfig[entrypoint=%s; cmd=%s; env=%s; workingDir=%s; layers=%s]", entrypoint, cmd, env, workingDir, layers);
+        return String.format("ContainerConfig[entrypoint=%s; cmd=%s; env=%s; workingDir=%s; layers=%s; labels=%s]", entrypoint, cmd, env, workingDir, layers, labels);
     }
 
     @Override
@@ -111,12 +116,13 @@ public class ContainerConfig {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ContainerConfig that = (ContainerConfig) o;
-        return Objects.equals(entrypoint, that.entrypoint) && Objects.equals(cmd, that.cmd) && Objects.equals(env, that.env) && Objects.equals(workingDir, that.workingDir) && Objects.equals(layers, that.layers);
+        return Objects.equals(entrypoint, that.entrypoint) && Objects.equals(cmd, that.cmd) && Objects.equals(env, that.env)
+                && Objects.equals(workingDir, that.workingDir) && Objects.equals(layers, that.layers) && Objects.equals(labels, that.labels);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(entrypoint, cmd, env, workingDir, layers);
+        return Objects.hash(entrypoint, cmd, env, workingDir, layers, labels);
     }
 
     static ContainerConfig copy(ContainerConfig that) {
@@ -136,7 +142,8 @@ public class ContainerConfig {
                 that.cmd!=null ? new ArrayList<>(that.cmd) : null,
                 that.env!=null ? new ArrayList<>(that.env) : null,
                 that.workingDir,
-                that.layers != null ? that.layers.stream().map(it -> ContainerLayer.copy(it,stripData)).collect(Collectors.toList()) : null
+                that.layers != null ? that.layers.stream().map(it -> ContainerLayer.copy(it,stripData)).collect(Collectors.toList()) : null,
+                that.labels != null ? that.labels.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)) : null
         );
     }
 
