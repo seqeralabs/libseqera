@@ -5,6 +5,26 @@ import spock.lang.Specification
 class PackagesSpecTest extends Specification {
     def 'should check equals and hashcode' () {
         given:
-        def p1 = new PackagesSpec('foo', 'bar', 'baz')
+        def packages1 = new PackagesSpec('CONDA', 'bar', ['baz'], null, null, ['1', '2'])
+        def packages2 = new PackagesSpec('CONDA', 'bar', ['baz'], null, null, ['1', '2'])
+        def packages3 = new PackagesSpec('SPACK', 'bar', ['baz'], null, null, null)
+
+        expect:
+        packages1 == packages2
+        packages1 != packages3
+
+        and:
+        packages1.hashCode() == packages2.hashCode()
+        packages1.hashCode() != packages3.hashCode()
+    }
+
+    def 'should infer the correct type' () {
+        given:
+        def packages1 = new PackagesSpec('CONDA', 'bar', ['baz'], null, null, ['1', '2'])
+        def packages2 = new PackagesSpec('SPACK', 'bar', ['baz'], null, null, null)
+
+        expect:
+        packages1.type == PackagesSpec.Type.CONDA
+        packages2.type == PackagesSpec.Type.SPACK
     }
 }

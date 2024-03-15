@@ -57,7 +57,7 @@ public class PackagesSpec {
     /**
      * channels used for downloading packages
      */
-    List<String> channels;
+    public List<String> channels;
 
     public PackagesSpec(String type, String envFile, List<String> packages, CondaOpts condaOpts, SpackOpts spackOpts, List<String> channels) {
         this.type = Type.valueOf(type);
