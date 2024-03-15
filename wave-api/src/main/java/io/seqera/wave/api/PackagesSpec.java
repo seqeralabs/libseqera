@@ -54,17 +54,33 @@ public class PackagesSpec {
      */
     public SpackOpts spackOpts;
 
+    /**
+     * channels used for downloading packages
+     */
+    List<String> channels;
+
+    public PackagesSpec(String type, String envFile, List<String> packages, CondaOpts condaOpts, SpackOpts spackOpts, List<String> channels) {
+        this.type = Type.valueOf(type);
+        this.envFile = envFile;
+        this.packages = packages;
+        this.condaOpts = condaOpts;
+        this.spackOpts = spackOpts;
+        this.channels = channels;
+    }
+
     @Override
     public boolean equals(Object object) {
         if (this == object) return true;
         if (object == null || getClass() != object.getClass()) return false;
         PackagesSpec that = (PackagesSpec) object;
-        return type == that.type && Objects.equals(envFile, that.envFile) && Objects.equals(packages, that.packages) && Objects.equals(condaOpts, that.condaOpts) && Objects.equals(spackOpts, that.spackOpts);
+        return type == that.type && Objects.equals(envFile, that.envFile)
+                && Objects.equals(packages, that.packages) && Objects.equals(condaOpts, that.condaOpts)
+                && Objects.equals(spackOpts, that.spackOpts) && Objects.equals(channels, that.channels);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, envFile, packages, condaOpts, spackOpts);
+        return Objects.hash(type, envFile, packages, condaOpts, spackOpts, channels);
     }
 
     @Override
@@ -75,6 +91,7 @@ public class PackagesSpec {
                 ", packages=" + packages +
                 ", condaOpts=" + condaOpts +
                 ", spackOpts=" + spackOpts +
+                ", channels=" + ObjectUtils.toString(channels) +
                 '}';
     }
 }
