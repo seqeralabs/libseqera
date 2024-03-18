@@ -433,4 +433,5 @@ public class DockerHelper {
             throw new IllegalArgumentException("The specified Spack environment file cannot be found: " + spackFile, e);
         }
     }
+
 }
