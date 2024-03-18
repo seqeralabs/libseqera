@@ -47,13 +47,25 @@ class CondaHelperTest extends Specification {
         def PACKAGES = ['bwa=0.7.15', 'salmon=1.1.1']
         def packages = new PackagesSpec(type: PackagesSpec.Type.CONDA, packages:  PACKAGES, channels: CHANNELS)
 
-        expect:
-        CondaHelper.createCondaFileFromPackages(packages) == 'Y2hhbm5lbHM6Ci0gY29uZGEtZm9yZ2UKLSBkZWZhdWx0cwpkZXBlbmRlbmNpZXM6Ci0gYndhPTAuNy4xNQotIHNhbG1vbj0xLjEuMQo='
-        and:
-        CondaHelper.createCondaFileFromPackages(null) == null
+        when:
+        def condaFile = new String(Base64.getDecoder().decode(CondaHelper.createCondaFileFromPackages(packages)))
+        then:
+        condaFile == '''\
+            channels:
+            - conda-forge
+            - defaults
+            dependencies:
+            - bwa=0.7.15
+            - salmon=1.1.1
+            '''.stripIndent()
+
+        when:
+        condaFile = CondaHelper.createCondaFileFromPackages(null)
+        then:
+        condaFile == null
     }
 
-    def 'shoul process conda channels' () {
+    def 'should process conda channels' () {
         given:
         def CHANNELS = ['conda-forge ', ' defaults']
         expect:
