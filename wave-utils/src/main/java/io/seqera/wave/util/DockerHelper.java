@@ -433,12 +433,4 @@ public class DockerHelper {
             throw new IllegalArgumentException("The specified Spack environment file cannot be found: " + spackFile, e);
         }
     }
-
-    public static String encodeStringBase64(String value) {
-        if( value == null || value.isEmpty() )
-            return null;
-        else
-            return Base64.getEncoder().encodeToString(value.getBytes());
-    }
-
 }
