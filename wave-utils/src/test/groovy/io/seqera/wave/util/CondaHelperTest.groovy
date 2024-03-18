@@ -18,6 +18,7 @@
 
 package io.seqera.wave.util
 
+import io.seqera.wave.api.PackagesSpec
 import spock.lang.Specification
 /**
  *
@@ -38,5 +39,24 @@ class CondaHelperTest extends Specification {
         CondaHelper.condaLock(['foo', 'http://foo.com'])
         then:
         thrown(IllegalArgumentException)
+    }
+
+    def 'should get conda file' () {
+        given:
+        def CHANNELS = ['conda-forge', 'defaults']
+        def PACKAGES = ['bwa=0.7.15', 'salmon=1.1.1']
+        def packages = new PackagesSpec(type: PackagesSpec.Type.CONDA, packages:  PACKAGES, channels: CHANNELS)
+
+        expect:
+        CondaHelper.createCondaFileFromPackages(packages) == 'Y2hhbm5lbHM6Ci0gY29uZGEtZm9yZ2UKLSBkZWZhdWx0cwpkZXBlbmRlbmNpZXM6Ci0gYndhPTAuNy4xNQotIHNhbG1vbj0xLjEuMQo='
+        and:
+        CondaHelper.createCondaFileFromPackages(null) == null
+    }
+
+    def 'shoul process conda channels' () {
+        given:
+        def CHANNELS = ['conda-forge ', ' defaults']
+        expect:
+        CondaHelper.processCondaChannels(CHANNELS) == ['conda-forge', 'defaults']
     }
 }
