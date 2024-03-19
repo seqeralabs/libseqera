@@ -18,7 +18,6 @@
 package io.seqera.wave.util;
 
 import java.util.List;
-
 /**
  *
  * @author Munish Chouhan <munish.chouhan@seqera.io>

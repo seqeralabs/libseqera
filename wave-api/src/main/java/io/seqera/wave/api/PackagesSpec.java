@@ -22,7 +22,6 @@ import java.util.Objects;
 
 import io.seqera.wave.config.CondaOpts;
 import io.seqera.wave.config.SpackOpts;
-
 /**
  * Model a Package environment requirements
  *
