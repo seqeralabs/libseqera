@@ -227,11 +227,13 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    @Deprecated
     public SubmitContainerTokenRequest withCondaFile(String condaFile) {
         this.condaFile = condaFile;
         return this;
     }
 
+    @Deprecated
     public SubmitContainerTokenRequest withSpackFile(String spackFile) {
         this.spackFile = spackFile;
         return this;

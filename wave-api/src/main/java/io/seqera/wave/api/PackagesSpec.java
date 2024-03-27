@@ -63,9 +63,12 @@ public class PackagesSpec {
         if (this == object) return true;
         if (object == null || getClass() != object.getClass()) return false;
         PackagesSpec that = (PackagesSpec) object;
-        return type == that.type && Objects.equals(envFile, that.envFile)
-                && Objects.equals(packages, that.packages) && Objects.equals(condaOpts, that.condaOpts)
-                && Objects.equals(spackOpts, that.spackOpts) && Objects.equals(channels, that.channels);
+        return type == that.type
+                && Objects.equals(envFile, that.envFile)
+                && Objects.equals(packages, that.packages)
+                && Objects.equals(condaOpts, that.condaOpts)
+                && Objects.equals(spackOpts, that.spackOpts)
+                && Objects.equals(channels, that.channels);
     }
 
     @Override
@@ -83,5 +86,35 @@ public class PackagesSpec {
                 ", spackOpts=" + spackOpts +
                 ", channels=" + ObjectUtils.toString(channels) +
                 '}';
+    }
+
+    public PackagesSpec withType(Type type) {
+        this.type = type;
+        return this;
+    }
+
+    public PackagesSpec withEnvFile(String encoded) {
+        this.envFile = encoded;
+        return this;
+    }
+
+    public PackagesSpec withPackages(List<String> packages) {
+        this.packages = packages;
+        return this;
+    }
+
+    public PackagesSpec withChannels(List<String> channels) {
+        this.channels = channels;
+        return this;
+    }
+
+    public PackagesSpec withCondaOpts(CondaOpts opts) {
+        this.condaOpts = opts;
+        return this;
+    }
+
+    public PackagesSpec withSpackOpts(SpackOpts opts) {
+        this.spackOpts = opts;
+        return this;
     }
 }

@@ -17,12 +17,15 @@
 
 package io.seqera.wave.api
 
+import io.seqera.wave.config.CondaOpts
+import io.seqera.wave.config.SpackOpts
 import spock.lang.Specification
 /**
  *
  * @author Munish Chouhan <munish.chouhan@seqera.io>
  */
 class PackagesSpecTest extends Specification {
+
     def 'should check equals and hashcode' () {
         given:
         def packages1 = new PackagesSpec(type: PackagesSpec.Type.CONDA, envFile: 'foo', packages: ['bar'], channels: ['1', '2'])
@@ -46,5 +49,23 @@ class PackagesSpecTest extends Specification {
         expect:
         packages1.type == PackagesSpec.Type.CONDA
         packages2.type == PackagesSpec.Type.SPACK
+    }
+
+    def 'should set values' () {
+        when:
+        def spec = new PackagesSpec()
+                .withType(PackagesSpec.Type.CONDA)
+                .withCondaOpts(new CondaOpts(basePackages: 'base:one'))
+                .withSpackOpts(new SpackOpts(basePackages: 'base:two'))
+                .withChannels(['c1','c2'])
+                .withPackages(['p1','p2'])
+                .withEnvFile('foo-env')
+        then:
+        spec.type == PackagesSpec.Type.CONDA
+        spec.condaOpts == new CondaOpts(basePackages: 'base:one')
+        spec.spackOpts == new SpackOpts(basePackages: 'base:two')
+        spec.channels == ['c1','c2']
+        spec.packages == ['p1','p2']
+        spec.envFile == 'foo-env'
     }
 }

@@ -19,6 +19,7 @@ package io.seqera.wave.config;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Spack build options
@@ -61,5 +62,18 @@ public class SpackOpts {
                 String.valueOf(basePackages),
                 commands != null ? String.join(",", commands) : "null"
         );
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) return true;
+        if (object == null || getClass() != object.getClass()) return false;
+        SpackOpts spackOpts = (SpackOpts) object;
+        return Objects.equals(commands, spackOpts.commands) && Objects.equals(basePackages, spackOpts.basePackages);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(commands, basePackages);
     }
 }

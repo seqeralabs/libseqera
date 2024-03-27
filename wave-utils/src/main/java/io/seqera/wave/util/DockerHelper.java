@@ -90,7 +90,7 @@ public class DockerHelper {
         return value;
     }
 
-    static String condaPackagesToCondaYaml(String packages, List<String> channels) {
+    public static String condaPackagesToCondaYaml(String packages, List<String> channels) {
         if( packages==null || packages.isBlank() )
             return null;
 
@@ -163,28 +163,36 @@ public class DockerHelper {
         }
 
         // => parse the conda file yaml, add the base packages to it
-        final Yaml yaml = new Yaml();
         try {
-            // 1. parse the file
-            Map<String,Object> root = yaml.load(new FileReader(condaFile));
-            // 2. append channels
-            if( channels!=null ) {
-                List<String> channels0 = (List<String>)root.get("channels");
-                if( channels0==null ) {
-                    channels0 = new ArrayList<>();
-                    root.put("channels", channels0);
-                }
-                for( String it : channels ) {
-                    if( !channels0.contains(it) )
-                        channels0.add(it);
-                }
-            }
-            // 3. return it as a new temp file
-            return toYamlTempFile( dumpCondaYaml(root) );
+            final String result = condaEnvironmentToCondaYaml(Files.readString(condaEnvPath), channels);
+            return toYamlTempFile(result);
         }
         catch (FileNotFoundException e) {
             throw new IllegalArgumentException("The specified Conda environment file cannot be found: " + condaFile, e);
         }
+        catch (IOException e) {
+            throw new IllegalArgumentException("Unable to parse conda file: " + condaFile, e);
+        }
+    }
+
+    public static String condaEnvironmentToCondaYaml(String env, List<String> channels) {
+        final Yaml yaml = new Yaml();
+        // 1. parse the file
+        Map<String,Object> root = yaml.load(env);
+        // 2. append channels
+        if( channels!=null ) {
+            List<String> channels0 = (List<String>)root.get("channels");
+            if( channels0==null ) {
+                channels0 = new ArrayList<>();
+                root.put("channels", channels0);
+            }
+            for( String it : channels ) {
+                if( !channels0.contains(it) )
+                    channels0.add(it);
+            }
+        }
+        // 3. return it
+        return dumpCondaYaml(root);
     }
 
     static public List<String> spackPackagesToList(String packages) {

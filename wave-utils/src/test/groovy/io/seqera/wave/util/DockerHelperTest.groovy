@@ -129,6 +129,114 @@ class DockerHelperTest extends Specification {
         DockerHelper.condaPackagesToCondaYaml('  ', ['foo']) == null
     }
 
+    def 'should add conda packages to conda yaml /1' () {
+        given:
+        def text = '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaEnvironmentToCondaYaml(text, null)
+        then:
+        result == '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['ch1', 'ch2'])
+        then:
+        result == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             channels:
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+    }
+
+    def 'should add conda packages to conda yaml /2' () {
+        given:
+        def text = '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaEnvironmentToCondaYaml(text, null)
+        then:
+        result == '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['ch1', 'ch2'])
+        then:
+        result == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             channels:
+             - hola
+             - ciao
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+    }
+
+    def 'should add conda packages to conda yaml /3' () {
+        given:
+        def text = '''\
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaEnvironmentToCondaYaml(text, null)
+        then:
+        result == '''\
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['ch1', 'ch2'])
+        then:
+        result == '''\
+             channels:
+             - hola
+             - ciao
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['bioconda'])
+        then:
+        result == '''\
+             channels:
+             - hola
+             - ciao
+             - bioconda
+            '''.stripIndent(true)
+    }
+
+
     def 'should add conda packages to conda file /1' () {
         given:
         def condaFile = Files.createTempFile('conda','yaml')
