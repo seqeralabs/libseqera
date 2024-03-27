@@ -28,6 +28,8 @@ import java.util.Objects;
  */
 public class SpackOpts {
 
+    public static final SpackOpts EMPTY = new SpackOpts();
+
     /**
      * Custom Dockerfile `RUN` commands that can be used to customise the target container
      */

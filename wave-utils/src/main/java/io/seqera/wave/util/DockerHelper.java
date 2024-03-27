@@ -19,7 +19,6 @@ package io.seqera.wave.util;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -222,6 +221,9 @@ public class DockerHelper {
     }
 
     static public String spackPackagesToSpackYaml(String packages, SpackOpts opts) {
+        if( opts==null )
+            opts = SpackOpts.EMPTY;
+        
         final List<String> base = spackPackagesToList(opts.basePackages);
         final List<String> custom = spackPackagesToList(packages);
         if( base==null && custom==null )
@@ -422,16 +424,49 @@ public class DockerHelper {
 
         // Case D - last case, both spack file and base packages are specified
         // => parse the spack file yaml, add the base packages to it
+        try {
+            final String result = addPackagesToSpackYaml(Files.readString(spackEnvPath), opts);
+            return toYamlTempFile( result );
+        }
+        catch (FileNotFoundException e) {
+            throw new IllegalArgumentException("The specified Spack environment file cannot be found: " + spackFile, e);
+        }
+        catch (IOException e) {
+            throw new IllegalArgumentException("Unable to parse Spack environment file: " + spackFile, e);
+        }
+    }
+
+    public static String addPackagesToSpackYaml(String spackYaml, SpackOpts opts) {
+        if( opts==null )
+            opts = SpackOpts.EMPTY;
+        
+        // Case A - both empty, nothing to do
+        if( StringUtils.isEmpty(spackYaml) && StringUtils.isEmpty(opts.basePackages) )
+            return null;
+
+        // Case B - the spack file is empty, but some base package are given
+        // create a spack file with those packages
+        if( StringUtils.isEmpty(spackYaml) ) {
+            return spackPackagesToSpackYaml(null, opts);
+        }
+
+        // Case C - if not base packages are given just return the spack file as a path
+        if( StringUtils.isEmpty(opts.basePackages) ) {
+            return spackYaml;
+        }
+
+        // Case D - last case, both spack file and base packages are specified
+        // => parse the spack file yaml, add the base packages to it
         final Yaml yaml = new Yaml();
         try {
             // 1. parse the file
-            Map<String,Object> data = yaml.load(new FileReader(spackFile));
+            Map<String,Object> data = yaml.load(spackYaml);
             // 2. parse the base packages
             final List<String> base = spackPackagesToList(opts.basePackages);
             // 3. append to the specs
             Map<String,Object> spack = (Map<String,Object>) data.get("spack");
             if( spack==null ) {
-                throw new IllegalArgumentException("The specified Spack environment file does not contain a root entry 'spack:' - offending file path: " + spackFile);
+                throw new IllegalArgumentException("The specified Spack environment file does not contain a root entry 'spack:'");
             }
             List<String> specs = (List<String>)spack.get("specs");
             if( specs==null ) {
@@ -439,11 +474,11 @@ public class DockerHelper {
                 spack.put("specs", specs);
             }
             specs.addAll(base);
-            // 5. return it as a new temp file
-            return toYamlTempFile( yaml.dump(data) );
+            // 5. return it
+            return yaml.dump(data) ;
         }
-        catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("The specified Spack environment file cannot be found: " + spackFile, e);
+        catch (Exception e) {
+            throw new IllegalArgumentException("Unable to parse Spack yaml:\n" + spackYaml);
         }
     }
 

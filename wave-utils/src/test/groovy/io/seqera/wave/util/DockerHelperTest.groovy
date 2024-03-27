@@ -714,6 +714,65 @@ class DockerHelperTest extends Specification {
         folder?.deleteDir()
     }
 
+
+    def 'should merge spack yaml and base package' () {
+        given:
+        def SPACK_FILE1 = '''\
+            spack:
+              specs: [foo@1.2.3 x=one, bar @2]
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+        and:
+        def SPACK_FILE2 = '''\
+            spack:
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+        and:
+        def SPACK_FILE3 = '''\
+            foo:
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.addPackagesToSpackYaml(null, new SpackOpts())
+        then:
+        result == null
+
+        when:
+        result = DockerHelper.addPackagesToSpackYaml(SPACK_FILE1, new SpackOpts())
+        then:
+        result == SPACK_FILE1
+
+        when:
+        result = DockerHelper.addPackagesToSpackYaml(SPACK_FILE1, new SpackOpts(basePackages: 'alpha delta'))
+        then:
+        result == '''\
+            spack:
+              specs: [foo@1.2.3 x=one, bar @2, alpha, delta]
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+
+
+        when:
+        result = DockerHelper.addPackagesToSpackYaml(SPACK_FILE2, new SpackOpts(basePackages: 'alpha delta'))
+        then:
+        result == '''\
+            spack:
+              concretizer: {unify: true, reuse: false}
+              specs: [alpha, delta]
+            '''.stripIndent(true)
+
+        when:
+        DockerHelper.addPackagesToSpackYaml(SPACK_FILE3, new SpackOpts(basePackages: 'foo'))
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        DockerHelper.addPackagesToSpackYaml('missing file', new SpackOpts(basePackages: 'foo'))
+        then:
+        thrown(IllegalArgumentException)
+    }
+
     /* *********************************************************************************
      * conda packages to singularity tests
      * *********************************************************************************/
