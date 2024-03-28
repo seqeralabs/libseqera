@@ -19,6 +19,7 @@ package io.seqera.wave.config;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Conda build options
@@ -64,5 +65,18 @@ public class CondaOpts {
                 basePackages,
                 commands != null ? String.join(",", commands) : "null"
                 );
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) return true;
+        if (object == null || getClass() != object.getClass()) return false;
+        CondaOpts condaOpts = (CondaOpts) object;
+        return Objects.equals(mambaImage, condaOpts.mambaImage) && Objects.equals(commands, condaOpts.commands) && Objects.equals(basePackages, condaOpts.basePackages);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(mambaImage, commands, basePackages);
     }
 }

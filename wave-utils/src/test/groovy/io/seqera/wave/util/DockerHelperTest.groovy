@@ -129,6 +129,114 @@ class DockerHelperTest extends Specification {
         DockerHelper.condaPackagesToCondaYaml('  ', ['foo']) == null
     }
 
+    def 'should add conda packages to conda yaml /1' () {
+        given:
+        def text = '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaEnvironmentToCondaYaml(text, null)
+        then:
+        result == '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['ch1', 'ch2'])
+        then:
+        result == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             channels:
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+    }
+
+    def 'should add conda packages to conda yaml /2' () {
+        given:
+        def text = '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaEnvironmentToCondaYaml(text, null)
+        then:
+        result == '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['ch1', 'ch2'])
+        then:
+        result == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             channels:
+             - hola
+             - ciao
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+    }
+
+    def 'should add conda packages to conda yaml /3' () {
+        given:
+        def text = '''\
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaEnvironmentToCondaYaml(text, null)
+        then:
+        result == '''\
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['ch1', 'ch2'])
+        then:
+        result == '''\
+             channels:
+             - hola
+             - ciao
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['bioconda'])
+        then:
+        result == '''\
+             channels:
+             - hola
+             - ciao
+             - bioconda
+            '''.stripIndent(true)
+    }
+
+
     def 'should add conda packages to conda file /1' () {
         given:
         def condaFile = Files.createTempFile('conda','yaml')
@@ -604,6 +712,65 @@ class DockerHelperTest extends Specification {
 
         cleanup:
         folder?.deleteDir()
+    }
+
+
+    def 'should merge spack yaml and base package' () {
+        given:
+        def SPACK_FILE1 = '''\
+            spack:
+              specs: [foo@1.2.3 x=one, bar @2]
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+        and:
+        def SPACK_FILE2 = '''\
+            spack:
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+        and:
+        def SPACK_FILE3 = '''\
+            foo:
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.addPackagesToSpackYaml(null, new SpackOpts())
+        then:
+        result == null
+
+        when:
+        result = DockerHelper.addPackagesToSpackYaml(SPACK_FILE1, new SpackOpts())
+        then:
+        result == SPACK_FILE1
+
+        when:
+        result = DockerHelper.addPackagesToSpackYaml(SPACK_FILE1, new SpackOpts(basePackages: 'alpha delta'))
+        then:
+        result == '''\
+            spack:
+              specs: [foo@1.2.3 x=one, bar @2, alpha, delta]
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+
+
+        when:
+        result = DockerHelper.addPackagesToSpackYaml(SPACK_FILE2, new SpackOpts(basePackages: 'alpha delta'))
+        then:
+        result == '''\
+            spack:
+              concretizer: {unify: true, reuse: false}
+              specs: [alpha, delta]
+            '''.stripIndent(true)
+
+        when:
+        DockerHelper.addPackagesToSpackYaml(SPACK_FILE3, new SpackOpts(basePackages: 'foo'))
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        DockerHelper.addPackagesToSpackYaml('missing file', new SpackOpts(basePackages: 'foo'))
+        then:
+        thrown(IllegalArgumentException)
     }
 
     /* *********************************************************************************
