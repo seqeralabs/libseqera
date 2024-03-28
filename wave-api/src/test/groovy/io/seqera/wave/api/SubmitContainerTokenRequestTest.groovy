@@ -47,7 +47,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 dryRun: true,
                 workflowId: 'id123',
                 containerIncludes: ['busybox:latest'],
-                packages: new PackagesSpec(type: PackagesSpec.Type.CONDA, envFile: 'foo', packages: ['bar'])
+                packages: new PackagesSpec(type: PackagesSpec.Type.CONDA, environment: 'foo', entries: ['bar'])
         )
 
         when:

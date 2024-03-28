@@ -34,14 +34,14 @@ public class PackagesSpec {
     public Type type;
 
     /**
-     * The package environment file encoded as a base64 string. When this is provided the field {@link #packages} is not allowed
+     * The package environment file encoded as a base64 string. When this is provided the field {@link #entries} is not allowed
      */
-    public String envFile;
+    public String environment;
 
     /**
-     * A list of one or more packages. When this is provided the field {@link #envFile} is not allowed
+     * A list of one or more packages. When this is provided the field {@link #environment} is not allowed
      */
-    public List<String> packages;
+    public List<String> entries;
 
     /**
      * Conda build options
@@ -64,8 +64,8 @@ public class PackagesSpec {
         if (object == null || getClass() != object.getClass()) return false;
         PackagesSpec that = (PackagesSpec) object;
         return type == that.type
-                && Objects.equals(envFile, that.envFile)
-                && Objects.equals(packages, that.packages)
+                && Objects.equals(environment, that.environment)
+                && Objects.equals(entries, that.entries)
                 && Objects.equals(condaOpts, that.condaOpts)
                 && Objects.equals(spackOpts, that.spackOpts)
                 && Objects.equals(channels, that.channels);
@@ -73,15 +73,15 @@ public class PackagesSpec {
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, envFile, packages, condaOpts, spackOpts, channels);
+        return Objects.hash(type, environment, entries, condaOpts, spackOpts, channels);
     }
 
     @Override
     public String toString() {
         return "PackagesSpec{" +
                 "type=" + type +
-                ", envFile='" + envFile + '\'' +
-                ", packages=" + packages +
+                ", envFile='" + environment + '\'' +
+                ", packages=" + entries +
                 ", condaOpts=" + condaOpts +
                 ", spackOpts=" + spackOpts +
                 ", channels=" + ObjectUtils.toString(channels) +
@@ -93,13 +93,13 @@ public class PackagesSpec {
         return this;
     }
 
-    public PackagesSpec withEnvFile(String encoded) {
-        this.envFile = encoded;
+    public PackagesSpec withEnvironment(String encoded) {
+        this.environment = encoded;
         return this;
     }
 
-    public PackagesSpec withPackages(List<String> packages) {
-        this.packages = packages;
+    public PackagesSpec withEntries(List<String> entries) {
+        this.entries = entries;
         return this;
     }
 

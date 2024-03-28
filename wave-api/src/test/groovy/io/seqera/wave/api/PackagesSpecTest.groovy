@@ -28,9 +28,9 @@ class PackagesSpecTest extends Specification {
 
     def 'should check equals and hashcode' () {
         given:
-        def packages1 = new PackagesSpec(type: PackagesSpec.Type.CONDA, envFile: 'foo', packages: ['bar'], channels: ['1', '2'])
-        def packages2 = new PackagesSpec(type: PackagesSpec.Type.CONDA, envFile: 'foo', packages: ['bar'], channels: ['1', '2'])
-        def packages3 = new PackagesSpec(type: PackagesSpec.Type.SPACK, envFile: 'foo', packages: ['bar'])
+        def packages1 = new PackagesSpec(type: PackagesSpec.Type.CONDA, environment: 'foo', entries: ['bar'], channels: ['1', '2'])
+        def packages2 = new PackagesSpec(type: PackagesSpec.Type.CONDA, environment: 'foo', entries: ['bar'], channels: ['1', '2'])
+        def packages3 = new PackagesSpec(type: PackagesSpec.Type.SPACK, environment: 'foo', entries: ['bar'])
 
         expect:
         packages1 == packages2
@@ -43,8 +43,8 @@ class PackagesSpecTest extends Specification {
 
     def 'should infer the correct type' () {
         given:
-        def packages1 = new PackagesSpec(type: PackagesSpec.Type.CONDA, envFile: 'foo', packages: ['bar'], channels: ['1', '2'])
-        def packages2 = new PackagesSpec(type: PackagesSpec.Type.SPACK, envFile: 'foo', packages: ['bar'])
+        def packages1 = new PackagesSpec(type: PackagesSpec.Type.CONDA, environment: 'foo', entries: ['bar'], channels: ['1', '2'])
+        def packages2 = new PackagesSpec(type: PackagesSpec.Type.SPACK, environment: 'foo', entries: ['bar'])
 
         expect:
         packages1.type == PackagesSpec.Type.CONDA
@@ -58,14 +58,14 @@ class PackagesSpecTest extends Specification {
                 .withCondaOpts(new CondaOpts(basePackages: 'base:one'))
                 .withSpackOpts(new SpackOpts(basePackages: 'base:two'))
                 .withChannels(['c1','c2'])
-                .withPackages(['p1','p2'])
-                .withEnvFile('foo-env')
+                .withEntries(['p1', 'p2'])
+                .withEnvironment('foo-env')
         then:
         spec.type == PackagesSpec.Type.CONDA
         spec.condaOpts == new CondaOpts(basePackages: 'base:one')
         spec.spackOpts == new SpackOpts(basePackages: 'base:two')
         spec.channels == ['c1','c2']
-        spec.packages == ['p1','p2']
-        spec.envFile == 'foo-env'
+        spec.entries == ['p1', 'p2']
+        spec.environment == 'foo-env'
     }
 }

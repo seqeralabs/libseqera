@@ -45,7 +45,7 @@ class CondaHelperTest extends Specification {
         given:
         def CHANNELS = ['conda-forge', 'defaults']
         def PACKAGES = ['bwa=0.7.15', 'salmon=1.1.1']
-        def packages = new PackagesSpec(type: PackagesSpec.Type.CONDA, packages:  PACKAGES, channels: CHANNELS)
+        def packages = new PackagesSpec(type: PackagesSpec.Type.CONDA, entries:  PACKAGES, channels: CHANNELS)
 
         when:
         def condaFile = new String(Base64.getDecoder().decode(CondaHelper.createCondaFileFromPackages(packages)))

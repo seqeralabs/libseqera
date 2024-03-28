@@ -52,9 +52,9 @@ public class CondaHelper {
     }
 
     public static String createCondaFileFromPackages(PackagesSpec packagesSpec) throws IOException {
-        if( packagesSpec == null || packagesSpec.packages == null )
+        if( packagesSpec == null || packagesSpec.entries == null )
             return null;
-        final String packages = String.join(" ", packagesSpec.packages);
+        final String packages = String.join(" ", packagesSpec.entries);
         Path condaFilePath =  condaFileFromPackages(packages, processCondaChannels(packagesSpec.channels));
         if( condaFilePath!=null ){
             return Base64.getEncoder().encodeToString(Files.readAllBytes(Path.of(condaFilePath.toString())));
