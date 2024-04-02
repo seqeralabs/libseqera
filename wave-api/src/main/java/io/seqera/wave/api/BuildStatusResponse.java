@@ -30,19 +30,21 @@ public class BuildStatusResponse {
     public enum Status { PENDING, COMPLETED }
 
     /** Build Id */
-    final public String id;
+    public String id;
 
     /** Status of image build */
-    final public Status status;
+    public Status status;
 
     /** Build start time */
-    final public Instant startTime;
+    public Instant startTime;
 
     /** Duration to complete build */
-    final public Duration duration;
+    public Duration duration;
 
     /** Build success status */
-    final public Boolean succeeded;
+    public Boolean succeeded;
+
+    public BuildStatusResponse() {}
 
     public BuildStatusResponse(String id, Status status, Instant startTime, Duration duration, Boolean succeeded) {
         this.id = id;
