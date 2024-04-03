@@ -19,6 +19,7 @@ package io.seqera.wave.api;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 
 
 /**
@@ -30,21 +31,30 @@ public class BuildStatusResponse {
     public enum Status { PENDING, COMPLETED }
 
     /** Build Id */
-    public String id;
+    final public String id;
 
     /** Status of image build */
-    public Status status;
+    final public Status status;
 
     /** Build start time */
-    public Instant startTime;
+    final public Instant startTime;
 
     /** Duration to complete build */
-    public Duration duration;
+    final public Duration duration;
 
     /** Build success status */
-    public Boolean succeeded;
+    final public Boolean succeeded;
 
-    public BuildStatusResponse() {}
+    /**
+     * This is required to allow jackson serialization - do not remove
+     */
+    private BuildStatusResponse() {
+        id = null;
+        status = null;
+        startTime = null;
+        duration = null;
+        succeeded = null;
+    }
 
     public BuildStatusResponse(String id, Status status, Instant startTime, Duration duration, Boolean succeeded) {
         this.id = id;
@@ -52,5 +62,29 @@ public class BuildStatusResponse {
         this.startTime = startTime;
         this.duration = duration;
         this.succeeded = succeeded;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) return true;
+        if (object == null || getClass() != object.getClass()) return false;
+        BuildStatusResponse that = (BuildStatusResponse) object;
+        return Objects.equals(id, that.id) && status == that.status && Objects.equals(startTime, that.startTime) && Objects.equals(duration, that.duration) && Objects.equals(succeeded, that.succeeded);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, status, startTime, duration, succeeded);
+    }
+
+    @Override
+    public String toString() {
+        return "BuildStatusResponse{" +
+                "id='" + id + '\'' +
+                ", status=" + status +
+                ", startTime=" + startTime +
+                ", duration=" + duration +
+                ", succeeded=" + succeeded +
+                '}';
     }
 }
