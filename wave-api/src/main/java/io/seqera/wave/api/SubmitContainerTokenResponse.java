@@ -18,6 +18,7 @@
 package io.seqera.wave.api;
 
 import java.time.Instant;
+import java.util.Objects;
 
 
 /**
@@ -38,17 +39,20 @@ public class SubmitContainerTokenResponse {
     public String targetImage;
 
     /**
-     * The time instant when the container token is going to expire
+     * The time instant when the container token is going to expire.
+     * This attribute is only available when {@link #freeze} is {@code false}
      */
     public Instant expiration;
 
     /**
      * The source container image that originated this request
      */
+    @Deprecated
     public String containerImage;
 
     /**
-     * The ID of the build associated with this request or null of the image already exists
+     * The ID of the build associated with this request or null of the image already exists.
+     * Version v1alpha2 as later.
      */
     public String buildId;
 
@@ -57,14 +61,52 @@ public class SubmitContainerTokenResponse {
      */
     public Boolean cached;
 
+    /**
+     * When the result is a freeze container. Version v1alpha2 as later.
+     */
+    public Boolean freeze;
+
     public SubmitContainerTokenResponse() { }
 
-    public SubmitContainerTokenResponse(String token, String target, Instant expiration, String containerImage, String buildId, Boolean cached) {
+    public SubmitContainerTokenResponse(String token, String target, Instant expiration, String containerImage, String buildId, Boolean cached, Boolean freeze) {
         this.containerToken = token;
         this.targetImage = target;
         this.expiration = expiration;
         this.containerImage = containerImage;
         this.buildId = buildId;
         this.cached = cached;
+        this.freeze = freeze;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) return true;
+        if (object == null || getClass() != object.getClass()) return false;
+        SubmitContainerTokenResponse that = (SubmitContainerTokenResponse) object;
+        return Objects.equals(containerToken, that.containerToken)
+                && Objects.equals(targetImage, that.targetImage)
+                && Objects.equals(expiration, that.expiration)
+                && Objects.equals(containerImage, that.containerImage)
+                && Objects.equals(buildId, that.buildId)
+                && Objects.equals(cached, that.cached)
+                && Objects.equals(freeze, that.freeze);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(containerToken, targetImage, expiration, containerImage, buildId, cached, freeze);
+    }
+
+    @Override
+    public String toString() {
+        return "SubmitContainerTokenResponse{" +
+                "containerToken='" + containerToken + '\'' +
+                ", targetImage='" + targetImage + '\'' +
+                ", expiration=" + expiration +
+                ", containerImage='" + containerImage + '\'' +
+                ", buildId='" + buildId + '\'' +
+                ", cached=" + cached +
+                ", freeze=" + freeze +
+                '}';
     }
 }
