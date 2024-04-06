@@ -17,7 +17,6 @@
 
 package io.seqera.wave.core.spec;
 
-import java.util.List;
 import java.util.Objects;
 
 import io.seqera.wave.model.ContentType;
@@ -28,8 +27,8 @@ import io.seqera.wave.model.ContentType;
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 public class ContainerSpec {
-
     String registry;
+    String hostName;
     String imageName;
     String reference;
     String digest;
@@ -39,8 +38,9 @@ public class ContainerSpec {
     /* REQUIRED BY SERIALIZATION */
     private ContainerSpec() {}
 
-    public ContainerSpec(String registry, String imageName, String reference, String digest, ConfigSpec config, ManifestSpec manifest, List<String> layerUrls) {
+    public ContainerSpec(String registry, String hostName, String imageName, String reference, String digest, ConfigSpec config, ManifestSpec manifest) {
         this.registry = registry;
+        this.hostName = hostName;
         this.imageName = imageName;
         this.reference = reference;
         this.digest = digest;
@@ -48,8 +48,22 @@ public class ContainerSpec {
         this.manifest = manifest;
     }
 
+    public ContainerSpec(ContainerSpec that) {
+        this.registry = that.registry;
+        this.hostName = that.hostName;
+        this.imageName = that.imageName;
+        this.reference = that.reference;
+        this.digest = that.digest;
+        this.config = that.config;
+        this.manifest = that.manifest;
+    }
+
     public String getRegistry() {
         return registry;
+    }
+
+    public String getHostName() {
+        return hostName;
     }
 
     public String getImageName() {
@@ -83,18 +97,25 @@ public class ContainerSpec {
         if (this == object) return true;
         if (object == null || getClass() != object.getClass()) return false;
         ContainerSpec that = (ContainerSpec) object;
-        return Objects.equals(registry, that.registry) && Objects.equals(imageName, that.imageName) && Objects.equals(reference, that.reference) && Objects.equals(digest, that.digest) && Objects.equals(config, that.config) && Objects.equals(manifest, that.manifest);
+        return Objects.equals(registry, that.registry)
+                && Objects.equals(hostName, that.hostName)
+                && Objects.equals(imageName, that.imageName)
+                && Objects.equals(reference, that.reference)
+                && Objects.equals(digest, that.digest)
+                && Objects.equals(config, that.config)
+                && Objects.equals(manifest, that.manifest);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(registry, imageName, reference, digest, config, manifest);
+        return Objects.hash(registry, hostName, imageName, reference, digest, config, manifest);
     }
 
     @Override
     public String toString() {
         return "ContainerSpec{" +
                 "registry='" + registry + '\'' +
+                ", hostName='" + hostName + '\'' +
                 ", imageName='" + imageName + '\'' +
                 ", reference='" + reference + '\'' +
                 ", digest='" + digest + '\'' +
@@ -102,4 +123,5 @@ public class ContainerSpec {
                 ", manifest=" + manifest +
                 '}';
     }
+
 }
