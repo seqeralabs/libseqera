@@ -75,7 +75,7 @@ class CondaOptsTest extends Specification {
         new CondaOpts(OPTS).toString() == EXPECTED
         where:
         OPTS    | EXPECTED
-        [:]     | "CondaOpts(mambaImage=mambaorg/micromamba:1.5.5; basePackages=conda-forge::procps-ng, commands=null)"
+        [:]     | "CondaOpts(mambaImage=mambaorg/micromamba:1.5.8-lunar; basePackages=conda-forge::procps-ng, commands=null)"
         [mambaImage: 'foo:1.0', basePackages: 'this that', commands: ['X','Y']] \
                 | "CondaOpts(mambaImage=foo:1.0; basePackages=this that, commands=X,Y)"
     }
