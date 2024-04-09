@@ -26,6 +26,20 @@ import spock.lang.Unroll
  */
 class CondaOptsTest extends Specification {
 
+    def 'should validate equals and hashcode'  () {
+        given:
+        def c1 = new CondaOpts(mambaImage: 'foo:one', basePackages: 'x y', commands: ['this','that'])
+        def c2 = new CondaOpts(mambaImage: 'foo:one', basePackages: 'x y', commands: ['this','that'])
+        def c3 = new CondaOpts(mambaImage: 'foo:two', basePackages: 'x y', commands: ['this','that'])
+        
+        expect:
+        c1 == c2
+        c1 != c3
+        and:
+        c1.hashCode() == c2.hashCode()
+        c1.hashCode() != c3.hashCode()
+    }
+
     def 'check conda options' () {
         when:
         def opts = new CondaOpts([:])
@@ -61,7 +75,7 @@ class CondaOptsTest extends Specification {
         new CondaOpts(OPTS).toString() == EXPECTED
         where:
         OPTS    | EXPECTED
-        [:]     | "CondaOpts(mambaImage=mambaorg/micromamba:1.5.5; basePackages=conda-forge::procps-ng, commands=null)"
+        [:]     | "CondaOpts(mambaImage=mambaorg/micromamba:1.5.8-lunar; basePackages=conda-forge::procps-ng, commands=null)"
         [mambaImage: 'foo:1.0', basePackages: 'this that', commands: ['X','Y']] \
                 | "CondaOpts(mambaImage=foo:1.0; basePackages=this that, commands=X,Y)"
     }

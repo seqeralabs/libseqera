@@ -36,14 +36,23 @@ public class ObjectRef {
     public String mediaType;
     public String digest;
     public Long size;
+    public Map<String,String> annotations;
 
     /* REQUIRED BY SERIALIZATION */
     private ObjectRef() {}
 
-    public ObjectRef(String mediaType, String digest, Long size) {
+    public ObjectRef(String mediaType, String digest, Long size, Map<String,String> annotations) {
         this.mediaType = mediaType;
         this.digest = digest;
         this.size = size;
+        this.annotations = annotations;
+    }
+
+    public ObjectRef(ObjectRef that) {
+        this.mediaType = that.mediaType;
+        this.digest = that.digest;
+        this.size = that.size;
+        this.annotations = that.annotations;
     }
 
     static public ObjectRef of(String json) {
@@ -65,7 +74,8 @@ public class ObjectRef {
         return new ObjectRef(
                 (String) object.get("mediaType"),
                 (String) object.get("digest"),
-                asLong(object.get("size")) );
+                asLong(object.get("size")),
+                (Map<String,String>) object.get("annotations"));
     }
 
     @Override
@@ -73,12 +83,12 @@ public class ObjectRef {
         if (this == object) return true;
         if (object == null || getClass() != object.getClass()) return false;
         ObjectRef objectRef = (ObjectRef) object;
-        return Objects.equals(mediaType, objectRef.mediaType) && Objects.equals(digest, objectRef.digest) && Objects.equals(size, objectRef.size);
+        return Objects.equals(mediaType, objectRef.mediaType) && Objects.equals(digest, objectRef.digest) && Objects.equals(size, objectRef.size) && Objects.equals(annotations, objectRef.annotations);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(mediaType, digest, size);
+        return Objects.hash(mediaType, digest, size, annotations);
     }
 
     @Override
