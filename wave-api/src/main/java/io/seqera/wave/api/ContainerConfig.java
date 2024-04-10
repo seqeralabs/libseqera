@@ -51,6 +51,7 @@ public class ContainerConfig {
         env = null;
         workingDir = null;
         layers = new ArrayList<>();
+        labels = new HashMap<>();
     }
 
     public ContainerConfig(List<String> entrypoint, List<String> cmd, List<String> env, String workDir, List<ContainerLayer> layers, Map<String, String> labels) {

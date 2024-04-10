@@ -54,7 +54,7 @@ class ContainerConfigTest extends Specification {
         def c1 = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], '/work/dir', [l1], [foo:'bar'])
 
         expect:
-        c0.toString() == 'ContainerConfig[entrypoint=null; cmd=null; env=null; workingDir=null; layers=[]; labels=null]'
+        c0.toString() == 'ContainerConfig[entrypoint=null; cmd=null; env=null; workingDir=null; layers=[]; labels={}]'
         c1.toString() == 'ContainerConfig[entrypoint=[/entry/point.sh]; cmd=[/my/cmd]; env=[FOO=1]; workingDir=/work/dir; layers=[ContainerLayer[location=http://foo.com; tarDigest=sha256:67890; gzipDigest=sha256:12345; gzipSize=100]]; labels={foo=bar}]'
     }
 
@@ -66,12 +66,15 @@ class ContainerConfigTest extends Specification {
         new ContainerConfig(null, null, [], null, null, null).empty()
         new ContainerConfig(null, null, null, '', null, null).empty()
         new ContainerConfig(null, null, null, null, [], null).empty()
+        new ContainerConfig(null, null, null, null, null, Map.of()).empty()
         and:
         !new ContainerConfig(['x'], null, null, null, null, null).empty()
         !new ContainerConfig(null, ['x'], null, null, null, null).empty()
         !new ContainerConfig(null, null, ['x'], null, null, null).empty()
         !new ContainerConfig(null, null, null, 'x', null, null).empty()
         !new ContainerConfig(null, null, null, null, [new ContainerLayer()], [:]).empty()
+        !new ContainerConfig(null, null, null, null, [new ContainerLayer()], null).empty()
+        !new ContainerConfig(null, null, null, null, null, Map.of('k', 'v')).empty()
     }
 
     def 'should validate groovy truth' () {
