@@ -32,9 +32,9 @@ class ContainerConfigTest extends Specification {
         def l3 = new ContainerLayer( 'http://bar.com', 'sha256:88788', 100, 'sha256:67890' )
 
         and:
-        def c1 = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], '/work/dir', [l1], [foo:'bar'])
-        def c2 = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], '/work/dir', [l2], [foo:'bar'])
-        def c3 = new ContainerConfig(['/entry/xyz.sh'], ['/your/cmd'], ['BAR=2'], '/work/dir', [l3], [bar:'foo'])
+        def c1 = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], [foo:'bar'], '/work/dir', [l1])
+        def c2 = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], [foo:'bar'], '/work/dir', [l2])
+        def c3 = new ContainerConfig(['/entry/xyz.sh'], ['/your/cmd'], ['BAR=2'], [bar:'foo'], '/work/dir', [l3])
 
         expect:
         c1 == c2
@@ -51,11 +51,11 @@ class ContainerConfigTest extends Specification {
         def c0 = new ContainerConfig()
         and:
         def l1 = new ContainerLayer( 'http://foo.com', 'sha256:12345', 100, 'sha256:67890' )
-        def c1 = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], '/work/dir', [l1], [foo:'bar'])
+        def c1 = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], [foo:'bar'], '/work/dir', [l1])
 
         expect:
-        c0.toString() == 'ContainerConfig[entrypoint=null; cmd=null; env=null; workingDir=null; layers=[]; labels={}]'
-        c1.toString() == 'ContainerConfig[entrypoint=[/entry/point.sh]; cmd=[/my/cmd]; env=[FOO=1]; workingDir=/work/dir; layers=[ContainerLayer[location=http://foo.com; tarDigest=sha256:67890; gzipDigest=sha256:12345; gzipSize=100]]; labels={foo=bar}]'
+        c0.toString() == 'ContainerConfig[entrypoint=null; cmd=null; env=null; labels={}; workingDir=null; layers=[]]'
+        c1.toString() == 'ContainerConfig[entrypoint=[/entry/point.sh]; cmd=[/my/cmd]; env=[FOO=1]; labels={foo=bar}; workingDir=/work/dir; layers=[ContainerLayer[location=http://foo.com; tarDigest=sha256:67890; gzipDigest=sha256:12345; gzipSize=100]]]'
     }
 
     def 'should validate empty' () {
@@ -64,16 +64,16 @@ class ContainerConfigTest extends Specification {
         new ContainerConfig([], null, null, null, null, null).empty()
         new ContainerConfig(null, [], null, null, null, null).empty()
         new ContainerConfig(null, null, [], null, null, null).empty()
-        new ContainerConfig(null, null, null, '', null, null).empty()
-        new ContainerConfig(null, null, null, null, [], null).empty()
-        new ContainerConfig(null, null, null, null, null, Map.of()).empty()
+        new ContainerConfig(null, null, null, Map.of(), null, null).empty()
+        new ContainerConfig(null, null, null, null, '', null).empty()
+        new ContainerConfig(null, null, null, null, null, []).empty()
         and:
         !new ContainerConfig(['x'], null, null, null, null, null).empty()
         !new ContainerConfig(null, ['x'], null, null, null, null).empty()
         !new ContainerConfig(null, null, ['x'], null, null, null).empty()
-        !new ContainerConfig(null, null, null, 'x', null, null).empty()
-        !new ContainerConfig(null, null, null, null, [new ContainerLayer()], null).empty()
-        !new ContainerConfig(null, null, null, null, null, Map.of('k', 'v')).empty()
+        !new ContainerConfig(null, null, null, Map.of('k', 'v'), null, null).empty()
+        !new ContainerConfig(null, null, null, null, 'x', null).empty()
+        !new ContainerConfig(null, null, null, null, null, [new ContainerLayer()]).empty()
     }
 
     def 'should validate groovy truth' () {
@@ -83,22 +83,22 @@ class ContainerConfigTest extends Specification {
         !new ContainerConfig([], null, null, null, null, null)
         !new ContainerConfig(null, [], null, null, null, null)
         !new ContainerConfig(null, null, [], null, null, null)
-        !new ContainerConfig(null, null, null, '', null, null)
-        !new ContainerConfig(null, null, null, null, [], null)
-        !new ContainerConfig(null, null, null, null, null, Map.of())
+        !new ContainerConfig(null, null, null, Map.of(), null, null)
+        !new ContainerConfig(null, null, null, null, '', null)
+        !new ContainerConfig(null, null, null, null, null, [])
         and:
         new ContainerConfig(['x'], null, null, null, null, null)
         new ContainerConfig(null, ['x'], null, null, null, null)
         new ContainerConfig(null, null, ['x'], null, null, null)
-        new ContainerConfig(null, null, null, 'x', null, null)
-        new ContainerConfig(null, null, null, null, [new ContainerLayer()], null)
-        new ContainerConfig(null, null, null, null, null, Map.of('k', 'v'))
+        new ContainerConfig(null, null, null, Map.of('k', 'v'), null, null)
+        new ContainerConfig(null, null, null, null, 'x', null)
+        new ContainerConfig(null, null, null, null, null, [new ContainerLayer()])
     }
 
     def 'should copy objects' () {
         given:
         def l1 = new ContainerLayer( 'http://foo.com', 'sha256:12345', 100, 'sha256:67890' )
-        def c1 = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], '/work/dir', [l1], [foo:'bar'])
+        def c1 = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], [foo:'bar'], '/work/dir', [l1])
 
         expect:
         null == ContainerConfig.copy(null)
@@ -111,7 +111,7 @@ class ContainerConfigTest extends Specification {
     def 'should copy objects and strip data' () {
         given:
         def l1 = new ContainerLayer( 'data:12345678890', 'sha256:12345', 100, 'sha256:67890' )
-        def c1 = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], '/work/dir', [l1], [foo:'bar'])
+        def c1 = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], [foo:'bar'], '/work/dir', [l1])
 
         expect:
         c1 == ContainerConfig.copy(c1)
@@ -124,7 +124,7 @@ class ContainerConfigTest extends Specification {
     def 'should find fusion version' () {
         given:
         def l1 = new ContainerLayer( 'https://fusionfs.seqera.io/releases/v2.1.3-amd64.json' )
-        def config = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], '/work/dir', [l1], [foo:'bar'])
+        def config = new ContainerConfig(['/entry/point.sh'], ['/my/cmd'], ['FOO=1'], [foo:'bar'], '/work/dir', [l1])
 
         expect:
         config.fusionVersion() == new FusionVersion('2.1.3', 'amd64')
