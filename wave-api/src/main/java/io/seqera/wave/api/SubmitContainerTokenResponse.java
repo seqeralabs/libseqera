@@ -47,7 +47,6 @@ public class SubmitContainerTokenResponse {
     /**
      * The source container image that originated this request
      */
-    @Deprecated
     public String containerImage;
 
     /**
