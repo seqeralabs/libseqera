@@ -72,7 +72,6 @@ class ContainerConfigTest extends Specification {
         !new ContainerConfig(null, ['x'], null, null, null, null).empty()
         !new ContainerConfig(null, null, ['x'], null, null, null).empty()
         !new ContainerConfig(null, null, null, 'x', null, null).empty()
-        !new ContainerConfig(null, null, null, null, [new ContainerLayer()], [:]).empty()
         !new ContainerConfig(null, null, null, null, [new ContainerLayer()], null).empty()
         !new ContainerConfig(null, null, null, null, null, Map.of('k', 'v')).empty()
     }
@@ -85,13 +84,15 @@ class ContainerConfigTest extends Specification {
         !new ContainerConfig(null, [], null, null, null, null)
         !new ContainerConfig(null, null, [], null, null, null)
         !new ContainerConfig(null, null, null, '', null, null)
-        !new ContainerConfig(null, null, null, null, [], [:])
+        !new ContainerConfig(null, null, null, null, [], null)
+        !new ContainerConfig(null, null, null, null, null, Map.of())
         and:
         new ContainerConfig(['x'], null, null, null, null, null)
         new ContainerConfig(null, ['x'], null, null, null, null)
         new ContainerConfig(null, null, ['x'], null, null, null)
         new ContainerConfig(null, null, null, 'x', null, null)
-        new ContainerConfig(null, null, null, null, [new ContainerLayer()], [:])
+        new ContainerConfig(null, null, null, null, [new ContainerLayer()], null)
+        new ContainerConfig(null, null, null, null, null, Map.of('k', 'v'))
     }
 
     def 'should copy objects' () {
