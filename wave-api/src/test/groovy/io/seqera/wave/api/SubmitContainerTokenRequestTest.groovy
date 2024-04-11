@@ -90,6 +90,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 containerPlatform: 'b10',
                 buildRepository: 'b11',
                 cacheRepository: 'b12',
+                imageName: 'testImageName',
                 timestamp: 'b13',
                 fingerprint: 'b14',
                 freeze: false,
@@ -112,6 +113,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.containerPlatform == 'b10'
         other.buildRepository == 'b11'
         other.cacheRepository == 'b12'
+        other.imageName== 'testImageName'
         other.timestamp == 'b13'
         other.fingerprint == 'b14'
         other.freeze == false
