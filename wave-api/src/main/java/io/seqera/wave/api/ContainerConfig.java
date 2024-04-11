@@ -39,7 +39,7 @@ public class ContainerConfig {
     /**
      * Image labels
      */
-    public Map<String, String> labels;
+    public List<String> labels;
 
     public String workingDir;
 
@@ -49,12 +49,12 @@ public class ContainerConfig {
         entrypoint = null;
         cmd = null;
         env = null;
-        labels = new HashMap<>();
+        labels = null;
         workingDir = null;
         layers = new ArrayList<>();
     }
 
-    public ContainerConfig(List<String> entrypoint, List<String> cmd, List<String> env, Map<String, String> labels, String workDir, List<ContainerLayer> layers) {
+    public ContainerConfig(List<String> entrypoint, List<String> cmd, List<String> env, List<String> labels, String workDir, List<ContainerLayer> layers) {
         this.entrypoint = entrypoint;
         this.cmd = cmd;
         this.env = env;
@@ -142,7 +142,7 @@ public class ContainerConfig {
                 that.entrypoint!=null ? new ArrayList<>(that.entrypoint) : null,
                 that.cmd!=null ? new ArrayList<>(that.cmd) : null,
                 that.env!=null ? new ArrayList<>(that.env) : null,
-                that.labels != null ? that.labels.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)) : null,
+                that.labels != null ? new ArrayList<>(that.labels) : null,
                 that.workingDir,
                 that.layers != null ? that.layers.stream().map(it -> ContainerLayer.copy(it,stripData)).collect(Collectors.toList()) : null
         );
