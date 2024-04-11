@@ -64,7 +64,7 @@ public class DockerHelper {
         return toYamlTempFile(yaml);
     }
 
-    static List<String> condaPackagesToList(String packages) {
+    static public List<String> condaPackagesToList(String packages) {
         if (packages == null || packages.isEmpty())
             return null;
         return Arrays
