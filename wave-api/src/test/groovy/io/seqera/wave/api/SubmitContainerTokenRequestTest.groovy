@@ -90,6 +90,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 containerPlatform: 'b10',
                 buildRepository: 'b11',
                 cacheRepository: 'b12',
+                imageName: 'testImageName',
                 timestamp: 'b13',
                 fingerprint: 'b14',
                 freeze: false,
@@ -97,7 +98,6 @@ class SubmitContainerTokenRequestTest extends Specification {
                 dryRun: false,
                 workflowId: 'id123',
                 containerIncludes: ['other:image'],
-                imageName: 'testImageName',
                 packages: new PackagesSpec(type: PackagesSpec.Type.SPACK)
         )
         then:
@@ -113,6 +113,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.containerPlatform == 'b10'
         other.buildRepository == 'b11'
         other.cacheRepository == 'b12'
+        other.imageName== 'testImageName'
         other.timestamp == 'b13'
         other.fingerprint == 'b14'
         other.freeze == false
@@ -120,7 +121,6 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.dryRun == false
         other.workflowId == 'id123'
         other.containerIncludes == ['other:image']
-        other.imageName== 'testImageName'
         other.packages == new PackagesSpec(type: PackagesSpec.Type.SPACK)
         and:
         !other.formatSingularity()
