@@ -129,6 +129,114 @@ class DockerHelperTest extends Specification {
         DockerHelper.condaPackagesToCondaYaml('  ', ['foo']) == null
     }
 
+    def 'should add conda packages to conda yaml /1' () {
+        given:
+        def text = '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaEnvironmentToCondaYaml(text, null)
+        then:
+        result == '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['ch1', 'ch2'])
+        then:
+        result == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             channels:
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+    }
+
+    def 'should add conda packages to conda yaml /2' () {
+        given:
+        def text = '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaEnvironmentToCondaYaml(text, null)
+        then:
+        result == '''\
+         dependencies:
+         - foo=1.0
+         - bar=2.0
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['ch1', 'ch2'])
+        then:
+        result == '''\
+             dependencies:
+             - foo=1.0
+             - bar=2.0
+             channels:
+             - hola
+             - ciao
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+    }
+
+    def 'should add conda packages to conda yaml /3' () {
+        given:
+        def text = '''\
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.condaEnvironmentToCondaYaml(text, null)
+        then:
+        result == '''\
+         channels:
+         - hola
+         - ciao
+        '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['ch1', 'ch2'])
+        then:
+        result == '''\
+             channels:
+             - hola
+             - ciao
+             - ch1
+             - ch2
+            '''.stripIndent(true)
+
+        when:
+        result = DockerHelper.condaEnvironmentToCondaYaml(text, ['bioconda'])
+        then:
+        result == '''\
+             channels:
+             - hola
+             - ciao
+             - bioconda
+            '''.stripIndent(true)
+    }
+
+
     def 'should add conda packages to conda file /1' () {
         given:
         def condaFile = Files.createTempFile('conda','yaml')
@@ -254,7 +362,7 @@ class DockerHelperTest extends Specification {
 
         expect:
         DockerHelper.condaFileToDockerFile(CONDA_OPTS)== '''\
-                FROM mambaorg/micromamba:1.5.5
+                FROM mambaorg/micromamba:1.5.8-lunar
                 COPY --chown=$MAMBA_USER:$MAMBA_USER conda.yml /tmp/conda.yml
                 RUN micromamba install -y -n base -f /tmp/conda.yml \\
                     && micromamba install -y -n base foo::bar \\
@@ -268,7 +376,7 @@ class DockerHelperTest extends Specification {
 
         expect:
         DockerHelper.condaFileToDockerFile(new CondaOpts([:]))== '''\
-                FROM mambaorg/micromamba:1.5.5
+                FROM mambaorg/micromamba:1.5.8-lunar
                 COPY --chown=$MAMBA_USER:$MAMBA_USER conda.yml /tmp/conda.yml
                 RUN micromamba install -y -n base -f /tmp/conda.yml \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
@@ -285,7 +393,7 @@ class DockerHelperTest extends Specification {
         def CHANNELS = ['conda-forge', 'defaults']
         expect:
         DockerHelper.condaPackagesToDockerFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
-                FROM mambaorg/micromamba:1.5.5
+                FROM mambaorg/micromamba:1.5.8-lunar
                 RUN \\
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
@@ -303,7 +411,7 @@ class DockerHelperTest extends Specification {
 
         expect:
         DockerHelper.condaPackagesToDockerFile(PACKAGES, CHANNELS, CONDA_OPTS) == '''\
-                FROM mambaorg/micromamba:1.5.5
+                FROM mambaorg/micromamba:1.5.8-lunar
                 RUN \\
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base foo::one bar::two \\
@@ -320,7 +428,7 @@ class DockerHelperTest extends Specification {
 
         expect:
         DockerHelper.condaPackagesToDockerFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
-                FROM mambaorg/micromamba:1.5.5
+                FROM mambaorg/micromamba:1.5.8-lunar
                 RUN \\
                     micromamba install -y -n base -c foo -c bar bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
@@ -606,6 +714,65 @@ class DockerHelperTest extends Specification {
         folder?.deleteDir()
     }
 
+
+    def 'should merge spack yaml and base package' () {
+        given:
+        def SPACK_FILE1 = '''\
+            spack:
+              specs: [foo@1.2.3 x=one, bar @2]
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+        and:
+        def SPACK_FILE2 = '''\
+            spack:
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+        and:
+        def SPACK_FILE3 = '''\
+            foo:
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+
+        when:
+        def result = DockerHelper.addPackagesToSpackYaml(null, new SpackOpts())
+        then:
+        result == null
+
+        when:
+        result = DockerHelper.addPackagesToSpackYaml(SPACK_FILE1, new SpackOpts())
+        then:
+        result == SPACK_FILE1
+
+        when:
+        result = DockerHelper.addPackagesToSpackYaml(SPACK_FILE1, new SpackOpts(basePackages: 'alpha delta'))
+        then:
+        result == '''\
+            spack:
+              specs: [foo@1.2.3 x=one, bar @2, alpha, delta]
+              concretizer: {unify: true, reuse: false}
+            '''.stripIndent(true)
+
+
+        when:
+        result = DockerHelper.addPackagesToSpackYaml(SPACK_FILE2, new SpackOpts(basePackages: 'alpha delta'))
+        then:
+        result == '''\
+            spack:
+              concretizer: {unify: true, reuse: false}
+              specs: [alpha, delta]
+            '''.stripIndent(true)
+
+        when:
+        DockerHelper.addPackagesToSpackYaml(SPACK_FILE3, new SpackOpts(basePackages: 'foo'))
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        DockerHelper.addPackagesToSpackYaml('missing file', new SpackOpts(basePackages: 'foo'))
+        then:
+        thrown(IllegalArgumentException)
+    }
+
     /* *********************************************************************************
      * conda packages to singularity tests
      * *********************************************************************************/
@@ -617,7 +784,7 @@ class DockerHelperTest extends Specification {
         expect:
         DockerHelper.condaFileToSingularityFile(CONDA_OPTS)== '''\
                 BootStrap: docker
-                From: mambaorg/micromamba:1.5.5
+                From: mambaorg/micromamba:1.5.8-lunar
                 %files
                     {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
@@ -634,7 +801,7 @@ class DockerHelperTest extends Specification {
         expect:
         DockerHelper.condaFileToSingularityFile(new CondaOpts([:]))== '''\
                 BootStrap: docker
-                From: mambaorg/micromamba:1.5.5
+                From: mambaorg/micromamba:1.5.8-lunar
                 %files
                     {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
@@ -654,7 +821,7 @@ class DockerHelperTest extends Specification {
         expect:
         DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
                 BootStrap: docker
-                From: mambaorg/micromamba:1.5.5
+                From: mambaorg/micromamba:1.5.8-lunar
                 %post
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base conda-forge::procps-ng
@@ -673,7 +840,7 @@ class DockerHelperTest extends Specification {
         expect:
         DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, CONDA_OPTS) == '''\
                 BootStrap: docker
-                From: mambaorg/micromamba:1.5.5
+                From: mambaorg/micromamba:1.5.8-lunar
                 %post
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base foo::one bar::two
@@ -691,7 +858,7 @@ class DockerHelperTest extends Specification {
         expect:
         DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
                 BootStrap: docker
-                From: mambaorg/micromamba:1.5.5
+                From: mambaorg/micromamba:1.5.8-lunar
                 %post
                     micromamba install -y -n base -c foo -c bar bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base conda-forge::procps-ng

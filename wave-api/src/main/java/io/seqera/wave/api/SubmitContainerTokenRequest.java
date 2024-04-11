@@ -68,11 +68,13 @@ public class SubmitContainerTokenRequest implements Cloneable {
     /**
      * Conda recipe file used to build the container
      */
+    @Deprecated
     public String condaFile;
 
     /**
      * Spack recipe file used to build the container
      */
+    @Deprecated
     public String spackFile;
 
     /**
@@ -132,6 +134,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
      */
     public List<String> containerIncludes;
 
+    /**
+     * Defines the packages to be included in this container request
+     */
+    public PackagesSpec packages;
+
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
             final SubmitContainerTokenRequest copy = (SubmitContainerTokenRequest) this.clone();
@@ -175,6 +182,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.workflowId = (String) opts.get("workflowId");
             if( opts.containsKey("containerIncludes"))
                 copy.containerIncludes = (List<String>) opts.get("containerIncludes");
+            if( opts.containsKey("packages"))
+                copy.packages = (PackagesSpec) opts.get("packages");
             // done
             return copy;
         }
@@ -218,11 +227,13 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    @Deprecated
     public SubmitContainerTokenRequest withCondaFile(String condaFile) {
         this.condaFile = condaFile;
         return this;
     }
 
+    @Deprecated
     public SubmitContainerTokenRequest withSpackFile(String spackFile) {
         this.spackFile = spackFile;
         return this;
@@ -283,6 +294,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    public SubmitContainerTokenRequest withPackages(PackagesSpec packages) {
+        this.packages = packages;
+        return this;
+    }
+
     public boolean formatSingularity() {
         return "sif".equals(format);
     }
@@ -310,6 +326,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", dryRun=" + dryRun +
                 ", workflowId=" + workflowId +
                 ", containerIncludes=" + ObjectUtils.toString(containerIncludes) +
+                ", packages=" + packages +
                 '}';
     }
 }
