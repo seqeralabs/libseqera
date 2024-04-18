@@ -93,11 +93,6 @@ public class SubmitContainerTokenRequest implements Cloneable {
     public String cacheRepository;
 
     /**
-     * Image name of the container
-     */
-    public String imageName;
-
-    /**
      * Request timestamp
      */
     public String timestamp;
@@ -144,6 +139,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
      */
     public PackagesSpec packages;
 
+    public ImageNameStrategy nameStrategy;
+
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
             final SubmitContainerTokenRequest copy = (SubmitContainerTokenRequest) this.clone();
@@ -171,8 +168,6 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.buildRepository = (String)opts.get("buildRepository");
             if( opts.containsKey("cacheRepository") )
                 copy.cacheRepository = (String)opts.get("cacheRepository");
-            if( opts.containsKey("imageName") )
-                copy.imageName = (String)opts.get("imageName");
             if( opts.containsKey("timestamp") )
                 copy.timestamp = (String)opts.get("timestamp");
             if( opts.containsKey("fingerprint") )
@@ -191,6 +186,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.containerIncludes = (List<String>) opts.get("containerIncludes");
             if( opts.containsKey("packages"))
                 copy.packages = (PackagesSpec) opts.get("packages");
+            if( opts.containsKey("nameStrategy"))
+                copy.nameStrategy = (ImageNameStrategy) opts.get("nameStrategy");
             // done
             return copy;
         }
@@ -261,10 +258,6 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
-    public SubmitContainerTokenRequest withImageName(String imageName) {
-        this.imageName = imageName;
-        return this;
-    }
 
     public SubmitContainerTokenRequest withTimestamp(String timestamp) {
         this.timestamp = timestamp;
@@ -316,6 +309,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    public SubmitContainerTokenRequest withNameStrategy(ImageNameStrategy value) {
+        this.nameStrategy = value;
+        return this;
+    }
+
     public boolean formatSingularity() {
         return "sif".equals(format);
     }
@@ -335,7 +333,6 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", containerPlatform='" + containerPlatform + '\'' +
                 ", buildRepository='" + buildRepository + '\'' +
                 ", cacheRepository='" + cacheRepository + '\'' +
-                ", imageName='" + imageName + '\'' +
                 ", timestamp='" + timestamp + '\'' +
                 ", fingerprint='" + fingerprint + '\'' +
                 ", freeze=" + freeze +
@@ -345,6 +342,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", workflowId=" + workflowId +
                 ", containerIncludes=" + ObjectUtils.toString(containerIncludes) +
                 ", packages=" + packages +
+                ", nameStrategy=" + nameStrategy +
                 '}';
     }
 }
