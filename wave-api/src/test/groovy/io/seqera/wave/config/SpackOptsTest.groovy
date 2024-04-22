@@ -26,6 +26,20 @@ import spock.lang.Unroll
  */
 class SpackOptsTest extends Specification {
 
+    def 'should validate equals and hashcode'  () {
+        given:
+        def c1 = new SpackOpts(basePackages: 'x y', commands: ['this','that'])
+        def c2 = new SpackOpts(basePackages: 'x y', commands: ['this','that'])
+        def c3 = new SpackOpts(basePackages: 'x z', commands: ['this','that'])
+
+        expect:
+        c1 == c2
+        c1 != c3
+        and:
+        c1.hashCode() == c2.hashCode()
+        c1.hashCode() != c3.hashCode()
+    }
+
     def 'check spack default options' () {
         given:
         def opts = new SpackOpts()
