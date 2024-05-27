@@ -22,14 +22,13 @@ compileJava {
     options.release.set(11)
 }
 
-tasks.withType(GroovyCompile) {
-    sourceCompatibility = '11'
-    targetCompatibility = '11'
-}
+// Load the javaVersion property from gradle.properties
+def javaVersion = project.hasProperty('javaVersion') ? project.property('javaVersion') : '17'
 
+// Configure the Groovy compile tasks using the javaVersion property
 tasks.withType(GroovyCompile) {
-    sourceCompatibility = '17'
-    targetCompatibility = '17'
+    sourceCompatibility = javaVersion
+    targetCompatibility = javaVersion
 }
 
 group = 'io.seqera'
