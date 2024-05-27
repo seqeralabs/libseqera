@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java_version: [17]
+        java_version: [11, 17]
 
     steps:
       - name: Environment
@@ -43,6 +43,9 @@ jobs:
           distribution: 'adopt'
           architecture: x64
           cache: gradle
+
+      - name: Set JAVA_VERSION environment variable
+        run: echo "JAVA_VERSION=${{ matrix.java-version }}" >> $GITHUB_ENV
 
       - name: Compile
         run: |
