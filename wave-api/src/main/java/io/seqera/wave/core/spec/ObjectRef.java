@@ -48,6 +48,13 @@ public class ObjectRef {
         this.annotations = annotations;
     }
 
+    public ObjectRef(ObjectRef that) {
+        this.mediaType = that.mediaType;
+        this.digest = that.digest;
+        this.size = that.size;
+        this.annotations = that.annotations;
+    }
+
     static public ObjectRef of(String json) {
         Moshi moshi = new Moshi.Builder().build();
         try {

@@ -47,7 +47,9 @@ class SubmitContainerTokenRequestTest extends Specification {
                 format: 'sif',
                 dryRun: true,
                 workflowId: 'id123',
-                containerIncludes: ['busybox:latest']
+                containerIncludes: ['busybox:latest'],
+                packages: new PackagesSpec(type: PackagesSpec.Type.CONDA, environment: 'foo', entries: ['bar']),
+                nameStrategy: ImageNameStrategy.imageSuffix
         )
 
         when:
@@ -73,6 +75,8 @@ class SubmitContainerTokenRequestTest extends Specification {
         copy.dryRun == req.dryRun
         copy.workflowId == req.workflowId
         copy.containerIncludes == req.containerIncludes
+        copy.packages == req.packages
+        copy.nameStrategy == req.nameStrategy
         and:
         copy.formatSingularity()
 
@@ -91,13 +95,16 @@ class SubmitContainerTokenRequestTest extends Specification {
                 containerPlatform: 'b11',
                 buildRepository: 'b12',
                 cacheRepository: 'b13',
+                imageName: 'testImageName',
                 timestamp: 'b14',
                 fingerprint: 'b15',
                 freeze: false,
                 format: 'foo',
                 dryRun: false,
                 workflowId: 'id123',
-                containerIncludes: ['other:image']
+                containerIncludes: ['other:image'],
+                packages: new PackagesSpec(type: PackagesSpec.Type.SPACK),
+                nameStrategy: ImageNameStrategy.tagPrefix
         )
         then:
         other.towerAccessToken == 'b1'
@@ -120,6 +127,8 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.dryRun == false
         other.workflowId == 'id123'
         other.containerIncludes == ['other:image']
+        other.packages == new PackagesSpec(type: PackagesSpec.Type.SPACK)
+        other.nameStrategy == ImageNameStrategy.tagPrefix
         and:
         !other.formatSingularity()
     }
