@@ -26,6 +26,7 @@ import java.util.Objects;
  *
  * @author Marco De La Pierre <marco.delapierre@gmail.com>
  */
+@Deprecated
 public class SpackOpts {
 
     public static final SpackOpts EMPTY = new SpackOpts();

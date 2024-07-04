@@ -113,6 +113,7 @@ public class PackagesSpec {
         return this;
     }
 
+    @Deprecated
     public PackagesSpec withSpackOpts(SpackOpts opts) {
         this.spackOpts = opts;
         return this;
