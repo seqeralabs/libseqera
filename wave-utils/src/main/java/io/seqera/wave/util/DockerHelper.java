@@ -196,6 +196,7 @@ public class DockerHelper {
         return dumpCondaYaml(root);
     }
 
+    @Deprecated
     static public List<String> spackPackagesToList(String packages) {
         if( packages==null || packages.isEmpty() )
             return null;
@@ -222,6 +223,7 @@ public class DockerHelper {
         return result;
     }
 
+    @Deprecated
     static public String spackPackagesToSpackYaml(String packages, SpackOpts opts) {
         if( opts==null )
             opts = SpackOpts.EMPTY;
@@ -401,6 +403,7 @@ public class DockerHelper {
         return result.toString();
     }
 
+    @Deprecated
     public static Path addPackagesToSpackFile(String spackFile, SpackOpts opts) {
         // Case A - both empty, nothing to do
         if( StringUtils.isEmpty(spackFile) && StringUtils.isEmpty(opts.basePackages) )
