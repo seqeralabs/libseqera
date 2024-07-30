@@ -321,8 +321,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
     @Override
     public String toString() {
         return "SubmitContainerTokenRequest{" +
-                "towerAccessToken='" + towerAccessToken + '\'' +
-                ", towerRefreshToken='" + towerRefreshToken + '\'' +
+                "towerAccessToken='" + ObjectUtils.redact(towerAccessToken) + '\'' +
+                ", towerRefreshToken='" + ObjectUtils.redact(towerRefreshToken) + '\'' +
                 ", towerEndpoint='" + towerEndpoint + '\'' +
                 ", towerWorkspaceId=" + towerWorkspaceId +
                 ", containerImage='" + containerImage + '\'' +

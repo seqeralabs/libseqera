@@ -50,4 +50,14 @@ class ObjectUtils {
             return "(empty)";
         return String.join(",",list);
     }
+
+    static String redact(Object value) {
+        if( value==null )
+            return "(null)";
+        if( isEmpty(value.toString()) )
+            return ("(empty)");
+        final String str = value.toString();
+        return str.length()>=5 ? str.substring(0,3) + "****" : "****";
+    }
+
 }
