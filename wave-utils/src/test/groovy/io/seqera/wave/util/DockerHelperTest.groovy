@@ -363,7 +363,7 @@ class DockerHelperTest extends Specification {
         cleanup:
         if (condaFile) Files.delete(condaFile)
     }
-    
+
     def 'should create dockerfile content from conda file' () {
         given:
         def CONDA_OPTS = new CondaOpts([basePackages: 'foo::bar'])
@@ -374,6 +374,7 @@ class DockerHelperTest extends Specification {
                 COPY --chown=$MAMBA_USER:$MAMBA_USER conda.yml /tmp/conda.yml
                 RUN micromamba install -y -n base -f /tmp/conda.yml \\
                     && micromamba install -y -n base foo::bar \\
+                    && micromamba env export --explicit > environment.lock.yml \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -388,6 +389,7 @@ class DockerHelperTest extends Specification {
                 COPY --chown=$MAMBA_USER:$MAMBA_USER conda.yml /tmp/conda.yml
                 RUN micromamba install -y -n base -f /tmp/conda.yml \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
+                    && micromamba env export --explicit > environment.lock.yml \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -405,6 +407,7 @@ class DockerHelperTest extends Specification {
                 RUN \\
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
+                    && micromamba env export --explicit > environment.lock.yml \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -423,6 +426,7 @@ class DockerHelperTest extends Specification {
                 RUN \\
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base foo::one bar::two \\
+                    && micromamba env export --explicit > environment.lock.yml \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -440,6 +444,7 @@ class DockerHelperTest extends Specification {
                 RUN \\
                     micromamba install -y -n base -c foo -c bar bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
+                    && micromamba env export --explicit > environment.lock.yml \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -458,6 +463,7 @@ class DockerHelperTest extends Specification {
                 RUN \\
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
+                    && micromamba env export --explicit > environment.lock.yml \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -479,6 +485,7 @@ class DockerHelperTest extends Specification {
                 RUN \\
                     micromamba install -y -n base -c conda-forge -c defaults -f https://foo.com/some/conda-lock.yml \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
+                    && micromamba env export --explicit > environment.lock.yml \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -502,19 +509,19 @@ class DockerHelperTest extends Specification {
         DockerHelper.spackFileToDockerFile(new SpackOpts())== '''\
                 # Runner image
                 FROM {{spack_runner_image}}
-                
+
                 COPY --from=builder /opt/spack-env /opt/spack-env
                 COPY --from=builder /opt/software /opt/software
                 COPY --from=builder /opt/._view /opt/._view
-                
+
                 # Entrypoint for Singularity
                 RUN mkdir -p /.singularity.d/env && \\
                     cp -p /opt/spack-env/z10_spack_environment.sh /.singularity.d/env/91-environment.sh
                 # Entrypoint for Docker
                 RUN echo "#!/usr/bin/env bash\\n\\nset -ef -o pipefail\\nsource /opt/spack-env/z10_spack_environment.sh\\nexec \\"\\\$@\\"" \\
                     >/opt/spack-env/spack_docker_entrypoint.sh && chmod a+x /opt/spack-env/spack_docker_entrypoint.sh
-                
-                
+
+
                 ENTRYPOINT [ "/opt/spack-env/spack_docker_entrypoint.sh" ]
                 CMD [ "/bin/bash" ]
                 '''.stripIndent()
@@ -535,20 +542,20 @@ class DockerHelperTest extends Specification {
         DockerHelper.spackFileToDockerFile(new SpackOpts(SPACK_OPTS))== '''\
                 # Runner image
                 FROM {{spack_runner_image}}
-                
+
                 COPY --from=builder /opt/spack-env /opt/spack-env
                 COPY --from=builder /opt/software /opt/software
                 COPY --from=builder /opt/._view /opt/._view
-                
+
                 # Entrypoint for Singularity
                 RUN mkdir -p /.singularity.d/env && \\
                     cp -p /opt/spack-env/z10_spack_environment.sh /.singularity.d/env/91-environment.sh
                 # Entrypoint for Docker
                 RUN echo "#!/usr/bin/env bash\\n\\nset -ef -o pipefail\\nsource /opt/spack-env/z10_spack_environment.sh\\nexec \\"\\\$@\\"" \\
                     >/opt/spack-env/spack_docker_entrypoint.sh && chmod a+x /opt/spack-env/spack_docker_entrypoint.sh
-                
+
                 USER hola
-                
+
                 ENTRYPOINT [ "/opt/spack-env/spack_docker_entrypoint.sh" ]
                 CMD [ "/bin/bash" ]
                 '''.stripIndent()
@@ -560,19 +567,19 @@ class DockerHelperTest extends Specification {
         DockerHelper.spackFileToDockerFile(new SpackOpts())== '''\
                 # Runner image
                 FROM {{spack_runner_image}}
-                
+
                 COPY --from=builder /opt/spack-env /opt/spack-env
                 COPY --from=builder /opt/software /opt/software
                 COPY --from=builder /opt/._view /opt/._view
-                
+
                 # Entrypoint for Singularity
                 RUN mkdir -p /.singularity.d/env && \\
                     cp -p /opt/spack-env/z10_spack_environment.sh /.singularity.d/env/91-environment.sh
                 # Entrypoint for Docker
                 RUN echo "#!/usr/bin/env bash\\n\\nset -ef -o pipefail\\nsource /opt/spack-env/z10_spack_environment.sh\\nexec \\"\\\$@\\"" \\
                     >/opt/spack-env/spack_docker_entrypoint.sh && chmod a+x /opt/spack-env/spack_docker_entrypoint.sh
-                
-                
+
+
                 ENTRYPOINT [ "/opt/spack-env/spack_docker_entrypoint.sh" ]
                 CMD [ "/bin/bash" ]
                 '''.stripIndent()
@@ -934,7 +941,7 @@ class DockerHelperTest extends Specification {
                 /opt/software /opt/software
                 /opt/._view /opt/._view
                 /opt/spack-env/z10_spack_environment.sh /.singularity.d/env/91-environment.sh
-            
+
             %post
                 USER hola
             '''.stripIndent()
