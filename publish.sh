@@ -40,7 +40,7 @@ ret=$(aws s3api head-object --bucket $BUCKET --key $KEY 2>&1) && {
   echo "NOTE: Library $NAME-$VERSION already exist - skipping publishing"
  } || {
   if [[ $ret == *"Not Found"* ]]; then
-    # the lib does not exist => punlish it
+    # the lib does not exist => publish it
     ./gradlew $NAME:publishMavenPublicationToSeqeraRepositoryRepository
   else 
     # print the error message
