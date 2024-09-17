@@ -2,7 +2,12 @@ FROM {{base_image}}
 RUN \
     micromamba install -y -n base {{channel_opts}} {{target}} \
     {{base_packages}}
-    && micromamba env export --explicit > environment.lock \
-    && micromamba clean -a -y
+    && micromamba env export --explicit > environment.lock
+
+RUN echo "conda_lock_start" \
+    && cat environment.lock \
+    && echo "conda_lock_end"
+
+RUN micromamba clean -a -y
 USER root
 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
