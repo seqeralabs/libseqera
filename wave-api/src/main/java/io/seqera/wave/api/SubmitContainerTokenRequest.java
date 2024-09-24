@@ -139,7 +139,16 @@ public class SubmitContainerTokenRequest implements Cloneable {
      */
     public PackagesSpec packages;
 
+    /**
+     * The strategy applied to name a container build by wave when using
+     * the freeze option.
+     */
     public ImageNameStrategy nameStrategy;
+
+    /**
+     * The target registry to push the container when using the "mirror" mode
+     */
+    public String mirrorRegistry;
 
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
@@ -188,6 +197,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.packages = (PackagesSpec) opts.get("packages");
             if( opts.containsKey("nameStrategy"))
                 copy.nameStrategy = (ImageNameStrategy) opts.get("nameStrategy");
+            if( opts.containsKey("mirrorRegistry") )
+                copy.mirrorRegistry = (String) opts.get("mirrorRegistry");
             // done
             return copy;
         }
@@ -314,6 +325,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    public SubmitContainerTokenRequest withMirrorRegistry(String value) {
+        this.mirrorRegistry = value;
+        return this;
+    }
+
     public boolean formatSingularity() {
         return "sif".equals(format);
     }
@@ -343,6 +359,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", containerIncludes=" + ObjectUtils.toString(containerIncludes) +
                 ", packages=" + packages +
                 ", nameStrategy=" + nameStrategy +
+                ", mirrorRegistry=" + mirrorRegistry +
                 '}';
     }
 }

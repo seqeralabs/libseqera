@@ -65,9 +65,11 @@ public class SubmitContainerTokenResponse {
      */
     public Boolean freeze;
 
+    public Boolean mirror;
+
     public SubmitContainerTokenResponse() { }
 
-    public SubmitContainerTokenResponse(String token, String target, Instant expiration, String containerImage, String buildId, Boolean cached, Boolean freeze) {
+    public SubmitContainerTokenResponse(String token, String target, Instant expiration, String containerImage, String buildId, Boolean cached, Boolean freeze, Boolean mirror) {
         this.containerToken = token;
         this.targetImage = target;
         this.expiration = expiration;
@@ -75,6 +77,7 @@ public class SubmitContainerTokenResponse {
         this.buildId = buildId;
         this.cached = cached;
         this.freeze = freeze;
+        this.mirror = mirror;
     }
 
     @Override
@@ -88,12 +91,13 @@ public class SubmitContainerTokenResponse {
                 && Objects.equals(containerImage, that.containerImage)
                 && Objects.equals(buildId, that.buildId)
                 && Objects.equals(cached, that.cached)
-                && Objects.equals(freeze, that.freeze);
+                && Objects.equals(freeze, that.freeze)
+                && Objects.equals(mirror, that.mirror) ;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(containerToken, targetImage, expiration, containerImage, buildId, cached, freeze);
+        return Objects.hash(containerToken, targetImage, expiration, containerImage, buildId, cached, freeze, mirror);
     }
 
     @Override
@@ -106,6 +110,7 @@ public class SubmitContainerTokenResponse {
                 ", buildId='" + buildId + '\'' +
                 ", cached=" + cached +
                 ", freeze=" + freeze +
+                ", mirror=" + mirror +
                 '}';
     }
 }
