@@ -47,7 +47,8 @@ class SubmitContainerTokenRequestTest extends Specification {
                 workflowId: 'id123',
                 containerIncludes: ['busybox:latest'],
                 packages: new PackagesSpec(type: PackagesSpec.Type.CONDA, environment: 'foo', entries: ['bar']),
-                nameStrategy: ImageNameStrategy.imageSuffix
+                nameStrategy: ImageNameStrategy.imageSuffix,
+                mirrorRegistry: 'foo.com'
         )
 
         when:
@@ -73,6 +74,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         copy.containerIncludes == req.containerIncludes
         copy.packages == req.packages
         copy.nameStrategy == req.nameStrategy
+        copy.mirrorRegistry == req.mirrorRegistry
         and:
         copy.formatSingularity()
 
@@ -119,6 +121,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.workflowId == 'id123'
         other.containerIncludes == ['other:image']
         other.nameStrategy == ImageNameStrategy.tagPrefix
+        other.mirrorRegistry == 'bar.io'
         and:
         !other.formatSingularity()
     }

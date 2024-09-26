@@ -97,7 +97,9 @@ public class DockerHelper {
         final List<Object> pipPackages = new ArrayList<>(10);
         // split conda package by pip prefixed packages
         for( String it : condaPackagesToList(packages) ) {
-            if( it.startsWith("pip:") )
+            if( it.startsWith("pip::") )
+                throw new IllegalArgumentException(String.format("Invalid pip prefix - Likely you want to use '%s' instead of '%s'", it.replaceAll(":+",":"), it));
+            else if( it.startsWith("pip:") )
                 pipPackages.add(it.substring(4));
             else
                 condaPackages.add(it);

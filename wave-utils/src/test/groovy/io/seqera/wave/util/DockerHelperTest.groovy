@@ -110,6 +110,14 @@ class DockerHelperTest extends Specification {
                 '''.stripIndent(true)
     }
 
+    def 'should return an error when using invalid pip prefix' () {
+        when:
+        DockerHelper.condaPackagesToCondaYaml('pip::numpy', [] )
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message == "Invalid pip prefix - Likely you want to use 'pip:numpy' instead of 'pip::numpy'"
+    }
+
     def 'should map pip packages to conda yaml' () {
         expect:
         DockerHelper.condaPackagesToCondaYaml('pip:numpy pip:panda pip:matplotlib', ['defaults']) ==

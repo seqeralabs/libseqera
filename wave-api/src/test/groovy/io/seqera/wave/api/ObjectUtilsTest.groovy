@@ -92,4 +92,20 @@ class ObjectUtilsTest extends Specification {
         ['1']           | '1'
         ['1','2','3']   | '1,2,3'
     }
+
+    @Unroll
+    def 'should strip secret' () {
+        expect:
+        ObjectUtils.redact(SECRET) == EXPECTED
+
+        where:
+        SECRET          | EXPECTED
+        'hi'            | '****'
+        'Hello'         | 'Hel****'
+        'World'         | 'Wor****'
+        '12345678'      | '123****'
+        'hola'          | '****'
+        null            | '(null)'
+        ''              | '(empty)'
+    }
 }
