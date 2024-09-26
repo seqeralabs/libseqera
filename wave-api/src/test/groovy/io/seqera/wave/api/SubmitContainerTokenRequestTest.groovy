@@ -99,7 +99,8 @@ class SubmitContainerTokenRequestTest extends Specification {
                 dryRun: false,
                 workflowId: 'id123',
                 containerIncludes: ['other:image'],
-                nameStrategy: ImageNameStrategy.tagPrefix
+                nameStrategy: ImageNameStrategy.tagPrefix,
+                mirrorRegistry: 'bar.io'
         )
         then:
         other.towerAccessToken == 'b1'
