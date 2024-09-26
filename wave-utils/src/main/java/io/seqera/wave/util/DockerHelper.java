@@ -33,14 +33,13 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import io.seqera.wave.config.CondaOpts;
-import io.seqera.wave.config.SpackOpts;
 import org.apache.commons.lang3.StringUtils;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.representer.Representer;
 
 /**
- * Helper class to create Dockerfile for Conda and Spack package managers
+ * Helper class to create Dockerfile for Conda package manager
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
@@ -194,70 +193,6 @@ public class DockerHelper {
         return dumpCondaYaml(root);
     }
 
-    @Deprecated
-    static public List<String> spackPackagesToList(String packages) {
-        if( packages==null || packages.isEmpty() )
-            return null;
-        final List<String> entries = Arrays
-                .stream(packages.split(" ")).map(it -> trim0(it)).collect(Collectors.toList());
-        final List<String> result = new ArrayList<>();
-        List<String> current = new ArrayList<>();
-        for( String it : entries ) {
-            if( it==null || it.isEmpty() || it.isBlank() )
-                continue;
-            if( !Character.isLetterOrDigit(it.charAt(0)) || it.contains("=") ) {
-              current.add(it);
-            }
-            else {
-                if( current.size()>0 )
-                    result.add(String.join(" ",current));
-                current = new ArrayList<>();
-                current.add(it);
-            }
-        }
-        // remaining entries
-        if( current.size()>0 )
-            result.add(String.join(" ",current));
-        return result;
-    }
-
-    @Deprecated
-    static public String spackPackagesToSpackYaml(String packages, SpackOpts opts) {
-        if( opts==null )
-            opts = SpackOpts.EMPTY;
-        
-        final List<String> base = spackPackagesToList(opts.basePackages);
-        final List<String> custom = spackPackagesToList(packages);
-        if( base==null && custom==null )
-            return null;
-
-        final List<String> specs = new ArrayList<>();
-        if( base!=null )
-            specs.addAll(base);
-        if( custom!=null )
-            specs.addAll(custom);
-
-        final Map<String,Object> concretizer = new LinkedHashMap<>();
-        concretizer.put("unify", true);
-        concretizer.put("reuse", false);
-
-        final Map<String,Object> spack = new LinkedHashMap<>();
-        spack.put("specs", specs);
-        spack.put("concretizer", concretizer);
-
-        final Map<String,Object> root = new LinkedHashMap<>();
-        root.put("spack", spack);
-
-        return new Yaml().dump(root);
-    }
-
-    static public Path spackPackagesToSpackFile(String packages, SpackOpts opts) {
-        final String yaml = spackPackagesToSpackYaml(packages, opts);
-        if( yaml==null || yaml.isEmpty())
-            return null;
-        return toYamlTempFile(yaml);
-    }
-
     static private Path toYamlTempFile(String yaml) {
         try {
             final File tempFile = File.createTempFile("nf-temp", ".yaml");
@@ -269,30 +204,6 @@ public class DockerHelper {
         catch (IOException e) {
             throw new IllegalStateException("Unable to write temporary file - Reason: " + e.getMessage(), e);
         }
-    }
-
-    static public String spackFileToDockerFile(SpackOpts opts) {
-        // create bindings
-        final Map<String,String> binding = spackBinding(opts);
-        // final ignored variables
-        final List<String> ignore = List.of("spack_runner_image");
-        //  return the template
-        return renderTemplate0("/templates/spack/dockerfile-spack-file.txt", binding, ignore);
-    }
-
-    static public String spackFileToSingularityFile(SpackOpts opts){
-        // create bindings
-        final Map<String,String> binding = spackBinding(opts);
-        // final ignored variables
-        final List<String> ignore = List.of("spack_runner_image");
-        //  return the template
-        return renderTemplate0("/templates/spack/singularityfile-spack-file.txt", binding, ignore);
-    }
-
-    static private Map<String,String> spackBinding(SpackOpts opts) {
-        final Map<String,String> binding = new HashMap<>();
-        binding.put("add_commands", joinCommands(opts.commands));
-        return binding;
     }
 
     static public String condaPackagesToDockerFile(String packages, List<String> condaChannels, CondaOpts opts) {
@@ -399,90 +310,6 @@ public class DockerHelper {
             result.append(cmd);
         }
         return result.toString();
-    }
-
-    @Deprecated
-    public static Path addPackagesToSpackFile(String spackFile, SpackOpts opts) {
-        // Case A - both empty, nothing to do
-        if( StringUtils.isEmpty(spackFile) && StringUtils.isEmpty(opts.basePackages) )
-            return null;
-
-        // Case B - the spack file is empty, but some base package are given
-        // create a spack file with those packages
-        if( StringUtils.isEmpty(spackFile) ) {
-            return spackPackagesToSpackFile(null, opts);
-        }
-
-        final Path spackEnvPath = Path.of(spackFile);
-
-        // make sure the file exists
-        if( !Files.exists(spackEnvPath) ) {
-            throw new IllegalArgumentException("The specified Spack environment file cannot be found: " + spackFile);
-        }
-
-        // Case C - if not base packages are given just return the spack file as a path
-        if( StringUtils.isEmpty(opts.basePackages) ) {
-            return spackEnvPath;
-        }
-
-        // Case D - last case, both spack file and base packages are specified
-        // => parse the spack file yaml, add the base packages to it
-        try {
-            final String result = addPackagesToSpackYaml(Files.readString(spackEnvPath), opts);
-            return toYamlTempFile( result );
-        }
-        catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("The specified Spack environment file cannot be found: " + spackFile, e);
-        }
-        catch (IOException e) {
-            throw new IllegalArgumentException("Unable to parse Spack environment file: " + spackFile, e);
-        }
-    }
-
-    public static String addPackagesToSpackYaml(String spackYaml, SpackOpts opts) {
-        if( opts==null )
-            opts = SpackOpts.EMPTY;
-        
-        // Case A - both empty, nothing to do
-        if( StringUtils.isEmpty(spackYaml) && StringUtils.isEmpty(opts.basePackages) )
-            return null;
-
-        // Case B - the spack file is empty, but some base package are given
-        // create a spack file with those packages
-        if( StringUtils.isEmpty(spackYaml) ) {
-            return spackPackagesToSpackYaml(null, opts);
-        }
-
-        // Case C - if not base packages are given just return the spack file as a path
-        if( StringUtils.isEmpty(opts.basePackages) ) {
-            return spackYaml;
-        }
-
-        // Case D - last case, both spack file and base packages are specified
-        // => parse the spack file yaml, add the base packages to it
-        final Yaml yaml = new Yaml();
-        try {
-            // 1. parse the file
-            Map<String,Object> data = yaml.load(spackYaml);
-            // 2. parse the base packages
-            final List<String> base = spackPackagesToList(opts.basePackages);
-            // 3. append to the specs
-            Map<String,Object> spack = (Map<String,Object>) data.get("spack");
-            if( spack==null ) {
-                throw new IllegalArgumentException("The specified Spack environment file does not contain a root entry 'spack:'");
-            }
-            List<String> specs = (List<String>)spack.get("specs");
-            if( specs==null ) {
-                specs = new ArrayList<>();
-                spack.put("specs", specs);
-            }
-            specs.addAll(base);
-            // 5. return it
-            return yaml.dump(data) ;
-        }
-        catch (Exception e) {
-            throw new IllegalArgumentException("Unable to parse Spack yaml:\n" + spackYaml);
-        }
     }
 
 }

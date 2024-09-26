@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.Objects;
 
 import io.seqera.wave.config.CondaOpts;
-import io.seqera.wave.config.SpackOpts;
+
 /**
  * Model a Package environment requirements
  *
@@ -29,7 +29,7 @@ import io.seqera.wave.config.SpackOpts;
  */
 public class PackagesSpec {
 
-    public enum Type { CONDA, SPACK }
+    public enum Type { CONDA }
 
     public Type type;
 
@@ -49,11 +49,6 @@ public class PackagesSpec {
     public CondaOpts condaOpts;
 
     /**
-     * Spack build options
-     */
-    public SpackOpts spackOpts;
-
-    /**
      * channels used for downloading packages
      */
     public List<String> channels;
@@ -67,13 +62,12 @@ public class PackagesSpec {
                 && Objects.equals(environment, that.environment)
                 && Objects.equals(entries, that.entries)
                 && Objects.equals(condaOpts, that.condaOpts)
-                && Objects.equals(spackOpts, that.spackOpts)
                 && Objects.equals(channels, that.channels);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, environment, entries, condaOpts, spackOpts, channels);
+        return Objects.hash(type, environment, entries, condaOpts, channels);
     }
 
     @Override
@@ -83,7 +77,6 @@ public class PackagesSpec {
                 ", envFile='" + environment + '\'' +
                 ", packages=" + entries +
                 ", condaOpts=" + condaOpts +
-                ", spackOpts=" + spackOpts +
                 ", channels=" + ObjectUtils.toString(channels) +
                 '}';
     }
@@ -113,9 +106,4 @@ public class PackagesSpec {
         return this;
     }
 
-    @Deprecated
-    public PackagesSpec withSpackOpts(SpackOpts opts) {
-        this.spackOpts = opts;
-        return this;
-    }
 }

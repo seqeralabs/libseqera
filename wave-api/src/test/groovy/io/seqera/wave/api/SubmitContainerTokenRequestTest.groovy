@@ -36,7 +36,6 @@ class SubmitContainerTokenRequestTest extends Specification {
                 containerFile:  'a6',
                 containerConfig: new ContainerConfig(entrypoint: ['this','that']),
                 condaFile: 'a8',
-                spackFile: 'a9',
                 containerPlatform: 'a10',
                 buildRepository: 'a11',
                 cacheRepository: 'a12',
@@ -62,7 +61,6 @@ class SubmitContainerTokenRequestTest extends Specification {
         copy.containerFile == req.containerFile
         copy.containerConfig == req.containerConfig
         copy.condaFile == req.condaFile
-        copy.spackFile == req.spackFile
         copy.containerPlatform == req.containerPlatform
         copy.buildRepository == req.buildRepository
         copy.cacheRepository == req.cacheRepository
@@ -88,7 +86,6 @@ class SubmitContainerTokenRequestTest extends Specification {
                 containerFile:  'b6',
                 containerConfig: new ContainerConfig(entrypoint: ['foo','bar']),
                 condaFile: 'b8',
-                spackFile: 'b9',
                 containerPlatform: 'b10',
                 buildRepository: 'b11',
                 cacheRepository: 'b12',
@@ -100,7 +97,6 @@ class SubmitContainerTokenRequestTest extends Specification {
                 dryRun: false,
                 workflowId: 'id123',
                 containerIncludes: ['other:image'],
-                packages: new PackagesSpec(type: PackagesSpec.Type.SPACK),
                 nameStrategy: ImageNameStrategy.tagPrefix
         )
         then:
@@ -112,7 +108,6 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.containerFile == 'b6'
         other.containerConfig == new ContainerConfig(entrypoint: ['foo','bar'])
         other.condaFile == 'b8'
-        other.spackFile == 'b9'
         other.containerPlatform == 'b10'
         other.buildRepository == 'b11'
         other.cacheRepository == 'b12'
@@ -123,7 +118,6 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.dryRun == false
         other.workflowId == 'id123'
         other.containerIncludes == ['other:image']
-        other.packages == new PackagesSpec(type: PackagesSpec.Type.SPACK)
         other.nameStrategy == ImageNameStrategy.tagPrefix
         and:
         !other.formatSingularity()
