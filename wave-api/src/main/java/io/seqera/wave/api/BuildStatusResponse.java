@@ -33,7 +33,7 @@ public class BuildStatusResponse {
     /** Build Id */
     final public String id;
 
-    /** Status of image build */
+    /** ContainerStatus of image build */
     final public Status status;
 
     /** Build start time */
@@ -69,7 +69,12 @@ public class BuildStatusResponse {
         if (this == object) return true;
         if (object == null || getClass() != object.getClass()) return false;
         BuildStatusResponse that = (BuildStatusResponse) object;
-        return Objects.equals(id, that.id) && status == that.status && Objects.equals(startTime, that.startTime) && Objects.equals(duration, that.duration) && Objects.equals(succeeded, that.succeeded);
+        return Objects.equals(id, that.id)
+                && status == that.status
+                && Objects.equals(startTime, that.startTime)
+                && Objects.equals(duration, that.duration)
+                && Objects.equals(succeeded, that.succeeded)
+                ;
     }
 
     @Override

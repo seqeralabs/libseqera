@@ -29,27 +29,42 @@ class SubmitContainerTokenResponseTest extends Specification {
 
     def 'should create response' () {
         when:
-        def ts = Instant.now().plusSeconds(10)
+        def timestamp = Instant.now().plusSeconds(10)
         and:
-        def resp = new SubmitContainerTokenResponse('123', 'target', ts, 'container/x', 'build-xyz', true, true, true)
+        def resp = new SubmitContainerTokenResponse(
+                '123',
+                '456',
+                'target',
+                timestamp,
+                'container/x',
+                'build-1234',
+                true,
+                true,
+                true,
+                'scan-1234',
+                ContainerStatus.PENDING
+        )
         then:
-        resp.containerToken == '123'
+        resp.requestId == '123'
+        resp.containerToken == '456'
         resp.targetImage == 'target'
-        resp.expiration == ts
+        resp.expiration == timestamp
         resp.containerImage == 'container/x'
-        resp.buildId == 'build-xyz'
+        resp.buildId == 'build-1234'
         resp.cached
         resp.freeze
         resp.mirror
+        resp.scanId == 'scan-1234'
+        resp.status == ContainerStatus.PENDING
     }
 
     def 'should validate equals & hashCode' () {
         given:
         def ts = Instant.now().plusSeconds(10)
         and:
-        def r1 = new SubmitContainerTokenResponse('123', 'target', ts, 'container/x', 'build-xyz', false, false, false)
-        def r2 = new SubmitContainerTokenResponse('123', 'target', ts, 'container/x', 'build-xyz', false, false, false)
-        def r3 = new SubmitContainerTokenResponse('abc', 'target', ts, 'container/x', 'build-xyz', false, false, false)
+        def r1 = new SubmitContainerTokenResponse('123', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.READY)
+        def r2 = new SubmitContainerTokenResponse('123', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.READY)
+        def r3 = new SubmitContainerTokenResponse('abc', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.READY)
 
         expect:
         r1 == r2

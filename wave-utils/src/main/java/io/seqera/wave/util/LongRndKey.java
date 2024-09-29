@@ -59,11 +59,20 @@ public class LongRndKey {
         return rnd0().longValue();
     }
 
+    static public String rndLongAsString() {
+        StringBuilder result = new StringBuilder();
+        result.append(rndLong());
+        while( result.length()<15 )
+            result.insert(0, "0");
+        return result.toString();
+    }
+
     static public String rndHex() {
-        String result = rnd0().toString(16);
+        StringBuilder result = new StringBuilder();
+        result.append(rnd0().toString(16));
         while( result.length()<12 )
-            result = "0" + result;
-        return result;
+            result.insert(0, "0");
+        return result.toString();
     }
 
 }
