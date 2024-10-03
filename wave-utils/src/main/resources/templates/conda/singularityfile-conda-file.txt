@@ -10,6 +10,5 @@ From: {{base_image}}
     cat environment.lock
     echo "<<<<<<< CONDA_LOCK_END"
     micromamba clean -a -y
-
 %environment
     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
