@@ -376,9 +376,9 @@ class DockerHelperTest extends Specification {
                     && micromamba install -y -n base foo::bar \\
                     && micromamba env export --name base --explicit > environment.lock
 
-                RUN echo "conda_lock_start" \\
+                RUN echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "conda_lock_end"
+                    && echo "<<<<<<< CONDA_LOCK_END"
 
                 RUN micromamba clean -a -y
                 USER root
@@ -396,9 +396,9 @@ class DockerHelperTest extends Specification {
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba env export --name base --explicit > environment.lock
                     
-                RUN echo "conda_lock_start" \\
+                RUN echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "conda_lock_end"
+                    && echo "<<<<<<< CONDA_LOCK_END"
 
                 RUN micromamba clean -a -y
                 USER root
@@ -419,9 +419,9 @@ class DockerHelperTest extends Specification {
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba env export --name base --explicit > environment.lock
                     
-                RUN echo "conda_lock_start" \\
+                RUN echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "conda_lock_end"
+                    && echo "<<<<<<< CONDA_LOCK_END"
 
                 RUN micromamba clean -a -y
                 USER root
@@ -443,9 +443,9 @@ class DockerHelperTest extends Specification {
                     && micromamba install -y -n base foo::one bar::two \\
                     && micromamba env export --name base --explicit > environment.lock
                     
-                RUN echo "conda_lock_start" \\
+                RUN echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "conda_lock_end"
+                    && echo "<<<<<<< CONDA_LOCK_END"
 
                 RUN micromamba clean -a -y
                 USER root
@@ -466,9 +466,9 @@ class DockerHelperTest extends Specification {
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba env export --name base --explicit > environment.lock
                     
-                RUN echo "conda_lock_start" \\
+                RUN echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "conda_lock_end"
+                    && echo "<<<<<<< CONDA_LOCK_END"
 
                 RUN micromamba clean -a -y
                 USER root
@@ -490,9 +490,9 @@ class DockerHelperTest extends Specification {
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba env export --name base --explicit > environment.lock
                     
-                RUN echo "conda_lock_start" \\
+                RUN echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "conda_lock_end"
+                    && echo "<<<<<<< CONDA_LOCK_END"
 
                 RUN micromamba clean -a -y
                 USER root
@@ -517,9 +517,9 @@ class DockerHelperTest extends Specification {
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba env export --name base --explicit > environment.lock
                     
-                RUN echo "conda_lock_start" \\
+                RUN echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "conda_lock_end"
+                    && echo "<<<<<<< CONDA_LOCK_END"
 
                 RUN micromamba clean -a -y
                 USER root
