@@ -6,7 +6,7 @@ RUN \
 
 RUN echo ">>>>>>> CONDA_LOCK_START" \
     && cat environment.lock \
-    && echo ">>>>>>> CONDA_LOCK_END"
+    && echo "<<<<<<< CONDA_LOCK_END"
 
 RUN micromamba clean -a -y
 USER root
