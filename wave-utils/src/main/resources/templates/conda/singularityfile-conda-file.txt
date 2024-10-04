@@ -5,6 +5,10 @@ From: {{base_image}}
 %post
     micromamba install -y -n base -f /scratch/conda.yml
     {{base_packages}}
+    micromamba env export --name base --explicit > environment.lock
+    echo ">> CONDA_LOCK_START"
+    cat environment.lock
+    echo "<< CONDA_LOCK_END"
     micromamba clean -a -y
 %environment
     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
