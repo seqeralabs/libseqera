@@ -30,8 +30,7 @@ class ScanModeTest extends Specification {
         expect:
         !ScanMode.none
         and:
-        ScanMode.lazy
-        ScanMode.sync
+        ScanMode.required
         ScanMode.async
     }
 }

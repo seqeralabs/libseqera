@@ -24,10 +24,9 @@ package io.seqera.wave.api;
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 public enum ScanMode {
-    none,
-    async,
-    sync,
-    lazy,
+    none,       // no scan is performed
+    async,      // scan is carried out asynchronously once the build is complete
+    required,   // scan completion is required for the container request to reach 'DONE' status
     ;
 
     public boolean asBoolean() {

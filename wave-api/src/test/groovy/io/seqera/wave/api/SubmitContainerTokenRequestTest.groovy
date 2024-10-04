@@ -50,8 +50,8 @@ class SubmitContainerTokenRequestTest extends Specification {
                 packages: new PackagesSpec(type: PackagesSpec.Type.CONDA, environment: 'foo', entries: ['bar']),
                 nameStrategy: ImageNameStrategy.imageSuffix,
                 mirrorRegistry: 'foo.com',
-                scanMode: ScanMode.lazy,
-                scanLevels: List.of(ScanLevel.low, ScanLevel.medium),
+                scanMode: ScanMode.async,
+                scanLevels: List.of(ScanLevel.LOW, ScanLevel.MEDIUM),
         )
 
         when:
@@ -109,8 +109,8 @@ class SubmitContainerTokenRequestTest extends Specification {
                 packages: new PackagesSpec(type: PackagesSpec.Type.SPACK),
                 nameStrategy: ImageNameStrategy.tagPrefix,
                 mirrorRegistry: 'bar.io',
-                scanMode: ScanMode.sync,
-                scanLevels: List.of(ScanLevel.high)
+                scanMode: ScanMode.required,
+                scanLevels: List.of(ScanLevel.HIGH)
         )
         then:
         other.towerAccessToken == 'b1'
@@ -135,8 +135,8 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.packages == new PackagesSpec(type: PackagesSpec.Type.SPACK)
         other.nameStrategy == ImageNameStrategy.tagPrefix
         other.mirrorRegistry == 'bar.io'
-        other.scanMode == ScanMode.sync
-        other.scanLevels == List.of(ScanLevel.high)
+        other.scanMode == ScanMode.required
+        other.scanLevels == List.of(ScanLevel.HIGH)
         and:
         !other.formatSingularity()
     }

@@ -23,8 +23,8 @@ package io.seqera.wave.api;
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 public enum ScanLevel {
-    low,
-    medium,
-    high,
-    critical
+    LOW,
+    MEDIUM,
+    HIGH,
+    CRITICAL
 }

@@ -62,9 +62,9 @@ class SubmitContainerTokenResponseTest extends Specification {
         given:
         def ts = Instant.now().plusSeconds(10)
         and:
-        def r1 = new SubmitContainerTokenResponse('123', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.READY)
-        def r2 = new SubmitContainerTokenResponse('123', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.READY)
-        def r3 = new SubmitContainerTokenResponse('abc', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.READY)
+        def r1 = new SubmitContainerTokenResponse('123', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.DONE)
+        def r2 = new SubmitContainerTokenResponse('123', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.DONE)
+        def r3 = new SubmitContainerTokenResponse('abc', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.DONE)
 
         expect:
         r1 == r2

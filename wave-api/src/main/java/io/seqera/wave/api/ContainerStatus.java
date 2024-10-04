@@ -26,5 +26,6 @@ public enum ContainerStatus {
     PENDING,
     BUILDING,
     SCANNING,
-    READY
+    DONE,
+    FAILED
 }
