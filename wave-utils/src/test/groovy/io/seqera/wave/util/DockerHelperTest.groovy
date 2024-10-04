@@ -377,7 +377,7 @@ class DockerHelperTest extends Specification {
                     && micromamba env export --name base --explicit > environment.lock \\
                     && echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END"
+                    && echo "<<<<<<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -395,7 +395,7 @@ class DockerHelperTest extends Specification {
                     && micromamba env export --name base --explicit > environment.lock \\
                     && echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END"
+                    && echo "<<<<<<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -416,7 +416,7 @@ class DockerHelperTest extends Specification {
                     && micromamba env export --name base --explicit > environment.lock \\
                     && echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END"
+                    && echo "<<<<<<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -438,7 +438,7 @@ class DockerHelperTest extends Specification {
                     && micromamba env export --name base --explicit > environment.lock \\
                     && echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END"
+                    && echo "<<<<<<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -459,7 +459,7 @@ class DockerHelperTest extends Specification {
                     && micromamba env export --name base --explicit > environment.lock \\
                     && echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END"
+                    && echo "<<<<<<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -481,7 +481,7 @@ class DockerHelperTest extends Specification {
                     && micromamba env export --name base --explicit > environment.lock \\
                     && echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END"
+                    && echo "<<<<<<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -506,7 +506,7 @@ class DockerHelperTest extends Specification {
                     && micromamba env export --name base --explicit > environment.lock \\
                     && echo ">>>>>>> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END"
+                    && echo "<<<<<<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
