@@ -375,9 +375,9 @@ class DockerHelperTest extends Specification {
                 RUN micromamba install -y -n base -f /tmp/conda.yml \\
                     && micromamba install -y -n base foo::bar \\
                     && micromamba env export --name base --explicit > environment.lock \\
-                    && echo ">>>>>>> CONDA_LOCK_START" \\
+                    && echo ">> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END" \\
+                    && echo "<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -393,9 +393,9 @@ class DockerHelperTest extends Specification {
                 RUN micromamba install -y -n base -f /tmp/conda.yml \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba env export --name base --explicit > environment.lock \\
-                    && echo ">>>>>>> CONDA_LOCK_START" \\
+                    && echo ">> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END" \\
+                    && echo "<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -414,9 +414,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba env export --name base --explicit > environment.lock \\
-                    && echo ">>>>>>> CONDA_LOCK_START" \\
+                    && echo ">> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END" \\
+                    && echo "<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -436,9 +436,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base foo::one bar::two \\
                     && micromamba env export --name base --explicit > environment.lock \\
-                    && echo ">>>>>>> CONDA_LOCK_START" \\
+                    && echo ">> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END" \\
+                    && echo "<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -457,9 +457,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -c foo -c bar bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba env export --name base --explicit > environment.lock \\
-                    && echo ">>>>>>> CONDA_LOCK_START" \\
+                    && echo ">> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END" \\
+                    && echo "<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -479,9 +479,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1 \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba env export --name base --explicit > environment.lock \\
-                    && echo ">>>>>>> CONDA_LOCK_START" \\
+                    && echo ">> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END" \\
+                    && echo "<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -504,9 +504,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -c conda-forge -c defaults -f https://foo.com/some/conda-lock.yml \\
                     && micromamba install -y -n base conda-forge::procps-ng \\
                     && micromamba env export --name base --explicit > environment.lock \\
-                    && echo ">>>>>>> CONDA_LOCK_START" \\
+                    && echo ">> CONDA_LOCK_START" \\
                     && cat environment.lock \\
-                    && echo "<<<<<<< CONDA_LOCK_END" \\
+                    && echo "<< CONDA_LOCK_END" \\
                     && micromamba clean -a -y
                 USER root
                 ENV PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -827,9 +827,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -f /scratch/conda.yml
                     micromamba install -y -n base foo::bar=1.0
                     micromamba env export --name base --explicit > environment.lock
-                    echo ">>>>>>> CONDA_LOCK_START"
+                    echo ">> CONDA_LOCK_START"
                     cat environment.lock
-                    echo "<<<<<<< CONDA_LOCK_END"
+                    echo "<< CONDA_LOCK_END"
                     micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -848,9 +848,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -f /scratch/conda.yml
                     micromamba install -y -n base conda-forge::procps-ng
                     micromamba env export --name base --explicit > environment.lock
-                    echo ">>>>>>> CONDA_LOCK_START"
+                    echo ">> CONDA_LOCK_START"
                     cat environment.lock
-                    echo "<<<<<<< CONDA_LOCK_END"
+                    echo "<< CONDA_LOCK_END"
                     micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -870,9 +870,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base conda-forge::procps-ng
                     micromamba env export --name base --explicit > environment.lock
-                    echo ">>>>>>> CONDA_LOCK_START"
+                    echo ">> CONDA_LOCK_START"
                     cat environment.lock
-                    echo "<<<<<<< CONDA_LOCK_END"
+                    echo "<< CONDA_LOCK_END"
                     micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -893,9 +893,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base foo::one bar::two
                     micromamba env export --name base --explicit > environment.lock
-                    echo ">>>>>>> CONDA_LOCK_START"
+                    echo ">> CONDA_LOCK_START"
                     cat environment.lock
-                    echo "<<<<<<< CONDA_LOCK_END"
+                    echo "<< CONDA_LOCK_END"
                     micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -915,9 +915,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -c foo -c bar bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base conda-forge::procps-ng
                     micromamba env export --name base --explicit > environment.lock
-                    echo ">>>>>>> CONDA_LOCK_START"
+                    echo ">> CONDA_LOCK_START"
                     cat environment.lock
-                    echo "<<<<<<< CONDA_LOCK_END"
+                    echo "<< CONDA_LOCK_END"
                     micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -938,9 +938,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base conda-forge::procps-ng
                     micromamba env export --name base --explicit > environment.lock
-                    echo ">>>>>>> CONDA_LOCK_START"
+                    echo ">> CONDA_LOCK_START"
                     cat environment.lock
-                    echo "<<<<<<< CONDA_LOCK_END"
+                    echo "<< CONDA_LOCK_END"
                     micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
@@ -965,9 +965,9 @@ class DockerHelperTest extends Specification {
                     micromamba install -y -n base -c conda-forge -c defaults -f https://foo.com/some/conda-lock.yml
                     micromamba install -y -n base conda-forge::procps-ng
                     micromamba env export --name base --explicit > environment.lock
-                    echo ">>>>>>> CONDA_LOCK_START"
+                    echo ">> CONDA_LOCK_START"
                     cat environment.lock
-                    echo "<<<<<<< CONDA_LOCK_END"
+                    echo "<< CONDA_LOCK_END"
                     micromamba clean -a -y
                 %environment
                     export PATH="$MAMBA_ROOT_PREFIX/bin:$PATH"
