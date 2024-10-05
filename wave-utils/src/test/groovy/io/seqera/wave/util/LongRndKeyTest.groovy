@@ -18,6 +18,7 @@
 package io.seqera.wave.util
 
 import spock.lang.Ignore
+import spock.lang.Retry
 import spock.lang.Specification
 /**
  *
@@ -25,9 +26,26 @@ import spock.lang.Specification
  */
 class LongRndKeyTest extends Specification {
 
+    @Retry(count=2)
+    def "should generate random long numbers" () {
+        expect:
+        LongRndKey.rndLong() != LongRndKey.rndLong()
+    }
+
+    @Retry(count=2)
+    def "should generate random long numbers" () {
+        expect:
+        LongRndKey.rndLongAsString() != LongRndKey.rndLongAsString()
+    }
+
     def 'should be greater than or equal to zero' () {
         expect:
         10_0000 .times {assert LongRndKey.rndLong() > 0 }
+    }
+
+    def 'should return long as string' () {
+        expect:
+        10_0000 .times {assert LongRndKey.rndLongAsString().size() == 15 }
     }
 
     def 'should return random hex' () {
