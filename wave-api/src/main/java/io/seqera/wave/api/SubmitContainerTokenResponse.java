@@ -29,6 +29,11 @@ import java.util.Objects;
 public class SubmitContainerTokenResponse {
 
     /**
+     * Unique Id for this request
+     */
+    public String requestId;
+
+    /**
      * A unique authorization token assigned to this request
      */
     public String containerToken;
@@ -65,11 +70,57 @@ public class SubmitContainerTokenResponse {
      */
     public Boolean freeze;
 
+    /**
+     * When the result is a mirror container. Version v1alpha2 as later.
+     */
     public Boolean mirror;
+
+    /**
+     * The id of the security scan associated with this container
+     */
+    public String scanId;
+
+    /**
+     * The status of the container for this request
+     */
+    public ContainerStatus status;
 
     public SubmitContainerTokenResponse() { }
 
-    public SubmitContainerTokenResponse(String token, String target, Instant expiration, String containerImage, String buildId, Boolean cached, Boolean freeze, Boolean mirror) {
+    /**
+     * Copy constructor
+     *
+     * @param that The target response to copy from
+     */
+    public SubmitContainerTokenResponse(SubmitContainerTokenResponse that) {
+        this.requestId = that.requestId;
+        this.containerToken = that.containerToken;
+        this.targetImage = that.targetImage;
+        this.expiration = that.expiration;
+        this.containerImage = that.containerImage;
+        this.buildId = that.buildId;
+        this.cached = that.cached;
+        this.freeze = that.freeze;
+        this.mirror = that.mirror;
+        this.scanId = that.scanId;
+        this.status = that.status;
+    }
+
+    public SubmitContainerTokenResponse(
+            String requestId,
+            String token,
+            String target,
+            Instant expiration,
+            String containerImage,
+            String buildId,
+            Boolean cached,
+            Boolean freeze,
+            Boolean mirror,
+            String scanId,
+            ContainerStatus status
+    )
+    {
+        this.requestId = requestId;
         this.containerToken = token;
         this.targetImage = target;
         this.expiration = expiration;
@@ -78,6 +129,8 @@ public class SubmitContainerTokenResponse {
         this.cached = cached;
         this.freeze = freeze;
         this.mirror = mirror;
+        this.scanId = scanId;
+        this.status = status;
     }
 
     @Override
@@ -85,25 +138,41 @@ public class SubmitContainerTokenResponse {
         if (this == object) return true;
         if (object == null || getClass() != object.getClass()) return false;
         SubmitContainerTokenResponse that = (SubmitContainerTokenResponse) object;
-        return Objects.equals(containerToken, that.containerToken)
+        return Objects.equals(requestId, that.requestId)
+                && Objects.equals(containerToken, that.containerToken)
                 && Objects.equals(targetImage, that.targetImage)
                 && Objects.equals(expiration, that.expiration)
                 && Objects.equals(containerImage, that.containerImage)
                 && Objects.equals(buildId, that.buildId)
                 && Objects.equals(cached, that.cached)
                 && Objects.equals(freeze, that.freeze)
-                && Objects.equals(mirror, that.mirror) ;
+                && Objects.equals(mirror, that.mirror)
+                && Objects.equals(scanId, that.scanId)
+                && Objects.equals(status, that.status)
+                ;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(containerToken, targetImage, expiration, containerImage, buildId, cached, freeze, mirror);
+        return Objects.hash(
+                requestId,
+                containerToken,
+                targetImage,
+                expiration,
+                containerImage,
+                buildId,
+                cached,
+                freeze,
+                mirror,
+                scanId,
+                status );
     }
 
     @Override
     public String toString() {
         return "SubmitContainerTokenResponse{" +
-                "containerToken='" + containerToken + '\'' +
+                "requestId='" + requestId + '\'' +
+                ", containerToken='" + containerToken + '\'' +
                 ", targetImage='" + targetImage + '\'' +
                 ", expiration=" + expiration +
                 ", containerImage='" + containerImage + '\'' +
@@ -111,6 +180,8 @@ public class SubmitContainerTokenResponse {
                 ", cached=" + cached +
                 ", freeze=" + freeze +
                 ", mirror=" + mirror +
+                ", scanId=" + scanId +
+                ", status=" + status +
                 '}';
     }
 }

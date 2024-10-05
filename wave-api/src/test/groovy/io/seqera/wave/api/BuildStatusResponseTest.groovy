@@ -58,4 +58,22 @@ class BuildStatusResponseTest extends Specification {
         c1.succeeded == true
     }
 
+    def 'should create response object' () {
+        given:
+        def ts = Instant.now()
+        def resp = new BuildStatusResponse(
+                'test',
+                BuildStatusResponse.Status.PENDING,
+                ts,
+                Duration.ofMinutes(1),
+                true,
+        )
+
+        expect:
+        resp.id == "test"
+        resp.status == BuildStatusResponse.Status.PENDING
+        resp.startTime == ts
+        resp.duration == Duration.ofMinutes(1)
+        resp.succeeded
+    }
 }

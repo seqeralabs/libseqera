@@ -150,6 +150,17 @@ public class SubmitContainerTokenRequest implements Cloneable {
      */
     public String mirrorRegistry;
 
+    /**
+     * The request security scan mode
+     */
+    public ScanMode scanMode;
+
+    /**
+     * Define the allows security vulnerabilities in the container request.
+     * Emtpy or null means no vulnerabilities are allowed.
+     */
+    public List<ScanLevel> scanLevels;
+
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
             final SubmitContainerTokenRequest copy = (SubmitContainerTokenRequest) this.clone();
@@ -199,6 +210,10 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.nameStrategy = (ImageNameStrategy) opts.get("nameStrategy");
             if( opts.containsKey("mirrorRegistry") )
                 copy.mirrorRegistry = (String) opts.get("mirrorRegistry");
+            if( opts.containsKey("scanMode") )
+                copy.scanMode = (ScanMode) opts.get("scanMode");
+            if( opts.containsKey("scanLevels"))
+                copy.scanLevels = (List<ScanLevel>) opts.get("scanLevels");
             // done
             return copy;
         }
@@ -330,6 +345,16 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    public SubmitContainerTokenRequest withScanMode(ScanMode mode) {
+        this.scanMode = mode;
+        return this;
+    }
+
+    public SubmitContainerTokenRequest withScanLevels(List<ScanLevel> levels) {
+        this.scanLevels = levels;
+        return this;
+    }
+
     public boolean formatSingularity() {
         return "sif".equals(format);
     }
@@ -360,6 +385,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", packages=" + packages +
                 ", nameStrategy=" + nameStrategy +
                 ", mirrorRegistry=" + mirrorRegistry +
+                ", scanMode=" + scanMode +
+                ", scanLevels=" + scanLevels +
                 '}';
     }
 }

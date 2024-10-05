@@ -49,7 +49,9 @@ class SubmitContainerTokenRequestTest extends Specification {
                 containerIncludes: ['busybox:latest'],
                 packages: new PackagesSpec(type: PackagesSpec.Type.CONDA, environment: 'foo', entries: ['bar']),
                 nameStrategy: ImageNameStrategy.imageSuffix,
-                mirrorRegistry: 'foo.com'
+                mirrorRegistry: 'foo.com',
+                scanMode: ScanMode.async,
+                scanLevels: List.of(ScanLevel.LOW, ScanLevel.MEDIUM),
         )
 
         when:
@@ -77,6 +79,8 @@ class SubmitContainerTokenRequestTest extends Specification {
         copy.packages == req.packages
         copy.nameStrategy == req.nameStrategy
         copy.mirrorRegistry == req.mirrorRegistry
+        copy.scanMode == req.scanMode
+        copy.scanLevels == req.scanLevels
         and:
         copy.formatSingularity()
 
@@ -104,7 +108,9 @@ class SubmitContainerTokenRequestTest extends Specification {
                 containerIncludes: ['other:image'],
                 packages: new PackagesSpec(type: PackagesSpec.Type.SPACK),
                 nameStrategy: ImageNameStrategy.tagPrefix,
-                mirrorRegistry: 'bar.io'
+                mirrorRegistry: 'bar.io',
+                scanMode: ScanMode.required,
+                scanLevels: List.of(ScanLevel.HIGH)
         )
         then:
         other.towerAccessToken == 'b1'
@@ -129,6 +135,8 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.packages == new PackagesSpec(type: PackagesSpec.Type.SPACK)
         other.nameStrategy == ImageNameStrategy.tagPrefix
         other.mirrorRegistry == 'bar.io'
+        other.scanMode == ScanMode.required
+        other.scanLevels == List.of(ScanLevel.HIGH)
         and:
         !other.formatSingularity()
     }
