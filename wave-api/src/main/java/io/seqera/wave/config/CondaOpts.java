@@ -27,7 +27,7 @@ import java.util.Objects;
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 public class CondaOpts {
-    final public static String DEFAULT_MAMBA_IMAGE = "mambaorg/micromamba:1.5.10-lunar";
+    final public static String DEFAULT_MAMBA_IMAGE = "mambaorg/micromamba:1.5.10-noble";
     final public static String DEFAULT_PACKAGES = "conda-forge::procps-ng";
 
     public String mambaImage;
