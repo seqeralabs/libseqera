@@ -146,9 +146,9 @@ public class SubmitContainerTokenRequest implements Cloneable {
     public ImageNameStrategy nameStrategy;
 
     /**
-     * The target registry to push the container when using the "mirror" mode
+     * Whenever use container "mirror" mode
      */
-    public String mirrorRegistry;
+    public boolean mirror;
 
     /**
      * The request security scan mode
@@ -208,8 +208,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.packages = (PackagesSpec) opts.get("packages");
             if( opts.containsKey("nameStrategy"))
                 copy.nameStrategy = (ImageNameStrategy) opts.get("nameStrategy");
-            if( opts.containsKey("mirrorRegistry") )
-                copy.mirrorRegistry = (String) opts.get("mirrorRegistry");
+            if( opts.containsKey("mirror") )
+                copy.mirror = (boolean) opts.get("mirror");
             if( opts.containsKey("scanMode") )
                 copy.scanMode = (ScanMode) opts.get("scanMode");
             if( opts.containsKey("scanLevels"))
@@ -340,8 +340,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
-    public SubmitContainerTokenRequest withMirrorRegistry(String value) {
-        this.mirrorRegistry = value;
+    public SubmitContainerTokenRequest withMirror(boolean value) {
+        this.mirror = value;
         return this;
     }
 
@@ -384,7 +384,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", containerIncludes=" + ObjectUtils.toString(containerIncludes) +
                 ", packages=" + packages +
                 ", nameStrategy=" + nameStrategy +
-                ", mirrorRegistry=" + mirrorRegistry +
+                ", mirror=" + mirror +
                 ", scanMode=" + scanMode +
                 ", scanLevels=" + scanLevels +
                 '}';
