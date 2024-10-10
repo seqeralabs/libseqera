@@ -78,6 +78,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
     public String spackFile;
 
     /**
+     * Target architecture for Spack builds
+     */
+    public String spackTarget;
+
+    /**
      * The container platform to be used
      */
     public String containerPlatform;
@@ -182,6 +187,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.condaFile = (String)opts.get("condaFile");
             if( opts.containsKey("spackFile") )
                 copy.spackFile = (String)opts.get("spackFile");
+            if( opts.containsKey("spackTarget") )
+                copy.spackTarget = (String)opts.get("spackTarget");
             if( opts.containsKey("containerPlatform") )
                 copy.containerPlatform = (String)opts.get("containerPlatform");
             if( opts.containsKey("buildRepository") )
@@ -266,6 +273,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
     @Deprecated
     public SubmitContainerTokenRequest withSpackFile(String spackFile) {
         this.spackFile = spackFile;
+        return this;
+    }
+
+    public SubmitContainerTokenRequest withSpackTarget(String spackTarget) {
+        this.spackTarget = spackTarget;
         return this;
     }
 
@@ -371,6 +383,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", containerConfig=" + containerConfig +
                 ", condaFile='" + condaFile + '\'' +
                 ", spackFile='" + spackFile + '\'' +
+                ", spackTarget='" + spackTarget + '\'' +
                 ", containerPlatform='" + containerPlatform + '\'' +
                 ", buildRepository='" + buildRepository + '\'' +
                 ", cacheRepository='" + cacheRepository + '\'' +

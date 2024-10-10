@@ -37,11 +37,12 @@ class SubmitContainerTokenRequestTest extends Specification {
                 containerConfig: new ContainerConfig(entrypoint: ['this','that']),
                 condaFile: 'a8',
                 spackFile: 'a9',
-                containerPlatform: 'a10',
-                buildRepository: 'a11',
-                cacheRepository: 'a12',
-                timestamp: 'a13',
-                fingerprint: 'a14',
+                spackTarget: 'a10',
+                containerPlatform: 'a11',
+                buildRepository: 'a12',
+                cacheRepository: 'a13',
+                timestamp: 'a14',
+                fingerprint: 'a15',
                 freeze: true,
                 format: 'sif',
                 dryRun: true,
@@ -66,6 +67,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         copy.containerConfig == req.containerConfig
         copy.condaFile == req.condaFile
         copy.spackFile == req.spackFile
+        copy.spackTarget == req.spackTarget
         copy.containerPlatform == req.containerPlatform
         copy.buildRepository == req.buildRepository
         copy.cacheRepository == req.cacheRepository
@@ -95,12 +97,13 @@ class SubmitContainerTokenRequestTest extends Specification {
                 containerConfig: new ContainerConfig(entrypoint: ['foo','bar']),
                 condaFile: 'b8',
                 spackFile: 'b9',
-                containerPlatform: 'b10',
-                buildRepository: 'b11',
-                cacheRepository: 'b12',
+                spackTarget: 'b10',
+                containerPlatform: 'b11',
+                buildRepository: 'b12',
+                cacheRepository: 'b13',
                 imageName: 'testImageName',
-                timestamp: 'b13',
-                fingerprint: 'b14',
+                timestamp: 'b14',
+                fingerprint: 'b15',
                 freeze: false,
                 format: 'foo',
                 dryRun: false,
@@ -122,11 +125,12 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.containerConfig == new ContainerConfig(entrypoint: ['foo','bar'])
         other.condaFile == 'b8'
         other.spackFile == 'b9'
-        other.containerPlatform == 'b10'
-        other.buildRepository == 'b11'
-        other.cacheRepository == 'b12'
-        other.timestamp == 'b13'
-        other.fingerprint == 'b14'
+        other.spackTarget == 'b10'
+        other.containerPlatform == 'b11'
+        other.buildRepository == 'b12'
+        other.cacheRepository == 'b13'
+        other.timestamp == 'b14'
+        other.fingerprint == 'b15'
         other.freeze == false
         other.format == 'foo'
         other.dryRun == false
