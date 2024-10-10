@@ -157,7 +157,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
 
     /**
      * Define the allows security vulnerabilities in the container request.
-     * Emtpy or null means no vulnerabilities are allowed.
+     * Empty or null means no vulnerabilities are allowed.
      */
     public List<ScanLevel> scanLevels;
 
