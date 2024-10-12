@@ -81,9 +81,10 @@ public class SubmitContainerTokenResponse {
     public String scanId;
 
     /**
-     * The status of the container for this request
+     * Whenever the container has been provisioned successfully or not. If false
+     * the current status needs to be checked via container status API.
      */
-    public ContainerStatus status;
+    public Boolean succeeded;
 
     public SubmitContainerTokenResponse() { }
 
@@ -103,7 +104,7 @@ public class SubmitContainerTokenResponse {
         this.freeze = that.freeze;
         this.mirror = that.mirror;
         this.scanId = that.scanId;
-        this.status = that.status;
+        this.succeeded = that.succeeded;
     }
 
     public SubmitContainerTokenResponse(
@@ -117,7 +118,7 @@ public class SubmitContainerTokenResponse {
             Boolean freeze,
             Boolean mirror,
             String scanId,
-            ContainerStatus status
+            Boolean succeeded
     )
     {
         this.requestId = requestId;
@@ -130,7 +131,7 @@ public class SubmitContainerTokenResponse {
         this.freeze = freeze;
         this.mirror = mirror;
         this.scanId = scanId;
-        this.status = status;
+        this.succeeded = succeeded;
     }
 
     @Override
@@ -148,7 +149,7 @@ public class SubmitContainerTokenResponse {
                 && Objects.equals(freeze, that.freeze)
                 && Objects.equals(mirror, that.mirror)
                 && Objects.equals(scanId, that.scanId)
-                && Objects.equals(status, that.status)
+                && Objects.equals(succeeded, that.succeeded)
                 ;
     }
 
@@ -165,7 +166,7 @@ public class SubmitContainerTokenResponse {
                 freeze,
                 mirror,
                 scanId,
-                status );
+                succeeded );
     }
 
     @Override
@@ -181,7 +182,7 @@ public class SubmitContainerTokenResponse {
                 ", freeze=" + freeze +
                 ", mirror=" + mirror +
                 ", scanId=" + scanId +
-                ", status=" + status +
+                ", succeeded=" + succeeded +
                 '}';
     }
 }

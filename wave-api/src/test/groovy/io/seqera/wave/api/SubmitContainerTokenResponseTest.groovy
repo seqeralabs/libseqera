@@ -42,7 +42,7 @@ class SubmitContainerTokenResponseTest extends Specification {
                 true,
                 true,
                 'scan-1234',
-                ContainerStatus.PENDING
+                true
         )
         then:
         resp.requestId == '123'
@@ -55,16 +55,16 @@ class SubmitContainerTokenResponseTest extends Specification {
         resp.freeze
         resp.mirror
         resp.scanId == 'scan-1234'
-        resp.status == ContainerStatus.PENDING
+        resp.succeeded == true
     }
 
     def 'should validate equals & hashCode' () {
         given:
         def ts = Instant.now().plusSeconds(10)
         and:
-        def r1 = new SubmitContainerTokenResponse('123', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.DONE)
-        def r2 = new SubmitContainerTokenResponse('123', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.DONE)
-        def r3 = new SubmitContainerTokenResponse('abc', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', ContainerStatus.DONE)
+        def r1 = new SubmitContainerTokenResponse('123', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', false)
+        def r2 = new SubmitContainerTokenResponse('123', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', false)
+        def r3 = new SubmitContainerTokenResponse('abc', '345', 'target', ts, 'container/x', 'build-xyz', false, false, false, 'scan-abc', true)
 
         expect:
         r1 == r2
