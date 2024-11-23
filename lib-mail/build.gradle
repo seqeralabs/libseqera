@@ -15,7 +15,7 @@ repositories {
 
 dependencies {
     compileOnly "io.micronaut:micronaut-inject-groovy"
-    implementation "io.seqera:wave-utils:0.14.1"
+    implementation "io.seqera:wave-utils:0.15.0"
     implementation "ch.qos.logback:logback-classic:1.5.12"
     implementation "org.apache.groovy:groovy:4.0.21"
     implementation "org.apache.groovy:groovy-nio:4.0.21"
