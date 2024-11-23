@@ -38,13 +38,3 @@ micronaut {
         incremental(true)
     }
 }
-
-// Micronaut 4 requires Java 17 as target compatibility
-compileJava {
-    options.release.set(17)
-}
-
-tasks.withType(GroovyCompile) {
-    sourceCompatibility = '17'
-    targetCompatibility = '17'
-}
