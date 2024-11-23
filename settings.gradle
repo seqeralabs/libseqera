@@ -10,3 +10,4 @@ rootProject.name = 'libseqera'
 include('wave-api')
 include('wave-utils')
 include('lib-mail')
+include('lib-crypto')

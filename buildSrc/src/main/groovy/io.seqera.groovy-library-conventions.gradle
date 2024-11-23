@@ -10,4 +10,8 @@ plugins {
     id 'java-library'
 }
 
+dependencies {
+    implementation "org.apache.groovy:groovy:4.0.21"
+}
+
 group = 'io.seqera'
