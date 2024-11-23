@@ -61,6 +61,7 @@ jobs:
       - name: Release
         if: "contains(github.event.head_commit.message, '[release]')"
         run: |
+          bash publish.sh lib-crypto
           bash publish.sh lib-mail
           bash publish.sh wave-api
           bash publish.sh wave-utils
