@@ -18,7 +18,7 @@
 package io.seqera.wave.api
 
 import io.seqera.wave.config.CondaOpts
-import io.seqera.wave.config.SpackOpts
+
 import spock.lang.Specification
 /**
  *
@@ -30,25 +30,20 @@ class PackagesSpecTest extends Specification {
         given:
         def packages1 = new PackagesSpec(type: PackagesSpec.Type.CONDA, environment: 'foo', entries: ['bar'], channels: ['1', '2'])
         def packages2 = new PackagesSpec(type: PackagesSpec.Type.CONDA, environment: 'foo', entries: ['bar'], channels: ['1', '2'])
-        def packages3 = new PackagesSpec(type: PackagesSpec.Type.SPACK, environment: 'foo', entries: ['bar'])
 
         expect:
         packages1 == packages2
-        packages1 != packages3
 
         and:
         packages1.hashCode() == packages2.hashCode()
-        packages1.hashCode() != packages3.hashCode()
     }
 
     def 'should infer the correct type' () {
         given:
         def packages1 = new PackagesSpec(type: PackagesSpec.Type.CONDA, environment: 'foo', entries: ['bar'], channels: ['1', '2'])
-        def packages2 = new PackagesSpec(type: PackagesSpec.Type.SPACK, environment: 'foo', entries: ['bar'])
 
         expect:
         packages1.type == PackagesSpec.Type.CONDA
-        packages2.type == PackagesSpec.Type.SPACK
     }
 
     def 'should set values' () {
@@ -56,14 +51,12 @@ class PackagesSpecTest extends Specification {
         def spec = new PackagesSpec()
                 .withType(PackagesSpec.Type.CONDA)
                 .withCondaOpts(new CondaOpts(basePackages: 'base:one'))
-                .withSpackOpts(new SpackOpts(basePackages: 'base:two'))
                 .withChannels(['c1','c2'])
                 .withEntries(['p1', 'p2'])
                 .withEnvironment('foo-env')
         then:
         spec.type == PackagesSpec.Type.CONDA
         spec.condaOpts == new CondaOpts(basePackages: 'base:one')
-        spec.spackOpts == new SpackOpts(basePackages: 'base:two')
         spec.channels == ['c1','c2']
         spec.entries == ['p1', 'p2']
         spec.environment == 'foo-env'
