@@ -63,6 +63,7 @@ jobs:
         run: |
           bash publish.sh lib-crypto
           bash publish.sh lib-mail
+          bash publish.sh lib-pool
           bash publish.sh wave-api
           bash publish.sh wave-utils
         env:

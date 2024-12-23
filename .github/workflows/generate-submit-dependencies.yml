@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        components: ["lib-crypto", "lib-mail","wave-utils", "wave-api"]
+        components: ["lib-crypto","lib-mail","lib-pool","wave-utils", "wave-api"]
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-java@v4
