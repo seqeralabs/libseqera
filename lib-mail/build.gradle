@@ -16,9 +16,9 @@ dependencies {
     compileOnly "io.micronaut:micronaut-inject-groovy"
     implementation "io.seqera:wave-utils:0.15.0"
     implementation "ch.qos.logback:logback-classic:1.5.15"
-    implementation "org.apache.groovy:groovy:4.0.21"
-    implementation "org.apache.groovy:groovy-nio:4.0.21"
-    implementation "org.apache.groovy:groovy-templates:4.0.21"
+    implementation "org.apache.groovy:groovy:4.0.24"
+    implementation "org.apache.groovy:groovy-nio:4.0.24"
+    implementation "org.apache.groovy:groovy-templates:4.0.24"
     api "com.sun.mail:javax.mail:1.6.2"
     api "org.jsoup:jsoup:1.15.3"
     implementation("io.micronaut:micronaut-runtime")
