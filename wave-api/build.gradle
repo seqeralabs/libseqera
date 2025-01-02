@@ -5,7 +5,11 @@ plugins {
 group = 'io.seqera'
 version = "${project.file('VERSION').text.trim()}"
 
+configurations.configureEach {
+    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"
+}
+
 dependencies {
-    implementation 'com.squareup.moshi:moshi:1.15.1'
-    implementation 'com.squareup.moshi:moshi-adapters:1.15.1'
+    implementation 'com.squareup.moshi:moshi:1.15.2'
+    implementation 'com.squareup.moshi:moshi-adapters:1.15.2'
 }
