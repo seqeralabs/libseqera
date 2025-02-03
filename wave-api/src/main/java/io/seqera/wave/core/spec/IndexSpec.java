@@ -47,6 +47,11 @@ public class IndexSpec {
      */
     List<ManifestSpec> manifests;
 
+    /**
+     * The digest checksum associated with the container
+     */
+    String digest;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -55,6 +60,7 @@ public class IndexSpec {
         return Objects.equals(mediaType, indexSpec.mediaType)
                 && Objects.equals(schemaVersion, indexSpec.schemaVersion)
                 && Objects.equals(manifests, indexSpec.manifests)
+                && Objects.equals(digest, indexSpec.digest)
                 ;
     }
 
@@ -70,6 +76,13 @@ public class IndexSpec {
         return manifests;
     }
 
+    public String getDigest() { return digest; }
+
+    public IndexSpec withDigest(String digest) {
+        this.digest = digest;
+        return this;
+    }
+
     @Override
     public int hashCode() {
         return Objects.hash(mediaType, schemaVersion, manifests);
@@ -81,6 +94,7 @@ public class IndexSpec {
                 "schemaVersion=" + schemaVersion +
                 ", mediaType='" + mediaType + '\'' +
                 ", manifests=" + manifests +
+                ", digest='" + digest + '\'' +
                 '}';
     }
 
