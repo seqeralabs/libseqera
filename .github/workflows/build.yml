@@ -67,6 +67,7 @@ jobs:
           bash publish.sh lib-trace
           bash publish.sh wave-api
           bash publish.sh wave-utils
+          bash publish.sh jedis-lock
         env:
           GRADLE_OPTS: '-Dorg.gradle.daemon=false'
           AWS_ACCESS_KEY_ID: ${{secrets.TOWER_CI_AWS_ACCESS}}

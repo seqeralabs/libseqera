@@ -1,0 +1,11 @@
+plugins {
+    id 'io.seqera.groovy-library-conventions'
+}
+
+dependencies {
+    implementation 'redis.clients:jedis:5.1.4'
+    implementation("io.micronaut:micronaut-runtime")
+}
+
+group = 'io.seqera'
+version = "${project.file('VERSION').text.trim()}"
