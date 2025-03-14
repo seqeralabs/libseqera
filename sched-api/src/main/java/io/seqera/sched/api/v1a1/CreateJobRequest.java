@@ -28,6 +28,7 @@ import java.util.Objects;
  */
 public class CreateJobRequest {
 
+    public String contextId;
     public List<String> command;
     public String image;
     public Map<String,String> environment;
