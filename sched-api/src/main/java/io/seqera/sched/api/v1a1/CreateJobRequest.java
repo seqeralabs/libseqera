@@ -32,6 +32,12 @@ public class CreateJobRequest {
     public List<String> command;
     public String image;
     public Map<String,String> environment;
+    public String platform;
+
+    public CreateJobRequest withContextId(String contextId) {
+        this.contextId = contextId;
+        return this;
+    }
 
     public CreateJobRequest withCommand(List<String> command) {
         this.command = command;
@@ -48,12 +54,18 @@ public class CreateJobRequest {
         return this;
     }
 
+    public CreateJobRequest withPlatform(String platform) {
+        this.platform = platform;
+        return this;
+    }
+
     @Override
     public String toString() {
         return "CreateJobRequest{" +
-                "command=" + command +
-                ", image='" + image + "'" +
+                "image=" + image +
+                ", command='" + command + "'" +
                 ", environment='" + environment + "'" +
+                ", platform='" + platform + "'" +
                 '}';
     }
 
@@ -62,14 +74,16 @@ public class CreateJobRequest {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         CreateJobRequest that = (CreateJobRequest) o;
-        return Objects.equals(command, that.command)
+        return Objects.equals(contextId, that.contextId)
                 && Objects.equals(image, that.image)
+                && Objects.equals(command, that.command)
                 && Objects.equals(environment, that.environment)
+                && Objects.equals(platform, that.platform)
                 ;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(command, image);
+        return Objects.hash(contextId, image, command, environment, platform);
     }
 }
