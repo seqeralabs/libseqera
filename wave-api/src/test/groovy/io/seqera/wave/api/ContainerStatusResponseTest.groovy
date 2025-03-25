@@ -42,6 +42,7 @@ class ContainerStatusResponseTest extends Specification {
                 "https://foo.com",
                 ts,
                 Duration.ofMinutes(2),
+                0
         )
         
         then:
@@ -56,6 +57,7 @@ class ContainerStatusResponseTest extends Specification {
         resp.detailsUri == "https://foo.com"
         resp.creationTime == ts
         resp.duration == Duration.ofMinutes(2)
+        resp.exitCode == 0
     }
 
 }

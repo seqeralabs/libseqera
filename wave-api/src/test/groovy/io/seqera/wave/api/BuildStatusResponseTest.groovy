@@ -32,9 +32,9 @@ class BuildStatusResponseTest extends Specification {
         given:
         def n = Instant.now()
         def d = Duration.ofMinutes(1)
-        def c1 = new BuildStatusResponse('123', BuildStatusResponse.Status.PENDING, n, d, true)
-        def c2 = new BuildStatusResponse('123', BuildStatusResponse.Status.PENDING, n, d, true)
-        def c3 = new BuildStatusResponse('321', BuildStatusResponse.Status.PENDING, n, d, true)
+        def c1 = new BuildStatusResponse('123', BuildStatusResponse.Status.PENDING, n, d, true, 0)
+        def c2 = new BuildStatusResponse('123', BuildStatusResponse.Status.PENDING, n, d, true, 0)
+        def c3 = new BuildStatusResponse('321', BuildStatusResponse.Status.PENDING, n, d, true, 0)
 
         expect:
         c1 == c2
@@ -48,7 +48,7 @@ class BuildStatusResponseTest extends Specification {
         given:
         def n = Instant.now()
         def d = Duration.ofMinutes(1)
-        def c1 = new BuildStatusResponse('123', BuildStatusResponse.Status.PENDING, n, d, true)
+        def c1 = new BuildStatusResponse('123', BuildStatusResponse.Status.PENDING, n, d, true, 0)
 
         expect:
         c1.id == '123'
@@ -67,6 +67,7 @@ class BuildStatusResponseTest extends Specification {
                 ts,
                 Duration.ofMinutes(1),
                 true,
+                0
         )
 
         expect:
@@ -75,5 +76,6 @@ class BuildStatusResponseTest extends Specification {
         resp.startTime == ts
         resp.duration == Duration.ofMinutes(1)
         resp.succeeded
+        resp.exitCode == 0
     }
 }

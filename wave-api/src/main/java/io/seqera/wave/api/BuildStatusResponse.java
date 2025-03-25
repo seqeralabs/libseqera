@@ -45,6 +45,8 @@ public class BuildStatusResponse {
     /** Build success status */
     final public Boolean succeeded;
 
+    final public Integer exitCode;
+
     /**
      * This is required to allow jackson serialization - do not remove
      */
@@ -54,14 +56,16 @@ public class BuildStatusResponse {
         startTime = null;
         duration = null;
         succeeded = null;
+        exitCode = null;
     }
 
-    public BuildStatusResponse(String id, Status status, Instant startTime, Duration duration, Boolean succeeded) {
+    public BuildStatusResponse(String id, Status status, Instant startTime, Duration duration, Boolean succeeded, Integer exitCode) {
         this.id = id;
         this.status = status;
         this.startTime = startTime;
         this.duration = duration;
         this.succeeded = succeeded;
+        this.exitCode = exitCode;
     }
 
     @Override
@@ -74,12 +78,13 @@ public class BuildStatusResponse {
                 && Objects.equals(startTime, that.startTime)
                 && Objects.equals(duration, that.duration)
                 && Objects.equals(succeeded, that.succeeded)
+                && Objects.equals(exitCode, that.exitCode)
                 ;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, status, startTime, duration, succeeded);
+        return Objects.hash(id, status, startTime, duration, succeeded, exitCode);
     }
 
     @Override
@@ -90,6 +95,7 @@ public class BuildStatusResponse {
                 ", startTime=" + startTime +
                 ", duration=" + duration +
                 ", succeeded=" + succeeded +
+                ", exitCode=" + exitCode +
                 '}';
     }
 }
