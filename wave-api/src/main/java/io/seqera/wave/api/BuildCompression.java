@@ -38,9 +38,9 @@ public class BuildCompression {
         ;
     }
 
-    Mode mode;
-    Integer level;
-    Boolean force;
+    private Mode mode;
+    private Integer level;
+    private Boolean force;
 
     public BuildCompression withMode(Mode mode) {
         this.mode = mode;
