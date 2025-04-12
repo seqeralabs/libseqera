@@ -155,6 +155,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
      */
     public List<ScanLevel> scanLevels;
 
+    /**
+     * The compression mode to be used when building a container image
+     */
+    public BuildCompression buildCompression;
+
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
             final SubmitContainerTokenRequest copy = (SubmitContainerTokenRequest) this.clone();
@@ -206,6 +211,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.scanMode = (ScanMode) opts.get("scanMode");
             if( opts.containsKey("scanLevels"))
                 copy.scanLevels = (List<ScanLevel>) opts.get("scanLevels");
+            if( opts.containsKey("buildCompression"))
+                copy.buildCompression = (BuildCompression) opts.get("buildCompression");
             // done
             return copy;
         }
@@ -341,6 +348,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    public SubmitContainerTokenRequest withBuildCompression(BuildCompression mode) {
+        this.buildCompression = mode;
+        return this;
+    }
+
     public boolean formatSingularity() {
         return "sif".equals(format);
     }
@@ -372,6 +384,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", mirror=" + mirror +
                 ", scanMode=" + scanMode +
                 ", scanLevels=" + scanLevels +
+                ", buildCompression=" + buildCompression +
                 '}';
     }
 }
