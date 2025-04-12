@@ -51,6 +51,7 @@ class SubmitContainerTokenRequestTest extends Specification {
                 mirror: true,
                 scanMode: ScanMode.async,
                 scanLevels: List.of(ScanLevel.LOW, ScanLevel.MEDIUM),
+                buildCompression: BuildCompression.gzip,
         )
 
         when:
@@ -79,6 +80,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         copy.mirror == req.mirror
         copy.scanMode == req.scanMode
         copy.scanLevels == req.scanLevels
+        copy.buildCompression == req.buildCompression
         and:
         copy.formatSingularity()
 
@@ -106,7 +108,8 @@ class SubmitContainerTokenRequestTest extends Specification {
                 nameStrategy: ImageNameStrategy.tagPrefix,
                 mirror: false,
                 scanMode: ScanMode.required,
-                scanLevels: List.of(ScanLevel.HIGH)
+                scanLevels: List.of(ScanLevel.HIGH),
+                buildCompression: BuildCompression.estargz,
         )
         then:
         other.towerAccessToken == 'b1'
@@ -131,6 +134,7 @@ class SubmitContainerTokenRequestTest extends Specification {
         other.mirror == false
         other.scanMode == ScanMode.required
         other.scanLevels == List.of(ScanLevel.HIGH)
+        other.buildCompression == BuildCompression.estargz
         and:
         !other.formatSingularity()
     }
