@@ -21,7 +21,7 @@ package io.seqera.wave.util
 import java.nio.file.Files
 
 import io.seqera.wave.config.CondaOpts
-
+import io.seqera.wave.config.PixiOpts
 import spock.lang.Specification
 /**
  *
@@ -683,4 +683,37 @@ class DockerHelperTest extends Specification {
                 '''.stripIndent()
     }
 
+    def 'should create dockerfile content from conda file using pixi' () {
+        given:
+        def PIXI_OPTS = new PixiOpts([basePackages: 'foo::bar'])
+
+        expect:
+        DockerHelper.condaFileToDockerFileUsingPixi(PIXI_OPTS)== '''\
+                FROM ghcr.io/prefix-dev/pixi:latest AS build
+                
+                COPY conda.yml /opt/wave/conda.yml
+                WORKDIR /opt/wave
+                
+                RUN pixi init --import /opt/wave/conda.yml \\
+                    && pixi add foo::bar \\
+                    && pixi shell-hook > /shell-hook.sh \\
+                    && echo 'exec "$@"' >> /shell-hook.sh \\
+                    && echo ">> CONDA_LOCK_START" \\
+                    && cat /opt/wave/pixi.lock \\
+                    && echo "<< CONDA_LOCK_END"
+                
+                FROM ubuntu:24.04 AS prod
+                
+                # copy the pixi environment in the final container
+                COPY --from=build /opt/wave/.pixi/envs/default /opt/wave/.pixi/envs/default
+                COPY --from=build /shell-hook.sh /shell-hook.sh
+                
+                # set the entrypoint to the shell-hook script (activate the environment and run the command)
+                # no more pixi needed in the prod container
+                ENTRYPOINT ["/bin/bash", "/shell-hook.sh"]
+                
+                # Default command for "docker run"
+                CMD ["/bin/bash"]
+                '''.stripIndent()
+    }
 }

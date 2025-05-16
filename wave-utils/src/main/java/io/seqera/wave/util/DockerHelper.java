@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import io.seqera.wave.config.CondaOpts;
+import io.seqera.wave.config.PixiOpts;
 import org.apache.commons.lang3.StringUtils;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -242,7 +243,6 @@ public class DockerHelper {
         return addCommands(result, opts.commands, singularity);
     }
 
-
     static public String condaFileToDockerFile(CondaOpts opts) {
         return condaFileTemplate0("/templates/conda/dockerfile-conda-file.txt", opts);
     }
@@ -251,12 +251,28 @@ public class DockerHelper {
         return condaFileTemplate0("/templates/conda/singularityfile-conda-file.txt", opts);
     }
 
+    static public String condaFileToDockerFileUsingPixi(PixiOpts opts) {
+        return condaFileTemplate1("/templates/pixi/dockerfile-conda-env.txt", opts);
+    }
+
     static protected String condaFileTemplate0(String template, CondaOpts opts) {
         final boolean singularity = template.contains("/singularityfile");
         // create the binding map
         final Map<String,String> binding = new HashMap<>();
         binding.put("base_image", opts.mambaImage);
         binding.put("base_packages", mambaInstallBasePackage0(opts.basePackages,singularity));
+
+        final String result = renderTemplate0(template, binding, List.of("wave_context_dir"));
+        return addCommands(result, opts.commands, singularity);
+    }
+
+    static protected String condaFileTemplate1(String template, PixiOpts opts) {
+        final boolean singularity = template.contains("/singularityfile");
+        // create the binding map
+        final Map<String,String> binding = new HashMap<>();
+        binding.put("base_image", opts.baseImage);
+        binding.put("pixi_image", opts.pixiImage);
+        binding.put("base_packages", pixiAddBasePackage0(opts.basePackages,singularity));
 
         final String result = renderTemplate0(template, binding, List.of("wave_context_dir"));
         return addCommands(result, opts.commands, singularity);
@@ -284,6 +300,15 @@ public class DockerHelper {
     private static String mambaInstallBasePackage0(String basePackages, boolean singularity) {
         String result = !StringUtils.isEmpty(basePackages)
                 ? String.format("micromamba install -y -n base %s", basePackages)
+                : null;
+        return result==null || singularity
+                ? result
+                : "&& " + result + " \\";
+    }
+
+    private static String pixiAddBasePackage0(String basePackages, boolean singularity) {
+        String result = !StringUtils.isEmpty(basePackages)
+                ? String.format("pixi add %s", basePackages)
                 : null;
         return result==null || singularity
                 ? result

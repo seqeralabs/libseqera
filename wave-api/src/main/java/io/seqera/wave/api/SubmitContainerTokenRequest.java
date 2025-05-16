@@ -160,6 +160,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
      */
     public BuildCompression buildCompression;
 
+    public String buildTemplate;
+
     public SubmitContainerTokenRequest copyWith(Map opts) {
         try {
             final SubmitContainerTokenRequest copy = (SubmitContainerTokenRequest) this.clone();
@@ -213,6 +215,8 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 copy.scanLevels = (List<ScanLevel>) opts.get("scanLevels");
             if( opts.containsKey("buildCompression"))
                 copy.buildCompression = (BuildCompression) opts.get("buildCompression");
+            if( opts.containsKey("buildTemplate"))
+                copy.buildTemplate = (String) opts.get("buildTemplate");
             // done
             return copy;
         }
@@ -353,6 +357,11 @@ public class SubmitContainerTokenRequest implements Cloneable {
         return this;
     }
 
+    public SubmitContainerTokenRequest withBuildTemplate(String template) {
+        this.buildTemplate = template;
+        return this;
+    }
+
     public boolean formatSingularity() {
         return "sif".equals(format);
     }
@@ -385,6 +394,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
                 ", scanMode=" + scanMode +
                 ", scanLevels=" + scanLevels +
                 ", buildCompression=" + buildCompression +
+                ", buildTemplate=" + buildTemplate +
                 '}';
     }
 }
