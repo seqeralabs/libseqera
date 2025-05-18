@@ -124,7 +124,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
     public String workflowId;
 
     /**
-     * One or more container should be included in upstream container request
+     * One or more container should be included in the upstream container request
      */
     public List<String> containerIncludes;
 
@@ -150,7 +150,7 @@ public class SubmitContainerTokenRequest implements Cloneable {
     public ScanMode scanMode;
 
     /**
-     * Define the allows security vulnerabilities in the container request.
+     * Define the allowed security vulnerabilities in the container request.
      * Empty or null means no vulnerabilities are allowed.
      */
     public List<ScanLevel> scanLevels;
@@ -160,6 +160,9 @@ public class SubmitContainerTokenRequest implements Cloneable {
      */
     public BuildCompression buildCompression;
 
+    /**
+     * The build template that should be used to build the container image.
+     */
     public String buildTemplate;
 
     public SubmitContainerTokenRequest copyWith(Map opts) {

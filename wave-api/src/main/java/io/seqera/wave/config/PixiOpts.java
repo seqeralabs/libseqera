@@ -63,10 +63,11 @@ public class PixiOpts {
 
     @Override
     public String toString() {
-        return String.format("PixiOpts(pixiImage=%s; basePackages=%s, commands=%s)",
+        return String.format("PixiOpts(pixiImage=%s; basePackages=%s, commands=%s, baseImage=%s)",
                 pixiImage,
                 basePackages,
-                commands != null ? String.join(",", commands) : "null"
+                commands != null ? String.join(",", commands) : "null",
+                baseImage
         );
     }
 
@@ -75,12 +76,16 @@ public class PixiOpts {
         if (this == object) return true;
         if (object == null || getClass() != object.getClass()) return false;
         CondaOpts condaOpts = (CondaOpts) object;
-        return Objects.equals(pixiImage, condaOpts.mambaImage) && Objects.equals(commands, condaOpts.commands) && Objects.equals(basePackages, condaOpts.basePackages);
+        return Objects.equals(pixiImage, condaOpts.mambaImage)
+                && Objects.equals(commands, condaOpts.commands)
+                && Objects.equals(basePackages, condaOpts.basePackages)
+                && Objects.equals(baseImage, condaOpts.baseImage)
+                ;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(pixiImage, commands, basePackages);
+        return Objects.hash(pixiImage, commands, basePackages, baseImage);
     }
 
 }

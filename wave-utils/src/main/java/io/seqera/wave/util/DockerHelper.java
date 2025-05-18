@@ -225,6 +225,23 @@ public class DockerHelper {
                 opts);
     }
 
+    static public String condaPackagesToDockerFileUsingMicromamba(String packages, List<String> condaChannels, CondaOpts opts) {
+        return condaPackagesTemplate0(
+                "/templates/micromamba/dockerfile-conda-packages.txt",
+                packages,
+                condaChannels,
+                opts);
+    }
+
+    static public String condaPackagesToSingularityFileUsingMicromamba(String packages, List<String> condaChannels, CondaOpts opts) {
+        return condaPackagesTemplate0(
+                "/templates/micromamba/singularityfile-conda-packages.txt",
+                packages,
+                condaChannels,
+                opts);
+    }
+
+    @Deprecated
     static protected String condaPackagesTemplate0(String template, String packages, List<String> condaChannels, CondaOpts opts) {
         final List<String> channels0 = condaChannels!=null ? condaChannels : List.of();
         final String channelsOpts = channels0.stream().map(it -> "-c "+it).collect(Collectors.joining(" "));
@@ -243,6 +260,24 @@ public class DockerHelper {
         return addCommands(result, opts.commands, singularity);
     }
 
+    static protected String condaPackagesTemplate1(String template, String packages, List<String> condaChannels, CondaOpts opts) {
+        final List<String> channels0 = condaChannels!=null ? condaChannels : List.of();
+        final String channelsOpts = channels0.stream().map(it -> "-c "+it).collect(Collectors.joining(" "));
+        final boolean singularity = template.contains("/singularityfile");
+        final String target = packages.startsWith("http://") || packages.startsWith("https://")
+                ? "-f " + packages
+                : packages;
+        final Map<String,String> binding = new HashMap<>();
+        binding.put("base_image", opts.baseImage);
+        binding.put("mamba_image", opts.mambaImage);
+        binding.put("channel_opts", channelsOpts);
+        binding.put("target", target);
+        binding.put("base_packages", mambaInstallBasePackage0(opts.basePackages,singularity));
+
+        final String result = renderTemplate0(template, binding) ;
+        return addCommands(result, opts.commands, singularity);
+    }
+
     static public String condaFileToDockerFile(CondaOpts opts) {
         return condaFileTemplate0("/templates/conda/dockerfile-conda-file.txt", opts);
     }
@@ -251,8 +286,20 @@ public class DockerHelper {
         return condaFileTemplate0("/templates/conda/singularityfile-conda-file.txt", opts);
     }
 
+    static public String condaFileToDockerFileUsingMicromamba(CondaOpts opts) {
+        return condaFileTemplate0("/templates/micromamba/dockerfile-conda-file.txt", opts);
+    }
+
+    static public String condaFileToSingularityFileUsingMicromamba(CondaOpts opts) {
+        return condaFileTemplate0("/templates/micromamba/singularityfile-conda-file.txt", opts);
+    }
+
     static public String condaFileToDockerFileUsingPixi(PixiOpts opts) {
-        return condaFileTemplate1("/templates/pixi/dockerfile-conda-env.txt", opts);
+        return condaFileTemplate1("/templates/pixi-v1/dockerfile-conda-file.txt", opts);
+    }
+
+    static public String condaFileToSingularityFileUsingPixi(PixiOpts opts) {
+        return condaFileTemplate1("/templates/pixi-v1/singularityfile-conda-file.txt", opts);
     }
 
     static protected String condaFileTemplate0(String template, CondaOpts opts) {
@@ -260,6 +307,18 @@ public class DockerHelper {
         // create the binding map
         final Map<String,String> binding = new HashMap<>();
         binding.put("base_image", opts.mambaImage);
+        binding.put("base_packages", mambaInstallBasePackage0(opts.basePackages,singularity));
+
+        final String result = renderTemplate0(template, binding, List.of("wave_context_dir"));
+        return addCommands(result, opts.commands, singularity);
+    }
+
+    static protected String condaFileTemplate2(String template, CondaOpts opts) {
+        final boolean singularity = template.contains("/singularityfile");
+        // create the binding map
+        final Map<String,String> binding = new HashMap<>();
+        binding.put("base_image", opts.baseImage);
+        binding.put("mamba_image", opts.mambaImage);
         binding.put("base_packages", mambaInstallBasePackage0(opts.basePackages,singularity));
 
         final String result = renderTemplate0(template, binding, List.of("wave_context_dir"));
