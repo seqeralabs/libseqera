@@ -1,0 +1,22 @@
+plugins {
+    id 'io.seqera.java-library-conventions'
+    id 'io.seqera.groovy-library-conventions'
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/releases' }
+    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/snapshots' }
+}
+dependencies {
+    implementation 'redis.clients:jedis:5.1.4'
+
+    testImplementation 'org.testcontainers:testcontainers:1.20.6'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+group = 'io.seqera'
+version = "${project.file('VERSION').text.trim()}"
