@@ -4,7 +4,16 @@ plugins {
 
 dependencies {
     implementation 'redis.clients:jedis:5.1.4'
-    implementation("io.micronaut:micronaut-runtime")
+
+    testImplementation 'org.testcontainers:testcontainers:1.20.6'
+    testImplementation 'org.objenesis:objenesis:3.4'
+    testImplementation 'net.bytebuddy:byte-buddy:1.14.17'
+    testImplementation 'org.spockframework:spock-core:2.3-groovy-4.0'
+    testImplementation 'org.spockframework:spock-junit4:2.3-groovy-4.0'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 group = 'io.seqera'

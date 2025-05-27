@@ -5,11 +5,8 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeoutException
 
-import io.micronaut.test.extensions.spock.annotation.MicronautTest
-import io.seqera.tower.Application
-import io.seqera.tower.test.BaseRedisTest
-import jakarta.inject.Inject
 import redis.clients.jedis.JedisPool
+import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Timeout
 
@@ -18,14 +15,20 @@ import spock.lang.Timeout
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Timeout(60)
-@MicronautTest(application = Application, transactional = false, startApplication = false, environments = ['redis','ha'])
 class JedisLockManagerTest extends Specification implements BaseRedisTest {
 
-    @Inject
+    @Shared
     JedisPool pool
 
+    def setup() {
+        pool = getJedisPool()
+    }
+
+    def cleanup() {
+        pool?.close()
+    }
+
     def 'should try acquire a lock' () {
-        given:
         def key = UUID.randomUUID().toString()
         def conn = pool.getResource()
         def manager = new JedisLockManager(conn)
@@ -52,6 +55,7 @@ class JedisLockManagerTest extends Specification implements BaseRedisTest {
 
         cleanup:
         conn?.close()
+        pool?.close()
     }
 
     def 'should block until the lock is not acquired' () {
