@@ -40,17 +40,18 @@ class RetryableTest extends Specification {
         retryable.config().multiplier == Retryable.DEFAULT_MULTIPLIER
     }
 
-    static class MyConfig implements Retryable.Config {
-        Duration delay = Duration.ofSeconds(1)
-        Duration maxDelay = Duration.ofSeconds(2)
-        int maxAttempts = 3
-        double jitter = 4d
-        double multiplier = 5d
-    }
-
     def 'should create with custom config' () {
         given:
-        def retryable = Retryable.of(new MyConfig())
+        def config = Mock(Retryable.Config) {
+            delay >> Duration.ofSeconds(1)
+            maxDelay >> Duration.ofSeconds(2)
+            maxAttempts >> 3
+            jitter >> 4d
+            multiplier >> 5d
+        }
+        and:
+        def retryable = Retryable.of(config)
+
         expect:
         retryable.config().delay == Duration.ofSeconds(1)
         retryable.config().maxDelay == Duration.ofSeconds(2)
@@ -94,5 +95,62 @@ class RetryableTest extends Specification {
         and:
         count == 3
         retries == 2
+    }
+
+    def 'should retry execution'  () {
+        given:
+        def config = Mock(Retryable.Config){
+            getDelay() >> Duration.ofSeconds(1)
+            getMaxDelay() >> Duration.ofSeconds(10)
+            getMaxAttempts() >> 10
+            getJitter() >> 0.25
+        }
+        and:
+        int attempts = 0
+        def retryable = Retryable.of(config).onRetry { log.info("Attempt ${it.attemptCount}") }
+        when:
+        def result = retryable.apply {
+            if( attempts++<2) throw new IOException("Oops failed!")
+            return attempts
+        }
+        then:
+        result == 3
+    }
+
+    def 'should throw an exception'  () {
+        given:
+        def config = Mock(Retryable.Config){
+            getDelay() >> Duration.ofSeconds(1)
+            getMaxDelay() >> Duration.ofSeconds(10)
+            getMaxAttempts() >> 1
+            getJitter() >> 0.25
+        }
+        and:
+        def retryable = Retryable.of(config).onRetry { log.info("Attempt ${it.attemptCount}") }
+        when:
+        retryable.apply(()-> {throw new IOException("Oops failed!")})
+        then:
+        def e = thrown(IOException)
+        e.message == 'Oops failed!'
+    }
+
+    def 'should validate config' () {
+        given:
+        def config = Mock(Retryable.Config){
+            getDelay() >> Duration.ofSeconds(1)
+            getMaxDelay() >> Duration.ofSeconds(10)
+            getMaxAttempts() >> 10
+            getJitter() >> 0.25
+            getMultiplier() >> 1.5
+        }
+
+        when:
+        def retry = Retryable.of(config).retryPolicy()
+        then:
+        retry.getConfig().getDelay() == Duration.ofSeconds(1)
+        retry.getConfig().getMaxDelay() == Duration.ofSeconds(10)
+        retry.getConfig().getMaxAttempts() == 10
+        retry.getConfig().getJitterFactor() == 0.25d
+        retry.getConfig().getDelayFactor() == 1.5d
     }
 }
