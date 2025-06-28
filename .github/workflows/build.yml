@@ -64,6 +64,7 @@ jobs:
           bash publish.sh lib-crypto
           bash publish.sh lib-mail
           bash publish.sh lib-pool
+          bash publish.sh lib-retry
           bash publish.sh lib-trace
           bash publish.sh wave-api
           bash publish.sh wave-utils
