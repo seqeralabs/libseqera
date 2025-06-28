@@ -6,12 +6,6 @@ plugins {
     id "io.micronaut.minimal.library" version '4.5.3'
 }
 
-repositories {
-    mavenCentral()
-    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/releases' }
-    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/snapshots' }
-}
-
 dependencies {
     compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     implementation "io.seqera:wave-utils:0.15.0"

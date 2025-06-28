@@ -3,11 +3,6 @@ plugins {
     id 'io.seqera.groovy-library-conventions'
 }
 
-repositories {
-    mavenCentral()
-    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/releases' }
-    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/snapshots' }
-}
 dependencies {
     implementation 'redis.clients:jedis:5.1.4'
 
