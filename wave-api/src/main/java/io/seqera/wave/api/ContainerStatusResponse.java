@@ -84,6 +84,11 @@ public class ContainerStatusResponse {
      */
     final public Duration duration;
 
+    /**
+     * Exit code of the container
+     */
+    final public Integer exitCode;
+
     /*
      * required for serialization/deserialization
      */
@@ -99,6 +104,7 @@ public class ContainerStatusResponse {
         this.vulnerabilities = null;
         this.reason = null;
         this.detailsUri = null;
+        this.exitCode = null;
     }
 
     public ContainerStatusResponse(
@@ -112,7 +118,8 @@ public class ContainerStatusResponse {
                 String reason,
                 String detailsUri,
                 Instant creationTime,
-                Duration duration
+                Duration duration,
+                Integer exitCode
     )
     {
         this.id = id;
@@ -126,6 +133,7 @@ public class ContainerStatusResponse {
         this.detailsUri = detailsUri;
         this.creationTime = creationTime;
         this.duration = duration;
+        this.exitCode = exitCode;
     }
 
     @Override
@@ -144,12 +152,13 @@ public class ContainerStatusResponse {
                 && Objects.equals(vulnerabilities, that.vulnerabilities)
                 && Objects.equals(reason, that.reason)
                 && Objects.equals(detailsUri, that.detailsUri)
+                && Objects.equals(exitCode, that.exitCode)
                 ;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, status, buildId, mirrorId, scanId, creationTime, duration, succeeded, vulnerabilities, reason, detailsUri);
+        return Objects.hash(id, status, buildId, mirrorId, scanId, creationTime, duration, succeeded, vulnerabilities, reason, detailsUri, exitCode);
     }
 
     @Override
@@ -166,6 +175,7 @@ public class ContainerStatusResponse {
                 ", vulnerabilities=" + vulnerabilities +
                 ", reason='" + reason + '\'' +
                 ", detailsUri='" + detailsUri + '\'' +
+                ", exitCode=" + exitCode +
                 '}';
     }
 }
