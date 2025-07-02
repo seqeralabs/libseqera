@@ -32,18 +32,18 @@ public class CreateNodeResponse {
         return this;
     }
 
-    public CreateNodeResponse withMasterInstanceId(String masterInstanceId) {
-        this.instanceId = masterInstanceId;
+    public CreateNodeResponse withInstanceId(String instanceId) {
+        this.instanceId = instanceId;
         return this;
     }
 
-    public CreateNodeResponse withMasterIp(String masterIp) {
-        this.ip = masterIp;
+    public CreateNodeResponse withIp(String ip) {
+        this.ip = ip;
         return this;
     }
 
-    public CreateNodeResponse withMasterDns(String masterDns) {
-        this.dns = masterDns;
+    public CreateNodeResponse withDns(String dns) {
+        this.dns = dns;
         return this;
     }
 
