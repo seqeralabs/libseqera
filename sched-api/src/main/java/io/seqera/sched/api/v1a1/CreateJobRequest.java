@@ -29,6 +29,7 @@ import java.util.Objects;
 public class CreateJobRequest {
 
     public String contextId;
+    public String clusterId;
     public List<String> command;
     public String image;
     public Map<String,String> environment;
@@ -36,6 +37,11 @@ public class CreateJobRequest {
 
     public CreateJobRequest withContextId(String contextId) {
         this.contextId = contextId;
+        return this;
+    }
+
+    public CreateJobRequest withClusterId(String clusterId) {
+        this.clusterId = clusterId;
         return this;
     }
 
@@ -66,6 +72,7 @@ public class CreateJobRequest {
                 ", command='" + command + "'" +
                 ", environment='" + environment + "'" +
                 ", platform='" + platform + "'" +
+                ", clusterId='" + clusterId + "'" +
                 '}';
     }
 
@@ -75,6 +82,7 @@ public class CreateJobRequest {
         if (o == null || getClass() != o.getClass()) return false;
         CreateJobRequest that = (CreateJobRequest) o;
         return Objects.equals(contextId, that.contextId)
+                && Objects.equals(clusterId, that.clusterId)
                 && Objects.equals(image, that.image)
                 && Objects.equals(command, that.command)
                 && Objects.equals(environment, that.environment)
@@ -84,6 +92,6 @@ public class CreateJobRequest {
 
     @Override
     public int hashCode() {
-        return Objects.hash(contextId, image, command, environment, platform);
+        return Objects.hash(contextId, clusterId, image, command, environment, platform);
     }
 }
