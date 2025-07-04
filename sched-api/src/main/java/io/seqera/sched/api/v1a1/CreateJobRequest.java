@@ -35,6 +35,9 @@ public class CreateJobRequest {
     public Map<String,String> environment;
     public String platform;
 
+    public int cpus;
+    public long memory;
+
     public CreateJobRequest withContextId(String contextId) {
         this.contextId = contextId;
         return this;
@@ -65,6 +68,16 @@ public class CreateJobRequest {
         return this;
     }
 
+    public CreateJobRequest withCpus(int cpus) {
+        this.cpus = cpus;
+        return this;
+    }
+
+    public CreateJobRequest withMemory(long memory) {
+        this.memory = memory;
+        return this;
+    }
+
     @Override
     public String toString() {
         return "CreateJobRequest{" +
@@ -87,11 +100,12 @@ public class CreateJobRequest {
                 && Objects.equals(command, that.command)
                 && Objects.equals(environment, that.environment)
                 && Objects.equals(platform, that.platform)
-                ;
+                && Objects.equals(cpus, that.cpus)
+                && Objects.equals(memory, that.memory);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(contextId, clusterId, image, command, environment, platform);
+        return Objects.hash(contextId, clusterId, image, command, environment, platform, cpus, memory);
     }
 }
