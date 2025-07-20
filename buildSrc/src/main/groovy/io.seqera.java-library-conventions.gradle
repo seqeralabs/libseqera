@@ -10,8 +10,9 @@ plugins {
 }
 
 repositories {
-    // Use Maven Central for resolving dependencies.
     mavenCentral()
+    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/releases' }
+    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/snapshots' }
 }
 
 java {

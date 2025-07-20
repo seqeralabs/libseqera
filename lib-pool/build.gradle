@@ -3,12 +3,6 @@ plugins {
     id 'io.seqera.groovy-library-conventions'
 }
 
-repositories {
-    mavenCentral()
-    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/releases' }
-    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/snapshots' }
-}
-
 group = 'io.seqera'
 version = "${project.file('VERSION').text.trim()}"
 

@@ -6,3 +6,11 @@ plugins {
 group = 'io.seqera'
 version = "${project.file('VERSION').text.trim()}"
 
+dependencies {
+    implementation 'redis.clients:jedis:5.1.4'
+    testImplementation 'org.testcontainers:testcontainers:1.20.6'
+}
+
+test {
+    useJUnitPlatform()
+}
