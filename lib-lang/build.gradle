@@ -1,0 +1,8 @@
+plugins {
+    id 'io.seqera.java-library-conventions'
+    id 'io.seqera.groovy-library-conventions'
+}
+
+group = 'io.seqera'
+version = "${project.file('VERSION').text.trim()}"
+
