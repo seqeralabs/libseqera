@@ -13,6 +13,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-pool](lib-pool/)** - Simple object pooling utilities
 - **[lib-lang](lib-lang/)** - Language and type utilities
 - **[lib-trace](lib-trace/)** - Tracing and logging utilities
+- **[lib-commons-io](lib-commons-io/)** - Common I/O utilities for logging and streaming
 - **[jedis-lock](jedis-lock/)** - Redis-based distributed locking using Jedis
 
 ### Messaging & Data Libraries

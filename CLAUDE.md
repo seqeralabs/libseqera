@@ -33,6 +33,7 @@ This is a library collection (`libseqera`) containing reusable components for Se
 - **lib-pool**: Simple object pooling utilities
 - **lib-lang**: Language and type utilities
 - **lib-trace**: Tracing and logging utilities
+- **lib-commons-io**: Common I/O utilities for logging and streaming
 - **jedis-lock**: Redis-based distributed locking using Jedis
 
 #### Messaging & Data Libraries

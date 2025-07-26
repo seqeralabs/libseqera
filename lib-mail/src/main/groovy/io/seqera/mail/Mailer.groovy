@@ -34,7 +34,7 @@ import javax.mail.internet.MimeUtility
 
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
-import io.seqera.wave.util.LogOutputStream
+import io.seqera.commons.io.LogOutputStream
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser

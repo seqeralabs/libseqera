@@ -26,3 +26,6 @@ push:
 #
 deps:
 	./gradlew -q ${mm}dependencies --configuration ${config}
+
+test:
+	./gradlew test

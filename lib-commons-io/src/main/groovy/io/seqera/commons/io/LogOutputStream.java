@@ -15,7 +15,7 @@
  *
  */
 
-package io.seqera.wave.util;
+package io.seqera.commons.io;
 
 /*
  * This source is a derivation of the

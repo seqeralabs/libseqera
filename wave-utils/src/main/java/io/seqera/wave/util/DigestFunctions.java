@@ -36,8 +36,6 @@ import java.util.Random;
  **/
 public class DigestFunctions {
 
-    final private static char PADDING = '_';
-
     private static MessageDigest getSha256() {
         try {
             // warning: MessageDigest instance is not thread safe!
