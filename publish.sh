@@ -41,7 +41,7 @@ ret=$(aws s3api head-object --bucket $BUCKET --key $KEY 2>&1) && {
  } || {
   if [[ $ret == *"Not Found"* ]]; then
     # the lib does not exist => publish it
-    ./gradlew $NAME:publishMavenPublicationToSeqeraRepositoryRepository
+    ./gradlew $NAME:publishMavenPublicationToSeqeraRepository
   else 
     # print the error message
     echo $ret >&2
