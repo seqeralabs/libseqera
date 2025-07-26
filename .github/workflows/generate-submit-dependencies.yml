@@ -22,7 +22,7 @@ jobs:
           "lib-pool",
           "lib-random",
           "lib-retry",
-          "lib-serde"
+          "lib-serde",
           "lib-trace",
           "wave-api",
           "wave-utils"
