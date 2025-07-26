@@ -11,7 +11,22 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        components: ["lib-crypto","lib-lang","lib-mail","lib-pool","lib-retry","lib-trace","wave-utils", "wave-api", "jedis-lock"]
+        components: [
+          "jedis-lock",
+          "lib-crypto",
+          "lib-data-queue-redis",
+          "lib-data-stream-redis",
+          "lib-fixtures-redis",
+          "lib-lang",
+          "lib-mail",
+          "lib-pool",
+          "lib-random",
+          "lib-retry",
+          "lib-serde"
+          "lib-trace",
+          "wave-api",
+          "wave-utils"
+        ]
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-java@v4
