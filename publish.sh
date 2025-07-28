@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Copyright 2024, Seqera Labs
+# Copyright 2025, Seqera Labs
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ ret=$(aws s3api head-object --bucket $BUCKET --key $KEY 2>&1) && {
  } || {
   if [[ $ret == *"Not Found"* ]]; then
     # the lib does not exist => publish it
-    ./gradlew $NAME:publishMavenPublicationToSeqeraRepositoryRepository
+    ./gradlew $NAME:publishMavenPublicationToSeqeraRepository
   else 
     # print the error message
     echo $ret >&2

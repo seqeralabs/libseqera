@@ -1,5 +1,5 @@
 /*
- * Copyright 2024, Seqera Labs
+ * Copyright 2025, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  *
  */
 
-package io.seqera.wave.util
+package io.seqera.random
 
 import spock.lang.Ignore
 import spock.lang.Retry

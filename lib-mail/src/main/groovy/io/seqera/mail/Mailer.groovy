@@ -1,5 +1,5 @@
 /*
- * Copyright 2024, Seqera Labs
+ * Copyright 2025, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ import javax.mail.internet.MimeUtility
 
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
-import io.seqera.wave.util.LogOutputStream
+import io.seqera.commons.io.LogOutputStream
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.parser.Parser

@@ -61,16 +61,27 @@ jobs:
       - name: Release
         if: "contains(github.event.head_commit.message, '[release]')"
         run: |
+          bash publish.sh jedis-lock
+          bash publish.sh lib-commons-io
           bash publish.sh lib-crypto
+          bash publish.sh lib-data-queue-redis
+          bash publish.sh lib-data-stream-redis
+          bash publish.sh lib-fixtures-redis          
+          bash publish.sh lib-lang
           bash publish.sh lib-mail
           bash publish.sh lib-pool
+          bash publish.sh lib-random
+          bash publish.sh lib-retry
+          bash publish.sh lib-serde
           bash publish.sh lib-trace
           bash publish.sh wave-api
           bash publish.sh wave-utils
+
         env:
           GRADLE_OPTS: '-Dorg.gradle.daemon=false'
           AWS_ACCESS_KEY_ID: ${{secrets.TOWER_CI_AWS_ACCESS}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.TOWER_CI_AWS_SECRET}}
+          AWS_JAVA_V1_DISABLE_DEPRECATION_ANNOUNCEMENT: true
           AWS_DEFAULT_REGION: 'eu-west-1'
           PUBLISH_REPO_URL: "s3://maven.seqera.io/releases"
 

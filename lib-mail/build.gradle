@@ -1,39 +1,52 @@
+/*
+ * Copyright 2025, Seqera Labs
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
 plugins {
     id 'io.seqera.java-library-conventions'
     id 'io.seqera.groovy-library-conventions'
     // Micronaut minimal lib
     // https://micronaut-projects.github.io/micronaut-gradle-plugin/latest/
-    id "io.micronaut.minimal.library" version '4.4.4'
-}
-
-repositories {
-    mavenCentral()
-    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/releases' }
-    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/snapshots' }
+    id "io.micronaut.minimal.library" version '4.5.3'
 }
 
 dependencies {
-    compileOnly "io.micronaut:micronaut-inject-groovy"
-    implementation "io.seqera:wave-utils:0.15.0"
+    compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     implementation "ch.qos.logback:logback-classic:1.5.15"
     implementation "org.apache.groovy:groovy:4.0.24"
     implementation "org.apache.groovy:groovy-nio:4.0.24"
     implementation "org.apache.groovy:groovy-templates:4.0.24"
     api "com.sun.mail:javax.mail:1.6.2"
     api "org.jsoup:jsoup:1.15.3"
-    implementation("io.micronaut:micronaut-runtime")
+    implementation("io.micronaut:micronaut-runtime:${micronautCoreVersion}")
+    implementation project(':lib-commons-io')
 
     testImplementation "org.subethamail:subethasmtp:3.1.7"
+    testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
+    testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
 }
 
 group = 'io.seqera'
 version = "${project.file('VERSION').text.trim()}"
 
 micronaut {
-    version '4.6.3'
+    version '4.8.3'
     runtime("netty")
-    testRuntime("spock2")
     processing {
         incremental(true)
     }
+    importMicronautPlatform = false
 }
