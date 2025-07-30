@@ -66,4 +66,44 @@ class AbstractMessageStreamRedisTest extends Specification implements RedisTestC
         stream.close()
     }
 
+    def 'should support multiple consumer groups with different TestStreams' () {
+        given:
+        def streamId = "stream-${LongRndKey.rndHex()}"
+        
+        // Create multiple TestStreams with different consumer groups  
+        def target = context.getBean(RedisMessageStream)
+        def stream1 = new TestStream(target, 'group1')
+        def stream2 = new TestStream(target, 'group2')
+        def stream3 = new TestStream(target, 'group3')
+        
+        def queue1 = new ArrayBlockingQueue(10)
+        def queue2 = new ArrayBlockingQueue(10)  
+        def queue3 = new ArrayBlockingQueue(10)
+
+        and:
+        stream1.addConsumer(streamId, { it-> queue1.add(it) })
+        stream2.addConsumer(streamId, { it-> queue2.add(it) })
+        stream3.addConsumer(streamId, { it-> queue3.add(it) })
+
+        when:
+        stream1.offer(streamId, new TestMessage('msg1','data1'))
+        stream1.offer(streamId, new TestMessage('msg2','data2'))
+
+        then:
+        // All consumer groups should receive the messages
+        queue1.take() == new TestMessage('msg1','data1')
+        queue1.take() == new TestMessage('msg2','data2')
+        
+        queue2.take() == new TestMessage('msg1','data1')
+        queue2.take() == new TestMessage('msg2','data2')
+        
+        queue3.take() == new TestMessage('msg1','data1')
+        queue3.take() == new TestMessage('msg2','data2')
+
+        cleanup:
+        stream1.close()
+        stream2.close() 
+        stream3.close()
+    }
+
 }

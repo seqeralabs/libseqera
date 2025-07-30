@@ -38,14 +38,15 @@ import jakarta.inject.Singleton
 @CompileStatic
 class LocalMessageStream implements MessageStream<String> {
 
-    private ConcurrentHashMap<String, LinkedBlockingQueue<String>> delegate = new ConcurrentHashMap<>()
+    private ConcurrentHashMap<String, ConcurrentHashMap<String, LinkedBlockingQueue<String>>> delegate = new ConcurrentHashMap<>()
 
     /**
      * {@inheritDoc}
      */
     @Override
     void init(String streamId, String groupId) {
-        delegate.put(streamId, new LinkedBlockingQueue<>())
+        delegate.putIfAbsent(streamId, new ConcurrentHashMap<>())
+        delegate.get(streamId).putIfAbsent(groupId, new LinkedBlockingQueue<>())
     }
 
     /**
@@ -55,7 +56,7 @@ class LocalMessageStream implements MessageStream<String> {
     void offer(String streamId, String message) {
         delegate
                 .get(streamId)
-                .offer(message)
+                .forEachEntry(1, linkedBlockingQueueEntry -> linkedBlockingQueueEntry.getValue().offer(message))
     }
 
     /**
@@ -65,6 +66,7 @@ class LocalMessageStream implements MessageStream<String> {
     boolean consume(String streamId, String groupId, MessageConsumer<String> consumer) {
         final message = delegate
                 .get(streamId)
+                .get(groupId)
                 .poll()
         if( message==null ) {
             return false
@@ -82,7 +84,10 @@ class LocalMessageStream implements MessageStream<String> {
             if( !result ) {
                 // add again message not consumed to mimic the behavior or redis stream
                 sleep(1_000)
-                offer(streamId,message)
+                delegate
+                        .get(streamId)
+                        .get(groupId)
+                        .offer(message)
             }
             return result
         }
@@ -93,6 +98,11 @@ class LocalMessageStream implements MessageStream<String> {
      */
     @Override
     int length(String streamId) {
-        return delegate.get(streamId).size()
+        def streamGroups = delegate.get(streamId)
+        if (streamGroups == null || streamGroups.isEmpty()) {
+            return 0
+        }
+        // Return the size of the first consumer group queue (they should all have the same size)
+        return streamGroups.values().iterator().next().size()
     }
 }

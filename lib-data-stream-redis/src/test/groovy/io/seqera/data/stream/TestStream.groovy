@@ -29,8 +29,21 @@ import groovy.json.JsonSlurper
  */
 class TestStream extends AbstractMessageStream<TestMessage> {
 
+    private String groupName
+
     TestStream(MessageStream<String> target) {
         super(target)
+        this.groupName = "seqera-message-stream" // default
+    }
+
+    TestStream(MessageStream<String> target, String groupName) {
+        super(target)
+        this.groupName = groupName
+    }
+
+    @Override
+    protected String consumerGroupName() {
+        return groupName
     }
 
     @Override
