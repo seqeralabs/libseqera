@@ -33,7 +33,7 @@ import jakarta.inject.Singleton
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Slf4j
-@Requires(notEnv = 'redis')
+@Requires(missingProperty = 'redis.uri')
 @Singleton
 @CompileStatic
 class LocalMessageStream implements MessageStream<String> {
@@ -44,7 +44,7 @@ class LocalMessageStream implements MessageStream<String> {
      * {@inheritDoc}
      */
     @Override
-    void init(String streamId) {
+    void init(String streamId, String groupId) {
         delegate.put(streamId, new LinkedBlockingQueue<>())
     }
 
@@ -62,7 +62,7 @@ class LocalMessageStream implements MessageStream<String> {
      * {@inheritDoc}
      */
     @Override
-    boolean consume(String streamId, MessageConsumer<String> consumer) {
+    boolean consume(String streamId, String groupId, MessageConsumer<String> consumer) {
         final message = delegate
                 .get(streamId)
                 .poll()

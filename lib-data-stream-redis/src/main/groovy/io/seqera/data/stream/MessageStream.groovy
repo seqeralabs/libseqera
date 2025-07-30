@@ -94,7 +94,7 @@ interface MessageStream<M> {
      * @param streamId the unique identifier for the stream; must not be null or empty
      * @throws IllegalArgumentException if streamId is null or empty
      */
-    void init(String streamId)
+    void init(String streamId, String groupId)
 
     /**
      * Adds a message to the specified stream.
@@ -149,7 +149,7 @@ interface MessageStream<M> {
      *         {@code false} if no message was available or processing failed
      * @see MessageConsumer#accept(Object)
      */
-    boolean consume(String streamId, MessageConsumer<M> consumer)
+    boolean consume(String streamId, String groupId, MessageConsumer<M> consumer)
 
     /**
      * Returns the approximate number of messages currently in the specified stream.

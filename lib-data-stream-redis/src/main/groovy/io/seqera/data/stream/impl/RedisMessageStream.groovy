@@ -44,14 +44,12 @@ import redis.clients.jedis.resps.StreamEntry
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Slf4j
-@Requires(env = 'redis')
+@Requires(property = 'redis.uri')
 @Singleton
 @CompileStatic
 class RedisMessageStream implements MessageStream<String> {
 
     private static final StreamEntryID STREAM_ENTRY_ZERO = new StreamEntryID("0-0")
-
-    private static final String CONSUMER_GROUP_NAME = "wave-message-stream"
 
     private static final String DATA_FIELD = 'data'
 
@@ -93,9 +91,9 @@ class RedisMessageStream implements MessageStream<String> {
      * {@inheritDoc}
      */
     @Override
-    void init(String streamId) {
+    void init(String streamId, String groupId) {
         try (Jedis jedis = pool.getResource()) {
-            initGroup0(jedis, streamId, CONSUMER_GROUP_NAME)
+            initGroup0(jedis, streamId, groupId)
         }
     }
 
@@ -113,15 +111,15 @@ class RedisMessageStream implements MessageStream<String> {
      * {@inheritDoc}
      */
     @Override
-    boolean consume(String streamId, MessageConsumer<String> consumer) {
+    boolean consume(String streamId, String groupId, MessageConsumer<String> consumer) {
         try (Jedis jedis = pool.getResource()) {
             String msg
             final long begin = System.currentTimeMillis()
-            final entry = claimMessage(jedis,streamId) ?: readMessage(jedis, streamId)
+            final entry = claimMessage(jedis,streamId, groupId) ?: readMessage(jedis, streamId, groupId)
             if( entry && consumer.accept(msg=entry.getFields().get(DATA_FIELD)) ) {
                 final tx = jedis.multi()
                 // acknowledge the entry has been processed so that it cannot be claimed anymore
-                tx.xack(streamId, CONSUMER_GROUP_NAME, entry.getID())
+                tx.xack(streamId, groupId, entry.getID())
                 final delta = System.currentTimeMillis()-begin
                 if( delta>consumeWarnTimeoutMillis ) {
                     log.warn "Redis message stream - consume processing took ${Duration.ofMillis(delta)} - offending entry=${entry.getID()}; message=${msg}"
@@ -136,7 +134,7 @@ class RedisMessageStream implements MessageStream<String> {
         }
     }
 
-    protected StreamEntry readMessage(Jedis jedis, String streamId) {
+    protected StreamEntry readMessage(Jedis jedis, String streamId, String groupId) {
         // Create parameters for reading with a group
         final params = new XReadGroupParams()
                 // Read one message at a time
@@ -144,7 +142,7 @@ class RedisMessageStream implements MessageStream<String> {
 
         // Read new messages from the stream using the correct xreadGroup signature
         List<Map.Entry<String, List<StreamEntry>>> messages = jedis.xreadGroup(
-                CONSUMER_GROUP_NAME,
+                groupId,
                 consumerName,
                 params,
                 Map.of(streamId, StreamEntryID.UNRECEIVED_ENTRY) )
@@ -155,14 +153,14 @@ class RedisMessageStream implements MessageStream<String> {
         return entry
     }
 
-    protected StreamEntry claimMessage(Jedis jedis, String streamId) {
+    protected StreamEntry claimMessage(Jedis jedis, String streamId, String groupId) {
         // Attempt to claim any pending messages that are idle for more than the threshold
         final params = new XAutoClaimParams()
                 // claim one entry at time
                 .count(1)
         final messages = jedis.xautoclaim(
                 streamId,
-                CONSUMER_GROUP_NAME,
+                groupId,
                 consumerName,
                 claimTimeout.toMillis(),
                 STREAM_ENTRY_ZERO,

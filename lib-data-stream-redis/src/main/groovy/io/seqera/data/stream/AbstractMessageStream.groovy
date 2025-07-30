@@ -92,6 +92,8 @@ import io.seqera.util.retry.ExponentialAttempt
 @CompileStatic
 abstract class AbstractMessageStream<M> implements Closeable {
 
+    private static final DEFAULT_CONSUMER_GROUP_NAME = "seqera-message-stream"
+
     static final private AtomicInteger count = new AtomicInteger()
 
     final private Map<String,MessageConsumer<M>> listeners = new ConcurrentHashMap<>()
@@ -113,6 +115,10 @@ abstract class AbstractMessageStream<M> implements Closeable {
     }
 
     abstract protected StringEncodingStrategy<M> createEncodingStrategy()
+
+    protected String consumerGroupName() {
+        return DEFAULT_CONSUMER_GROUP_NAME
+    }
 
     protected Thread createListenerThread() {
         final thread = new Thread(()-> processMessages(), name0)
@@ -181,7 +187,7 @@ abstract class AbstractMessageStream<M> implements Closeable {
             if( listeners.containsKey(streamId))
                 throw new IllegalStateException("Only one consumer can be defined for each stream - offending streamId=$streamId; consumer=$consumer")
             // initialize the stream
-            stream.init(streamId)
+            stream.init(streamId, consumerGroupName())
             // then add the consumer to the listeners
             listeners.put(streamId, consumer)
             // finally start the listener thread
@@ -222,7 +228,7 @@ abstract class AbstractMessageStream<M> implements Closeable {
                 for( Map.Entry<String,MessageConsumer<M>> entry : listeners.entrySet() ) {
                     final streamId = entry.key
                     final consumer = entry.value
-                    stream.consume(streamId, (String msg)-> processMessage(msg, consumer, count))
+                    stream.consume(streamId, consumerGroupName(), (String msg)-> processMessage(msg, consumer, count))
                 }
                 // reset the attempt count because no error has been thrown
                 attempt.reset()
