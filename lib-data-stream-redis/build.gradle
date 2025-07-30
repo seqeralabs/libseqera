@@ -33,33 +33,20 @@ dependencies {
     implementation project(':lib-random')
     implementation 'redis.clients:jedis:5.1.4'
 
-    compileOnly("io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}") {
-        exclude group: 'io.micronaut', module: 'micronaut-http'
-    }
+    compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     implementation "ch.qos.logback:logback-classic:1.5.15"
     implementation "org.apache.groovy:groovy:4.0.24"
     implementation "org.apache.groovy:groovy-nio:4.0.24"
     implementation "org.apache.groovy:groovy-templates:4.0.24"
     testImplementation "org.apache.groovy:groovy-json:4.0.24"
-    implementation("io.micronaut:micronaut-runtime:${micronautCoreVersion}") {
-        exclude group: 'io.micronaut', module: 'micronaut-http'
-        exclude group: 'io.micronaut', module: 'micronaut-http-client'
-    }
-    implementation("io.micronaut:micronaut-websocket:${micronautCoreVersion}") {
-        exclude group: 'io.micronaut', module: 'micronaut-http'
-        exclude group: 'io.micronaut', module: 'micronaut-http-client'
-    }
+    implementation "io.micronaut:micronaut-runtime:${micronautCoreVersion}"
+    implementation "io.micronaut:micronaut-websocket:${micronautCoreVersion}"
     implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
 
     testImplementation project(':lib-lang')
     testImplementation testFixtures(project(':lib-fixtures-redis'))
-    testImplementation("io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}") {
-        exclude group: 'io.micronaut', module: 'micronaut-http'
-    }
-    testImplementation("io.micronaut.test:micronaut-test-spock:${micronautTestVersion}") {
-        exclude group: 'io.micronaut', module: 'micronaut-http'
-        exclude group: 'io.micronaut', module: 'micronaut-http-client'
-    }
+    testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
+    testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
     testImplementation 'org.testcontainers:testcontainers:1.20.6'
 }
 
