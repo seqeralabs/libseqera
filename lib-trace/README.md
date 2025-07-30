@@ -2,6 +2,16 @@
 
 Tracing and performance monitoring utilities for distributed systems debugging.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-trace:0.1.0'
+}
+```
+
 ## Usage
 
 Generate distributed trace IDs for HTTP request correlation:

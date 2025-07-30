@@ -2,6 +2,16 @@
 
 Cryptographically secure random key generation and unique identifier utilities.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-random:1.0.0'
+}
+```
+
 ## Usage
 
 Secure random number generation with multiple encoding formats:

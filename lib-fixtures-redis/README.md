@@ -2,6 +2,16 @@
 
 Redis test fixtures and Testcontainers integration for integration testing.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    testImplementation 'io.seqera:lib-fixtures-redis:1.0.0'
+}
+```
+
 ## Usage
 
 Redis container setup and test data management:

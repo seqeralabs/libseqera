@@ -2,6 +2,16 @@
 
 Object pooling utilities for efficient resource management and reduced allocation overhead.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-pool:1.0.0'
+}
+```
+
 ## Usage
 
 Thread-safe object pooling for acquiring expensive-to-create resources:

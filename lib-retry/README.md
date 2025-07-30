@@ -2,6 +2,16 @@
 
 Retry mechanisms with exponential backoff for handling transient failures.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-retry:1.1.0'
+}
+```
+
 ## Usage
 
 Exponential backoff retry mechanisms with configurable parameters:

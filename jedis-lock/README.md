@@ -2,6 +2,16 @@
 
 Redis-based distributed locking with automatic expiration and lock coordination.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:jedis-lock:1.0.0'
+}
+```
+
 ## Usage
 
 Distributed mutex locks using Redis for cross-process synchronization:

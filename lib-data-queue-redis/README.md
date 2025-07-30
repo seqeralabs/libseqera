@@ -2,6 +2,16 @@
 
 Message queue abstraction with Redis and local implementations for reliable FIFO messaging.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-data-queue-redis:1.0.0'
+}
+```
+
 ## Usage
 
 Distributed message queuing with blocking operations:

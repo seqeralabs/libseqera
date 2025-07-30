@@ -2,6 +2,16 @@
 
 Email functionality with Micronaut integration for Seqera platform components.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-mail:1.3.0'
+}
+```
+
 ## Usage
 
 Send emails with attachments and HTML content:

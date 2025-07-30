@@ -2,6 +2,16 @@
 
 Message streaming with Redis Streams and local implementations for persistent event processing.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-data-stream-redis:1.0.0'
+}
+```
+
 ## Usage
 
 Event streaming with consumer groups and message acknowledgment:

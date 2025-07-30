@@ -2,6 +2,16 @@
 
 Common I/O utilities for logging and streaming in Seqera platform components.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-commons-io:1.0.0'
+}
+```
+
 ## Usage
 
 Stream processing utilities for logging external process output:

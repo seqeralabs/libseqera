@@ -2,6 +2,16 @@
 
 Cryptographic utilities for secure operations in Seqera platform components.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-crypto:1.0.0'
+}
+```
+
 ## Usage
 
 Secure encryption, digital signatures, and token management:

@@ -2,6 +2,16 @@
 
 Serialization and deserialization utilities with pluggable encoding strategies.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-serde:1.0.0'
+}
+```
+
 ## Usage
 
 Flexible encoding strategies for data transformation and messaging:

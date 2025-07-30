@@ -2,6 +2,16 @@
 
 Language and type utilities with reflection helpers for dynamic operations.
 
+## Installation
+
+Add this dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-lang:1.0.0'
+}
+```
+
 ## Usage
 
 Runtime generic type resolution using `getGenericType`:
