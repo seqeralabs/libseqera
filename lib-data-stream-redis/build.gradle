@@ -69,7 +69,7 @@ test {
 
 
 micronaut {
-    version '4.4.3'
+    version '4.8.3'
     runtime("netty")
     processing {
         incremental(true)
