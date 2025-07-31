@@ -22,7 +22,6 @@ import java.time.Duration
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 import io.micronaut.context.annotation.Requires
-import io.micronaut.context.annotation.Value
 import io.seqera.data.stream.MessageConsumer
 import io.seqera.data.stream.MessageStream
 import io.seqera.random.LongRndKey
@@ -37,11 +36,40 @@ import redis.clients.jedis.params.XAutoClaimParams
 import redis.clients.jedis.params.XReadGroupParams
 import redis.clients.jedis.resps.StreamEntry
 /**
- * Implement a distributed {@link MessageStream} backed by a Redis stream.
- * This implementation allows multiple concurrent consumers and guarantee consistency
- * across replicas restart. 
+ * Redis-based implementation of {@link MessageStream} that provides distributed message
+ * streaming capabilities using Redis Streams as the underlying storage mechanism.
+ * 
+ * <p>This implementation offers the following features:
+ * <ul>
+ *   <li><b>Distributed Processing:</b> Supports multiple concurrent consumers across different instances</li>
+ *   <li><b>Reliability:</b> Guarantees message delivery consistency across service restarts</li>
+ *   <li><b>Consumer Groups:</b> Uses Redis consumer groups for load balancing and fault tolerance</li>
+ *   <li><b>Message Claiming:</b> Automatically reclaims stalled messages from failed consumers</li>
+ *   <li><b>Persistence:</b> Messages are persisted in Redis until explicitly acknowledged and deleted</li>
+ * </ul>
+ * 
+ * <p>The implementation follows Redis Streams best practices:
+ * <ul>
+ *   <li>Creates consumer groups automatically on initialization</li>
+ *   <li>Uses unique consumer names to avoid conflicts</li>
+ *   <li>Implements message claiming for handling consumer failures</li>
+ *   <li>Acknowledges and removes processed messages to prevent memory bloat</li>
+ * </ul>
+ * 
+ * <p>Message processing workflow:
+ * <ol>
+ *   <li>Attempt to claim any stalled messages from failed consumers</li>
+ *   <li>If no stalled messages, read new messages from the stream</li>
+ *   <li>Process the message through the provided consumer</li>
+ *   <li>Acknowledge and delete the message upon successful processing</li>
+ * </ol>
+ * 
+ * <p>This class is automatically activated when the 'redis' environment is active
+ * and requires a configured {@link JedisPool} for Redis connectivity.
  *
+ * @param <String> the message type (currently fixed to String)
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
+ * @since 1.0
  */
 @Slf4j
 @Requires(env = 'redis')
@@ -51,26 +79,20 @@ class RedisMessageStream implements MessageStream<String> {
 
     private static final StreamEntryID STREAM_ENTRY_ZERO = new StreamEntryID("0-0")
 
-    private static final String CONSUMER_GROUP_NAME = "wave-message-stream"
-
     private static final String DATA_FIELD = 'data'
 
     @Inject
     private JedisPool pool
 
-    @Value('${wave.message-stream.claim-timeout:5s}')
-    private Duration claimTimeout
-
-    @Value('${wave.message-stream.consume-warn-timeout-millis:4000}')
-    private long consumeWarnTimeoutMillis
+    @Inject
+    private RedisStreamConfig config
 
     private String consumerName
 
     @PostConstruct
     private void create() {
         consumerName = "consumer-${LongRndKey.rndLong()}"
-
-        log.info "Creating Redis message stream - consumer=${consumerName}; claim-timeout=${claimTimeout}"
+        log.info "Creating Redis message stream - consumer=${consumerName}"
     }
 
     protected boolean initGroup0(Jedis jedis, String streamId, String group) {
@@ -89,13 +111,12 @@ class RedisMessageStream implements MessageStream<String> {
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
     void init(String streamId) {
+        log.info "Initializing Redis message stream=$streamId; consumer=${consumerName}; config=${config}"
+        this.config = config
         try (Jedis jedis = pool.getResource()) {
-            initGroup0(jedis, streamId, CONSUMER_GROUP_NAME)
+            initGroup0(jedis, streamId, config.getDefaultConsumerGroupName())
         }
     }
 
@@ -121,9 +142,9 @@ class RedisMessageStream implements MessageStream<String> {
             if( entry && consumer.accept(msg=entry.getFields().get(DATA_FIELD)) ) {
                 final tx = jedis.multi()
                 // acknowledge the entry has been processed so that it cannot be claimed anymore
-                tx.xack(streamId, CONSUMER_GROUP_NAME, entry.getID())
+                tx.xack(streamId, config.getDefaultConsumerGroupName(), entry.getID())
                 final delta = System.currentTimeMillis()-begin
-                if( delta>consumeWarnTimeoutMillis ) {
+                if( delta>config.consumerWarnTimeoutMillis ) {
                     log.warn "Redis message stream - consume processing took ${Duration.ofMillis(delta)} - offending entry=${entry.getID()}; message=${msg}"
                 }
                 // this remove permanently the entry from the stream
@@ -144,7 +165,7 @@ class RedisMessageStream implements MessageStream<String> {
 
         // Read new messages from the stream using the correct xreadGroup signature
         List<Map.Entry<String, List<StreamEntry>>> messages = jedis.xreadGroup(
-                CONSUMER_GROUP_NAME,
+                config.getDefaultConsumerGroupName(),
                 consumerName,
                 params,
                 Map.of(streamId, StreamEntryID.UNRECEIVED_ENTRY) )
@@ -162,9 +183,9 @@ class RedisMessageStream implements MessageStream<String> {
                 .count(1)
         final messages = jedis.xautoclaim(
                 streamId,
-                CONSUMER_GROUP_NAME,
+                config.getDefaultConsumerGroupName(),
                 consumerName,
-                claimTimeout.toMillis(),
+                config.claimTimeoutMillis,
                 STREAM_ENTRY_ZERO,
                 params
         )

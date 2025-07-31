@@ -27,10 +27,36 @@ import io.seqera.data.stream.MessageConsumer
 import io.seqera.data.stream.MessageStream
 import jakarta.inject.Singleton
 /**
- * Implement a {@link MessageStream} using a Java {@link java.util.concurrent.BlockingQueue}.
- * This is only meant for developing purpose.
+ * In-memory implementation of {@link MessageStream} using Java {@link LinkedBlockingQueue}
+ * as the underlying storage mechanism. This implementation is designed exclusively for
+ * development, testing, and local environments.
+ * 
+ * <p><strong>Important:</strong> This implementation should <b>never</b> be used in production
+ * environments as it provides no persistence, durability, or distribution capabilities.
+ * Messages are stored only in local JVM memory and will be lost on application restart.
+ * 
+ * <p>Key characteristics:
+ * <ul>
+ *   <li><b>Local Only:</b> Messages exist only within the current JVM instance</li>
+ *   <li><b>No Persistence:</b> All messages are lost when the application stops</li>
+ *   <li><b>No Distribution:</b> Cannot share messages across multiple application instances</li>
+ *   <li><b>Simple Queuing:</b> Messages are processed in FIFO order using blocking queues</li>
+ *   <li><b>Retry Logic:</b> Failed messages are re-queued after a 1-second delay</li>
+ * </ul>
+ * 
+ * <p>This implementation automatically activates when the 'redis' environment is <b>not</b>
+ * active, making it ideal for:
+ * <ul>
+ *   <li>Local development without Redis infrastructure</li>
+ *   <li>Unit testing scenarios</li>
+ *   <li>Quick prototyping and experimentation</li>
+ * </ul>
+ * 
+ * <p>Each stream is backed by its own {@link ConcurrentHashMap} entry containing
+ * a {@link LinkedBlockingQueue} for thread-safe message handling.
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
+ * @since 1.0
  */
 @Slf4j
 @Requires(notEnv = 'redis')
