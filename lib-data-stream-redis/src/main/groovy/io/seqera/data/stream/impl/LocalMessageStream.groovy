@@ -59,7 +59,7 @@ import jakarta.inject.Singleton
  * @since 1.0
  */
 @Slf4j
-@Requires(notEnv = 'redis')
+@Requires(missingBeans = RedisMessageStream.class)
 @Singleton
 @CompileStatic
 class LocalMessageStream implements MessageStream<String> {
