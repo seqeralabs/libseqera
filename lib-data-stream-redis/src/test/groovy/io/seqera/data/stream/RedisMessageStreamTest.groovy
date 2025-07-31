@@ -35,7 +35,7 @@ class RedisMessageStreamTest extends Specification implements RedisTestContainer
     ApplicationContext context
 
     def setup() {
-        context = ApplicationContext.run(['wave.message-stream.claim-timeout': '1s'], 'test', 'redis')
+        context = ApplicationContext.run('test', 'redis')
     }
 
     def cleanup() {
