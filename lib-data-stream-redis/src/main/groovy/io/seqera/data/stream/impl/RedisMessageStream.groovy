@@ -25,6 +25,7 @@ import io.micronaut.context.annotation.Requires
 import io.micronaut.context.annotation.Value
 import io.seqera.data.stream.MessageConsumer
 import io.seqera.data.stream.MessageStream
+import io.seqera.data.stream.RedisAvailabilityCondition
 import io.seqera.random.LongRndKey
 import jakarta.annotation.PostConstruct
 import jakarta.inject.Inject
@@ -47,7 +48,7 @@ import redis.clients.jedis.resps.StreamGroupInfo
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Slf4j
-@Requires(property = 'redis.uri')
+@Requires(condition = RedisAvailabilityCondition.class)
 @Singleton
 @CompileStatic
 class RedisMessageStream implements MessageStream<String> {

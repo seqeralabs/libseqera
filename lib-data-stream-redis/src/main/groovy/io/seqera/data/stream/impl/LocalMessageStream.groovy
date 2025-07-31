@@ -26,6 +26,9 @@ import io.micronaut.context.annotation.Requires
 import io.seqera.data.stream.MessageConsumer
 import io.seqera.data.stream.MessageStream
 import jakarta.inject.Singleton
+
+import io.seqera.data.stream.RedisAvailabilityCondition
+
 /**
  * Implement a {@link MessageStream} using a Java {@link java.util.concurrent.BlockingQueue}.
  * This is only meant for developing purpose.
@@ -33,7 +36,7 @@ import jakarta.inject.Singleton
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Slf4j
-@Requires(missingProperty = 'redis.uri')
+@Requires(missingBeans = RedisMessageStream)
 @Singleton
 @CompileStatic
 class LocalMessageStream implements MessageStream<String> {
