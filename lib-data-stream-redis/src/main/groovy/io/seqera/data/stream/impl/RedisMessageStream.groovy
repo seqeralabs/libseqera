@@ -24,6 +24,7 @@ import groovy.util.logging.Slf4j
 import io.micronaut.context.annotation.Requires
 import io.seqera.data.stream.MessageConsumer
 import io.seqera.data.stream.MessageStream
+import io.seqera.data.stream.RedisAvailabilityCondition
 import io.seqera.random.LongRndKey
 import jakarta.annotation.PostConstruct
 import jakarta.inject.Inject
@@ -72,7 +73,7 @@ import redis.clients.jedis.resps.StreamEntry
  * @since 1.0
  */
 @Slf4j
-@Requires(env = 'redis')
+@Requires(condition = RedisAvailabilityCondition.class)
 @Singleton
 @CompileStatic
 class RedisMessageStream implements MessageStream<String> {
