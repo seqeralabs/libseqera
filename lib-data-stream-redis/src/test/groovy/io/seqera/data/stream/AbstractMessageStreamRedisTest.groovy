@@ -37,7 +37,7 @@ class AbstractMessageStreamRedisTest extends Specification implements RedisTestC
     ApplicationContext context
 
     def setup() {
-        context = ApplicationContext.run('test', 'redis')
+        context = ApplicationContext.run(['redis.uri': 'redis://localhost:6379'], 'test')
     }
 
     def cleanup() {

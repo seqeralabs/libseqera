@@ -35,7 +35,7 @@ class RedisMessageStreamTest extends Specification implements RedisTestContainer
     ApplicationContext context
 
     def setup() {
-        context = ApplicationContext.run(['wave.message-stream.claim-timeout': '1s'], 'test', 'redis')
+        context = ApplicationContext.run(['redis.uri': 'redis://localhost:6379', 'wave.message-stream.claim-timeout': '1s'], 'test')
     }
 
     def cleanup() {
@@ -133,8 +133,42 @@ class RedisMessageStreamTest extends Specification implements RedisTestContainer
         given:
         def streamId = "stream-${LongRndKey.rndHex()}"
         def stream = context.getBean(RedisMessageStream)
+
+        and:
+        // Then initialize the consumer groups after messages exist
+        stream.init(streamId, 'group1')
+        stream.init(streamId, 'group2')
+        stream.init(streamId, 'group3')
         
-        // Initialize the same stream with different consumer groups
+        when:
+        // Offer messages to the stream
+        stream.offer(streamId, 'message1')
+        stream.offer(streamId, 'message2')
+        stream.offer(streamId, 'message3')
+
+        then:
+        // Each consumer group should receive all messages independently
+        stream.consume(streamId, 'group1', { it-> it=='message1'})
+        stream.consume(streamId, 'group1', { it-> it=='message2'})
+        stream.consume(streamId, 'group1', { it-> it=='message3'})
+        !stream.consume(streamId, 'group1', { it-> assert false })
+        stream.consume(streamId, 'group2', { it-> it=='message1'})
+        stream.consume(streamId, 'group2', { it-> it=='message2'})
+        stream.consume(streamId, 'group2', { it-> it=='message3'})
+        !stream.consume(streamId, 'group2', { it-> assert false })
+        stream.consume(streamId, 'group3', { it-> it=='message1'})
+        stream.consume(streamId, 'group3', { it-> it=='message2'})
+        stream.consume(streamId, 'group3', { it-> it=='message3'})
+        !stream.consume(streamId, 'group3', { it-> assert false })
+    }
+
+    def 'should support multiple consumer groups consuming alternated' () {
+        given:
+        def streamId = "stream-${LongRndKey.rndHex()}"
+        def stream = context.getBean(RedisMessageStream)
+
+        and:
+        // Then initialize the consumer groups after messages exist
         stream.init(streamId, 'group1')
         stream.init(streamId, 'group2')
         stream.init(streamId, 'group3')
@@ -148,22 +182,16 @@ class RedisMessageStreamTest extends Specification implements RedisTestContainer
         then:
         // Each consumer group should receive all messages independently
         stream.consume(streamId, 'group1', { it-> it=='message1'})
-        stream.consume(streamId, 'group1', { it-> it=='message2'})
-        stream.consume(streamId, 'group1', { it-> it=='message3'})
-        !stream.consume(streamId, 'group1', { it-> assert false })
-
-        and:
-        // Group 2 should also receive all messages
         stream.consume(streamId, 'group2', { it-> it=='message1'})
-        stream.consume(streamId, 'group2', { it-> it=='message2'})
-        stream.consume(streamId, 'group2', { it-> it=='message3'})
-        !stream.consume(streamId, 'group2', { it-> assert false })
-
-        and:
-        // Group 3 should also receive all messages
         stream.consume(streamId, 'group3', { it-> it=='message1'})
+        stream.consume(streamId, 'group1', { it-> it=='message2'})
+        stream.consume(streamId, 'group2', { it-> it=='message2'})
         stream.consume(streamId, 'group3', { it-> it=='message2'})
+        stream.consume(streamId, 'group1', { it-> it=='message3'})
+        stream.consume(streamId, 'group2', { it-> it=='message3'})
         stream.consume(streamId, 'group3', { it-> it=='message3'})
+        !stream.consume(streamId, 'group1', { it-> assert false })
+        !stream.consume(streamId, 'group2', { it-> assert false })
         !stream.consume(streamId, 'group3', { it-> assert false })
     }
 
@@ -171,10 +199,10 @@ class RedisMessageStreamTest extends Specification implements RedisTestContainer
         given:
         def streamId = "stream-${LongRndKey.rndHex()}"
         def stream = context.getBean(RedisMessageStream)
-        
+
         stream.init(streamId, 'groupA')
         stream.init(streamId, 'groupB')
-
+        
         when:
         stream.offer(streamId, 'test-message')
 

@@ -34,8 +34,11 @@ import redis.clients.jedis.JedisPool
 import redis.clients.jedis.StreamEntryID
 import redis.clients.jedis.exceptions.JedisDataException
 import redis.clients.jedis.params.XAutoClaimParams
+import redis.clients.jedis.params.XPendingParams
 import redis.clients.jedis.params.XReadGroupParams
 import redis.clients.jedis.resps.StreamEntry
+import redis.clients.jedis.resps.StreamGroupInfo
+
 /**
  * Implement a distributed {@link MessageStream} backed by a Redis stream.
  * This implementation allows multiple concurrent consumers and guarantee consistency
@@ -64,6 +67,8 @@ class RedisMessageStream implements MessageStream<String> {
 
     private String consumerName
 
+    private Set<String> consumerGroups = new HashSet<>()
+
     @PostConstruct
     private void create() {
         consumerName = "consumer-${LongRndKey.rndLong()}"
@@ -75,6 +80,7 @@ class RedisMessageStream implements MessageStream<String> {
         log.debug "Initializing Redis group='$group'; streamId='$streamId'"
         try {
             jedis.xgroupCreate(streamId, group, STREAM_ENTRY_ZERO, true)
+            jedis.xgroupCreateConsumer(streamId, group, "${consumerName}-${group}")
             return true
         }
         catch (JedisDataException e) {
@@ -94,6 +100,7 @@ class RedisMessageStream implements MessageStream<String> {
     void init(String streamId, String groupId) {
         try (Jedis jedis = pool.getResource()) {
             initGroup0(jedis, streamId, groupId)
+            consumerGroups.add(groupId)
         }
     }
 
@@ -104,6 +111,7 @@ class RedisMessageStream implements MessageStream<String> {
     void offer(String streamId, String message) {
         try (Jedis jedis = pool.getResource()) {
             jedis.xadd(streamId, StreamEntryID.NEW_ENTRY, Map.of(DATA_FIELD, message))
+            log.debug "Added message to streamId=$streamId"
         }
     }
 
@@ -117,16 +125,19 @@ class RedisMessageStream implements MessageStream<String> {
             final long begin = System.currentTimeMillis()
             final entry = claimMessage(jedis,streamId, groupId) ?: readMessage(jedis, streamId, groupId)
             if( entry && consumer.accept(msg=entry.getFields().get(DATA_FIELD)) ) {
-                final tx = jedis.multi()
                 // acknowledge the entry has been processed so that it cannot be claimed anymore
-                tx.xack(streamId, groupId, entry.getID())
+                jedis.xack(streamId, groupId, entry.getID())
                 final delta = System.currentTimeMillis()-begin
                 if( delta>consumeWarnTimeoutMillis ) {
                     log.warn "Redis message stream - consume processing took ${Duration.ofMillis(delta)} - offending entry=${entry.getID()}; message=${msg}"
                 }
-                // this remove permanently the entry from the stream
-                tx.xdel(streamId, entry.getID())
-                tx.exec()
+                
+                // Check if all consumer groups have processed this message before deleting
+                if( consumerGroups.size() == 1 || allGroupsProcessedMessage(jedis, streamId, entry.getID()) ) {
+                    jedis.xdel(streamId, entry.getID())
+                    log.trace "Deleted message ${entry.getID()} from stream ${streamId} after all groups processed it"
+                }
+                
                 return true
             }
             else
@@ -143,7 +154,7 @@ class RedisMessageStream implements MessageStream<String> {
         // Read new messages from the stream using the correct xreadGroup signature
         List<Map.Entry<String, List<StreamEntry>>> messages = jedis.xreadGroup(
                 groupId,
-                consumerName,
+                "${consumerName}-${groupId}",
                 params,
                 Map.of(streamId, StreamEntryID.UNRECEIVED_ENTRY) )
 
@@ -161,7 +172,7 @@ class RedisMessageStream implements MessageStream<String> {
         final messages = jedis.xautoclaim(
                 streamId,
                 groupId,
-                consumerName,
+                "${consumerName}-${groupId}",
                 claimTimeout.toMillis(),
                 STREAM_ENTRY_ZERO,
                 params
@@ -170,6 +181,31 @@ class RedisMessageStream implements MessageStream<String> {
         if( entry!=null )
             log.trace "Redis stream id=$streamId; claimed entry=$entry"
         return entry
+    }
+
+    /**
+     * Check if all consumer groups for a stream have processed (acknowledged) the given message.
+     * This is determined by checking if the message ID is not present in any group's pending entries list.
+     */
+    protected static boolean allGroupsProcessedMessage(Jedis jedis, String streamId, StreamEntryID messageId) {
+        try {
+            // Get all consumer groups for this stream
+            final groups = jedis.xinfoGroups(streamId)
+            for (StreamGroupInfo group : groups) {
+                if (group.lastDeliveredId < messageId) {
+                    return false
+                }
+                final pending = jedis.xpending(streamId, group.getName(), XPendingParams.xPendingParams(messageId.toString(), messageId.toString(), 1))
+                if (!pending.isEmpty()) {
+                    return false
+                }
+            }
+            return true
+        } catch (Exception e) {
+            log.warn "Error checking if all groups processed message ${messageId} in stream ${streamId}: ${e.message}"
+            // In case of error, don't delete the message to be safe
+            return false
+        }
     }
 
     /**
