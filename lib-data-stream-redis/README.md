@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-data-stream-redis:1.0.0'
+    implementation 'io.seqera:lib-data-stream-redis:1.1.0'
 }
 ```
 

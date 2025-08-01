@@ -72,7 +72,7 @@ package io.seqera.data.stream
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  * @see MessageConsumer
- * @see AbstractMessageStream
+ * @see AbstractMessageStreamConsumer
  */
 interface MessageStream<M> {
 

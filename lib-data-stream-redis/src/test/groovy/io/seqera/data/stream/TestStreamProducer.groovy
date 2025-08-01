@@ -27,9 +27,9 @@ import groovy.json.JsonSlurper
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-class TestStream extends AbstractMessageStream<TestMessage> {
+class TestStreamProducer extends AbstractMessageStreamConsumer<TestMessage> {
 
-    TestStream(MessageStream<String> target) {
+    TestStreamProducer(MessageStream<String> target) {
         super(target)
     }
 

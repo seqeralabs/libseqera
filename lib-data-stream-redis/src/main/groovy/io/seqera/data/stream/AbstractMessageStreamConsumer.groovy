@@ -90,7 +90,7 @@ import io.seqera.util.retry.ExponentialAttempt
  */
 @Slf4j
 @CompileStatic
-abstract class AbstractMessageStream<M> implements Closeable {
+abstract class AbstractMessageStreamConsumer<M> implements Closeable {
 
     static final private AtomicInteger count = new AtomicInteger()
 
@@ -106,7 +106,7 @@ abstract class AbstractMessageStream<M> implements Closeable {
 
     private String name0
 
-    AbstractMessageStream(MessageStream<String> target) {
+    AbstractMessageStreamConsumer(MessageStream<String> target) {
         this.encoder = createEncodingStrategy()
         this.stream = target
         this.name0 = name() + '-thread-' + count.getAndIncrement()
@@ -132,23 +132,6 @@ abstract class AbstractMessageStream<M> implements Closeable {
      *      when no more entries are available.
      */
     protected abstract Duration pollInterval()
-
-    /**
-     * Adds a message to the specified stream for asynchronous processing.
-     * 
-     * <p>The message will be serialized using the configured encoding strategy and added
-     * to the underlying stream. If a consumer is registered for the specified stream ID,
-     * the message will be processed asynchronously by the background thread.</p>
-     * 
-     * <p>This method is thread-safe and can be called concurrently from multiple threads.</p>
-     *
-     * @param streamId the unique identifier of the target stream; must not be null or empty
-     * @param message the message to be added to the stream; may be null depending on encoding strategy
-     */
-    void offer(String streamId, M message) {
-        final msg = encoder.encode(message)
-        stream.offer(streamId, msg)
-    }
 
     /**
      * Registers a consumer to process messages from the specified stream.
