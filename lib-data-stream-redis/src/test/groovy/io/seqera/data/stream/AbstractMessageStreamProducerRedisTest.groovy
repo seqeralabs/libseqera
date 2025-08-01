@@ -17,30 +17,40 @@
 
 package io.seqera.data.stream
 
+import io.seqera.fixtures.redis.RedisTestContainer
 import io.seqera.random.LongRndKey
+import spock.lang.Shared
 import spock.lang.Specification
 
 import java.util.concurrent.ArrayBlockingQueue
 
-import io.micronaut.test.extensions.spock.annotation.MicronautTest
-import io.seqera.data.stream.impl.LocalMessageStream
-import jakarta.inject.Inject
+import io.micronaut.context.ApplicationContext
+import io.seqera.data.stream.impl.RedisMessageStream
+
 /**
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-@MicronautTest(environments = ['test'])
-class AbstractMessageStreamLocalTest extends Specification {
+class AbstractMessageStreamProducerRedisTest extends Specification implements RedisTestContainer {
 
-    @Inject
-    LocalMessageStream target
+    @Shared
+    ApplicationContext context
+
+    def setup() {
+        context = ApplicationContext.run('test', 'redis')
+    }
+
+    def cleanup() {
+        context.stop()
+    }
 
     def 'should offer and consume some messages' () {
         given:
         def id1 = "stream-${LongRndKey.rndHex()}"
 
         and:
-        def stream = new TestStream(target)
+        def target = context.getBean(RedisMessageStream)
+        def stream = new TestStreamProducer(target)
         def queue = new ArrayBlockingQueue(10)
         and:
         stream.addConsumer(id1, { it-> queue.add(it) })
