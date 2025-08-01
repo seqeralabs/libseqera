@@ -17,6 +17,7 @@
 
 package io.seqera.data.stream.impl
 
+import com.google.common.annotations.VisibleForTesting
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 
@@ -65,6 +66,7 @@ import jakarta.inject.Singleton
 @CompileStatic
 class LocalMessageStream implements MessageStream<String> {
 
+    @VisibleForTesting
     private ConcurrentHashMap<String, LinkedBlockingQueue<String>> delegate = new ConcurrentHashMap<>()
 
     /**
@@ -119,6 +121,7 @@ class LocalMessageStream implements MessageStream<String> {
      */
     @Override
     int length(String streamId) {
-        return delegate.get(streamId).size()
+        def stream = delegate.get(streamId)
+        return stream != null ? stream.size() : 0
     }
 }

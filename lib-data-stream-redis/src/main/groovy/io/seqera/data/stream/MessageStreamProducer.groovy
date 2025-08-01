@@ -17,15 +17,13 @@
 
 package io.seqera.data.stream
 
-import java.time.Duration
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.function.Predicate
+import jakarta.inject.Singleton
 
+import com.google.common.annotations.VisibleForTesting
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
-import io.seqera.serde.encode.StringEncodingStrategy
-import io.seqera.util.retry.ExponentialAttempt
+import io.seqera.data.stream.impl.MessageStreamTopic
+
 /**
  * Abstract base implementation of a message stream producer that provides message publishing functionality.
  * 
@@ -66,18 +64,14 @@ import io.seqera.util.retry.ExponentialAttempt
  */
 @Slf4j
 @CompileStatic
-abstract class AbstractMessageStreamProducer<M> {
+class MessageStreamProducer<M extends MessageStreamTopic> {
 
-    final private StringEncodingStrategy<M> encoder
-
+    @VisibleForTesting
     final private MessageStream<String> stream
 
-    AbstractMessageStreamProducer(MessageStream<String> target) {
-        this.encoder = createEncodingStrategy()
+    MessageStreamProducer(MessageStream<String> target) {
         this.stream = target
     }
-
-    abstract protected StringEncodingStrategy<M> createEncodingStrategy()
 
     /**
      * Adds a message to the specified stream for asynchronous processing.
@@ -91,9 +85,9 @@ abstract class AbstractMessageStreamProducer<M> {
      * @param streamId the unique identifier of the target stream; must not be null or empty
      * @param message the message to be added to the stream; may be null depending on encoding strategy
      */
-    void offer(String streamId, M message) {
-        final msg = encoder.encode(message)
-        stream.offer(streamId, msg)
+    void offer(M message) {
+        final msg = message.getEncodingStrategy().encode(message)
+        stream.offer(message.getTopicId(), msg)
     }
 
 }

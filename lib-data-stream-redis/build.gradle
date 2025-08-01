@@ -43,6 +43,7 @@ dependencies {
     implementation "io.micronaut:micronaut-runtime:${micronautCoreVersion}"
     implementation "io.micronaut:micronaut-websocket:${micronautCoreVersion}"
     implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+    implementation 'com.google.guava:guava:33.0.0-jre'
 
     testImplementation project(':lib-lang')
     testImplementation testFixtures(project(':lib-fixtures-redis'))
