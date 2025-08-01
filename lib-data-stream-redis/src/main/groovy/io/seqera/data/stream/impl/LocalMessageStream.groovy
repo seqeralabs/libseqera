@@ -79,8 +79,7 @@ class LocalMessageStream implements MessageStream<String> {
      */
     @Override
     void offer(String streamId, String message) {
-        delegate
-                .get(streamId)
+        delegate.computeIfAbsent(streamId, k -> new LinkedBlockingQueue<>())
                 .offer(message)
     }
 
