@@ -30,7 +30,7 @@ import jakarta.inject.Inject
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @MicronautTest(environments = ['test'])
-class AbstractMessageStreamLocalTest extends Specification {
+class AbstractMessageStreamProducerLocalTest extends Specification {
 
     @Inject
     LocalMessageStream target
@@ -40,20 +40,14 @@ class AbstractMessageStreamLocalTest extends Specification {
         def id1 = "stream-${LongRndKey.rndHex()}"
 
         and:
-        def stream = new TestStream(target)
-        def queue = new ArrayBlockingQueue(10)
-        and:
-        stream.addConsumer(id1, { it-> queue.add(it) })
+        def stream_producer = new TestStreamProducer(target)
 
         when:
-        stream.offer(id1, new TestMessage('one','two'))
-        stream.offer(id1, new TestMessage('alpha','omega'))
+        stream_producer.offer(id1, new TestMessage('one','two'))
+        stream_producer.offer(id1, new TestMessage('alpha','omega'))
         then:
-        queue.take()==new TestMessage('one','two')
-        queue.take()==new TestMessage('alpha','omega')
-        
-        cleanup:
-        stream.close()
+        target.length(id1)==2
+
     }
 
 }
