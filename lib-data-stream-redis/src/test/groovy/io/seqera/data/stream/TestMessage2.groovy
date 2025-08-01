@@ -17,33 +17,33 @@
 
 package io.seqera.data.stream
 
+import groovy.json.JsonBuilder
+import groovy.json.JsonSlurper
 import groovy.transform.Canonical
 import io.seqera.data.stream.impl.MessageStreamTopic
 import io.seqera.serde.encode.StringEncodingStrategy
-import groovy.json.JsonBuilder
-import groovy.json.JsonSlurper
 
 /**
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Canonical
-class TestMessage implements MessageStreamTopic {
+class TestMessage2 implements MessageStreamTopic {
     String x
     String y
 
-    public static final String TOPIC_ID = "test-task-event"
+    public static final String TOPIC_ID = "test-task-event-2"
 
-    public static final StringEncodingStrategy<TestMessage> ENCODING_STRATEGY = new StringEncodingStrategy<TestMessage>() {
+    public static final StringEncodingStrategy<TestMessage2> ENCODING_STRATEGY = new StringEncodingStrategy<TestMessage2>() {
         @Override
-        String encode(TestMessage message) {
+        String encode(TestMessage2 message) {
             return new JsonBuilder([x: message.x, y: message.y]).toString()
         }
 
         @Override
-        TestMessage decode(String encoded) {
+        TestMessage2 decode(String encoded) {
             def json = new JsonSlurper().parseText(encoded)
-            return new TestMessage(json.x, json.y)
+            return new TestMessage2(json.x, json.y)
         }
     }
     

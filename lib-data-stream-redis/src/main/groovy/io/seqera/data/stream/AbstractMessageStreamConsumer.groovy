@@ -21,9 +21,11 @@ import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Predicate
+import jakarta.annotation.PostConstruct
 
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
+import io.seqera.data.stream.impl.MessageStreamTopic
 import io.seqera.serde.encode.StringEncodingStrategy
 import io.seqera.util.retry.ExponentialAttempt
 /**
@@ -90,7 +92,7 @@ import io.seqera.util.retry.ExponentialAttempt
  */
 @Slf4j
 @CompileStatic
-abstract class AbstractMessageStreamConsumer<M> implements Closeable {
+abstract class AbstractMessageStreamConsumer<M extends MessageStreamTopic> implements Closeable {
 
     static final private AtomicInteger count = new AtomicInteger()
 
@@ -100,19 +102,20 @@ abstract class AbstractMessageStreamConsumer<M> implements Closeable {
 
     final private StringEncodingStrategy<M> encoder
 
+    final private String streamId
+
     final private MessageStream<String> stream
 
     private Thread thread
 
     private String name0
 
-    AbstractMessageStreamConsumer(MessageStream<String> target) {
-        this.encoder = createEncodingStrategy()
+    AbstractMessageStreamConsumer(MessageStream<String> target, StringEncodingStrategy<M> encoder, String streamId) {
         this.stream = target
+        this.encoder = encoder
+        this.streamId = streamId
         this.name0 = name() + '-thread-' + count.getAndIncrement()
     }
-
-    abstract protected StringEncodingStrategy<M> createEncodingStrategy()
 
     protected Thread createListenerThread() {
         final thread = new Thread(()-> processMessages(), name0)
@@ -124,7 +127,9 @@ abstract class AbstractMessageStreamConsumer<M> implements Closeable {
     /**
      * @return The name of the message queue implementation
      */
-    protected abstract String name()
+    protected String name() {
+        return streamId
+    }
 
     /**
      * @return
@@ -155,7 +160,7 @@ abstract class AbstractMessageStreamConsumer<M> implements Closeable {
      * @param consumer the message consumer that will process messages; must not be null
      * @see MessageConsumer#accept(Object)
      */
-    void addConsumer(String streamId, MessageConsumer<M> consumer) {
+    void addConsumer(MessageConsumer<M> consumer) {
         // the use of synchronized block is meant to prevent a race condition while
         // updating the 'listeners' from concurrent invocations.
         // however, considering the addConsumer is invoked during the initialization phase
