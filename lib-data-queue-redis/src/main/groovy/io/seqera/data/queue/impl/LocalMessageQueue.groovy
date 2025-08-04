@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 import io.micronaut.context.annotation.Requires
+import io.seqera.activator.redis.RedisActivator
 import io.seqera.data.queue.MessageQueue
 import jakarta.inject.Singleton
 /**
@@ -34,7 +35,7 @@ import jakarta.inject.Singleton
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Slf4j
-@Requires(notEnv = 'redis')
+@Requires(missingBeans = RedisActivator)
 @Singleton
 @CompileStatic
 class LocalMessageQueue implements MessageQueue<String> {

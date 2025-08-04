@@ -27,6 +27,7 @@ This is a library collection (`libseqera`) containing reusable components for Se
 #### Core Libraries
 - **wave-api**: API models and DTOs for Wave container service
 - **wave-utils**: Utility classes for Wave (Docker helpers, file operations, template rendering)
+- **lib-activator**: Conditional activation markers for enabling components based on infrastructure availability
 - **lib-crypto**: Cryptographic utilities (asymmetric encryption, HMAC signatures, secure tokens)
 - **lib-mail**: Email functionality with Micronaut integration
 - **lib-retry**: Retry mechanisms with exponential backoff

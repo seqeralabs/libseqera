@@ -30,6 +30,7 @@ version = "${project.file('VERSION').text.trim()}"
 dependencies {
     implementation project(':lib-serde')
     implementation project(':lib-retry')
+    implementation project(':lib-activator')
     implementation 'redis.clients:jedis:5.1.4'
 
     compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"

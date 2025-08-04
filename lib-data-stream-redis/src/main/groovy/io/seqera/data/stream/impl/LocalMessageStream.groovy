@@ -23,6 +23,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 import io.micronaut.context.annotation.Requires
+import io.seqera.activator.redis.RedisActivator
 import io.seqera.data.stream.MessageConsumer
 import io.seqera.data.stream.MessageStream
 import jakarta.inject.Singleton
@@ -59,7 +60,7 @@ import jakarta.inject.Singleton
  * @since 1.0
  */
 @Slf4j
-@Requires(notEnv = 'redis')
+@Requires(missingBeans = RedisActivator)
 @Singleton
 @CompileStatic
 class LocalMessageStream implements MessageStream<String> {

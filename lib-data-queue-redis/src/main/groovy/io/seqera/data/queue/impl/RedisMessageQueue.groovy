@@ -22,6 +22,7 @@ import java.time.Duration
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 import io.micronaut.context.annotation.Requires
+import io.seqera.activator.redis.RedisActivator
 import io.seqera.data.queue.MessageQueue
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
@@ -33,7 +34,7 @@ import redis.clients.jedis.JedisPool
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Slf4j
-@Requires(env = 'redis')
+@Requires(bean = RedisActivator)
 @Singleton
 @CompileStatic
 class RedisMessageQueue implements MessageQueue<String>  {

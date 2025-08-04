@@ -22,6 +22,7 @@ import java.time.Duration
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 import io.micronaut.context.annotation.Requires
+import io.seqera.activator.redis.RedisActivator
 import io.seqera.data.stream.MessageConsumer
 import io.seqera.data.stream.MessageStream
 import io.seqera.random.LongRndKey
@@ -72,7 +73,7 @@ import redis.clients.jedis.resps.StreamEntry
  * @since 1.0
  */
 @Slf4j
-@Requires(env = 'redis')
+@Requires(bean = RedisActivator)
 @Singleton
 @CompileStatic
 class RedisMessageStream implements MessageStream<String> {
