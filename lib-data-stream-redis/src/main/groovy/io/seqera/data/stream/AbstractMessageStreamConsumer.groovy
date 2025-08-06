@@ -27,16 +27,16 @@ import groovy.util.logging.Slf4j
 import io.seqera.serde.encode.StringEncodingStrategy
 import io.seqera.util.retry.ExponentialAttempt
 /**
- * Abstract base implementation of a message stream that provides asynchronous message consumption.
+ * Abstract base implementation of a message stream consumer that provides asynchronous message consumption.
  * 
- * <p>This class implements the core functionality for a message stream that continuously consumes
- * messages from underlying streams and delivers them to registered consumers. It provides:</p>
+ * <p>This class implements the core functionality for consuming messages from underlying streams 
+ * and delivering them to registered consumers. It provides:</p>
  * 
  * <ul>
  *   <li><strong>Asynchronous Processing:</strong> Uses a background thread to continuously poll for messages</li>
  *   <li><strong>Consumer Management:</strong> Manages registration of message consumers for different streams</li>
  *   <li><strong>Error Resilience:</strong> Implements exponential backoff for error recovery</li>
- *   <li><strong>Message Serialization:</strong> Handles encoding/decoding of messages transparently</li>
+ *   <li><strong>Message Deserialization:</strong> Handles decoding of messages transparently</li>
  *   <li><strong>Resource Management:</strong> Proper cleanup and shutdown of background resources</li>
  * </ul>
  * 
@@ -51,7 +51,7 @@ import io.seqera.util.retry.ExponentialAttempt
  * <p>Usage pattern:</p>
  * <pre>{@code
  * // Subclass implementation
- * public class MyMessageStream extends AbstractMessageStream<MyEvent> {
+ * public class MyMessageStreamConsumer extends AbstractMessageStreamConsumer<MyEvent> {
  *     protected StringEncodingStrategy<MyEvent> createEncodingStrategy() {
  *         return new JsonEncodingStrategy<>() {};
  *     }
@@ -61,16 +61,13 @@ import io.seqera.util.retry.ExponentialAttempt
  * }
  * 
  * // Usage
- * MyMessageStream stream = new MyMessageStream(underlyingStream);
+ * MyMessageStreamConsumer consumer = new MyMessageStreamConsumer(underlyingStream);
  * 
  * // Add consumer for a specific stream
- * stream.addConsumer("user-events", event -> {
+ * consumer.addConsumer("user-events", event -> {
  *     processUserEvent(event);
  *     return true; // Acknowledge successful processing
  * });
- * 
- * // Send messages (will be processed asynchronously by registered consumers)
- * stream.offer("user-events", new UserLoginEvent(userId));
  * }</pre>
  * 
  * <p>Key features:</p>
@@ -80,17 +77,21 @@ import io.seqera.util.retry.ExponentialAttempt
  *   <li><strong>Graceful Shutdown:</strong> Implements {@link Closeable} for proper resource cleanup</li>
  *   <li><strong>Error Recovery:</strong> Uses exponential backoff to handle transient failures</li>
  * </ul>
+ * 
+ * <p>This class is designed to work in conjunction with {@link AbstractMessageStreamProducer}
+ * which handles the production side of message streaming.</p>
  *
- * @param <M> the type of messages that can be processed by this stream
+ * @param <M> the type of messages that can be consumed by this stream
  * 
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  * @see MessageStream
  * @see MessageConsumer
+ * @see AbstractMessageStreamProducer
  */
 @Slf4j
 @CompileStatic
-abstract class AbstractMessageStream<M> implements Closeable {
+abstract class AbstractMessageStreamConsumer<M> implements Closeable {
 
     static final private AtomicInteger count = new AtomicInteger()
 
@@ -106,7 +107,7 @@ abstract class AbstractMessageStream<M> implements Closeable {
 
     private String name0
 
-    AbstractMessageStream(MessageStream<String> target) {
+    AbstractMessageStreamConsumer(MessageStream<String> target) {
         this.encoder = createEncodingStrategy()
         this.stream = target
         this.name0 = name() + '-thread-' + count.getAndIncrement()
@@ -132,23 +133,6 @@ abstract class AbstractMessageStream<M> implements Closeable {
      *      when no more entries are available.
      */
     protected abstract Duration pollInterval()
-
-    /**
-     * Adds a message to the specified stream for asynchronous processing.
-     * 
-     * <p>The message will be serialized using the configured encoding strategy and added
-     * to the underlying stream. If a consumer is registered for the specified stream ID,
-     * the message will be processed asynchronously by the background thread.</p>
-     * 
-     * <p>This method is thread-safe and can be called concurrently from multiple threads.</p>
-     *
-     * @param streamId the unique identifier of the target stream; must not be null or empty
-     * @param message the message to be added to the stream; may be null depending on encoding strategy
-     */
-    void offer(String streamId, M message) {
-        final msg = encoder.encode(message)
-        stream.offer(streamId, msg)
-    }
 
     /**
      * Registers a consumer to process messages from the specified stream.

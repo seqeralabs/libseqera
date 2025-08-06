@@ -31,7 +31,7 @@ import io.seqera.data.stream.impl.RedisMessageStream
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-class AbstractMessageStreamRedisTest extends Specification implements RedisTestContainer {
+class AbstractMessageStreamProducerRedisTest extends Specification implements RedisTestContainer {
 
     @Shared
     ApplicationContext context
@@ -50,20 +50,14 @@ class AbstractMessageStreamRedisTest extends Specification implements RedisTestC
 
         and:
         def target = context.getBean(RedisMessageStream)
-        def stream = new TestStream(target)
-        def queue = new ArrayBlockingQueue(10)
-        and:
-        stream.addConsumer(id1, { it-> queue.add(it) })
+        def stream_producer = new TestStreamProducer(target)
 
         when:
-        stream.offer(id1, new TestMessage('one','two'))
-        stream.offer(id1, new TestMessage('alpha','omega'))
+        stream_producer.offer(id1, new TestMessage('one','two'))
+        stream_producer.offer(id1, new TestMessage('alpha','omega'))
         then:
-        queue.take()==new TestMessage('one','two')
-        queue.take()==new TestMessage('alpha','omega')
-        
-        cleanup:
-        stream.close()
+        target.length(id1)==2
+
     }
 
 }

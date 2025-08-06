@@ -27,9 +27,9 @@ import groovy.json.JsonSlurper
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-class TestStream extends AbstractMessageStream<TestMessage> {
+class TestStreamProducer extends AbstractMessageStreamProducer<TestMessage> {
 
-    TestStream(MessageStream<String> target) {
+    TestStreamProducer(MessageStream<String> target) {
         super(target)
     }
 
@@ -49,13 +49,4 @@ class TestStream extends AbstractMessageStream<TestMessage> {
         }
     }
 
-    @Override
-    protected String name() {
-        return 'test-stream'
-    }
-
-    @Override
-    protected Duration pollInterval() {
-        return Duration.ofSeconds(1)
-    }
 }
