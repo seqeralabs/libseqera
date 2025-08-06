@@ -21,11 +21,10 @@ import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Predicate
-import jakarta.annotation.PostConstruct
 
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
-import io.seqera.data.stream.impl.MessageStreamTopic
+import io.seqera.data.stream.impl.StreamMessage
 import io.seqera.serde.encode.StringEncodingStrategy
 import io.seqera.util.retry.ExponentialAttempt
 /**
@@ -93,7 +92,7 @@ import io.seqera.util.retry.ExponentialAttempt
  */
 @Slf4j
 @CompileStatic
-abstract class AbstractMessageStreamConsumer<M extends MessageStreamTopic> implements Closeable {
+abstract class AbstractMessageStreamConsumer<M extends StreamMessage> implements Closeable {
 
     static final private AtomicInteger count = new AtomicInteger()
 

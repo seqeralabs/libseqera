@@ -17,12 +17,11 @@
 
 package io.seqera.data.stream
 
-import jakarta.inject.Singleton
 
 import com.google.common.annotations.VisibleForTesting
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
-import io.seqera.data.stream.impl.MessageStreamTopic
+import io.seqera.data.stream.impl.StreamMessage
 
 /**
  * Abstract base implementation of a message stream producer that provides message publishing functionality.
@@ -64,7 +63,7 @@ import io.seqera.data.stream.impl.MessageStreamTopic
  */
 @Slf4j
 @CompileStatic
-class MessageStreamProducer<M extends MessageStreamTopic> {
+class MessageStreamProducer<M extends StreamMessage> {
 
     @VisibleForTesting
     final private MessageStream<String> stream

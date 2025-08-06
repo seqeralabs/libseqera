@@ -3,7 +3,7 @@ package io.seqera.data.stream
 import jakarta.inject.Singleton
 
 import groovy.transform.CompileStatic
-import io.seqera.data.stream.impl.MessageStreamTopic
+import io.seqera.data.stream.impl.StreamMessage
 
 @CompileStatic
 @Singleton
@@ -15,7 +15,7 @@ class MessageStreamProducerFactory {
         this.messageStream = messageStream
     }
 
-    def <T extends MessageStreamTopic> MessageStreamProducer<T> createProducer() {
+    def <T extends StreamMessage> MessageStreamProducer<T> createProducer() {
         return new MessageStreamProducer<T>(messageStream)
     }
 }

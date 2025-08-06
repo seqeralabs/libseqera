@@ -20,7 +20,7 @@ package io.seqera.data.stream
 import groovy.json.JsonBuilder
 import groovy.json.JsonSlurper
 import groovy.transform.Canonical
-import io.seqera.data.stream.impl.MessageStreamTopic
+import io.seqera.data.stream.impl.StreamMessage
 import io.seqera.serde.encode.StringEncodingStrategy
 
 /**
@@ -28,7 +28,7 @@ import io.seqera.serde.encode.StringEncodingStrategy
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Canonical
-class TestMessage2 implements MessageStreamTopic {
+class TestMessage2 implements StreamMessage {
     String x
     String y
 
