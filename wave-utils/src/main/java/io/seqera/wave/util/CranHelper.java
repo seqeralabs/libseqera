@@ -75,23 +75,23 @@ public class CranHelper {
     static protected String cranPackagesTemplate0(String template, String packages, List<String> repositories, CranOpts opts) {
         final List<String> repos0 = repositories!=null ? repositories : List.of();
         final boolean singularity = template.contains("/singularityfile");
-        final String repoOpts = buildRepositoryOptions(repos0, singularity);
         final String image = opts.rImage;
         final String target = formatPackageTarget(packages);
         final String basePackages = rInstallBasePackage0(opts.basePackages, singularity);
+        final String repoOpts = buildRepositoryOptions(repos0, singularity);
         final Map<String,String> binding = new HashMap<>();
         binding.put("base_image", image);
         binding.put("repo_opts", repoOpts);
         binding.put("target", target);
-        String basePackagesPart = "";
+        String basePackagesStr = singularity ? "" : "\\";
         if (basePackages != null) {
             if (singularity) {
-                basePackagesPart = "\n    " + basePackages;
+                basePackagesStr += "\n    " + basePackages;
             } else {
-                basePackagesPart = " \\\n    && " + basePackages;
+                basePackagesStr += "\n    && " + basePackages + " \\";
             }
         }
-        binding.put("base_packages", basePackagesPart);
+        binding.put("base_packages", basePackagesStr);
 
         final String result = renderTemplate0(template, binding) ;
         return addCommands(result, opts.commands, singularity);
@@ -136,7 +136,12 @@ public class CranHelper {
             repoSetup = String.format("R -e \"%s\"", repoCommands);
         }
         
-        return singularity ? repoSetup : repoSetup + " \\\n   ";
+        if (singularity) {
+            return repoSetup;
+        } else {
+            // For dockerfile: add proper line continuation
+            return repoSetup + " ";
+        }
     }
 
     private static String formatPackageTarget(String packages) {

@@ -83,7 +83,8 @@ class CranHelperTest extends Specification {
                 && rm -rf /var/lib/apt/lists/*
             USER root
             ENV R_LIBS_USER="/usr/local/lib/R/site-library"
-            '''.stripIndent()
+            '''
+                .stripIndent(true)
     }
 
     def 'should create singularity file for cran packages - complete test' () {
@@ -107,7 +108,8 @@ class CranHelperTest extends Specification {
                 rm -rf /var/lib/apt/lists/*
             %environment
                 export R_LIBS_USER="/usr/local/lib/R/site-library"
-            '''.stripIndent()
+                '''
+                .stripIndent(true)
     }
 
     def 'should create dockerfile for cran file' () {
@@ -206,7 +208,7 @@ class CranHelperTest extends Specification {
                 && rm -rf /var/lib/apt/lists/*
             USER root
             ENV R_LIBS_USER="/usr/local/lib/R/site-library"
-            '''.stripIndent()
+            '''.stripIndent(true)
 
         singularityResult == '''\
             BootStrap: docker
@@ -219,7 +221,8 @@ class CranHelperTest extends Specification {
                 rm -rf /var/lib/apt/lists/*
             %environment
                 export R_LIBS_USER="/usr/local/lib/R/site-library"
-            '''.stripIndent()
+                '''
+                .stripIndent(true)
     }
 
     def 'should handle null base packages - complete test' () {
@@ -243,7 +246,8 @@ class CranHelperTest extends Specification {
                 && rm -rf /var/lib/apt/lists/*
             USER root
             ENV R_LIBS_USER="/usr/local/lib/R/site-library"
-            '''.stripIndent()
+            '''
+                .stripIndent(true)
 
         singularityResult == '''\
             BootStrap: docker
@@ -255,7 +259,8 @@ class CranHelperTest extends Specification {
                 rm -rf /var/lib/apt/lists/*
             %environment
                 export R_LIBS_USER="/usr/local/lib/R/site-library"
-            '''.stripIndent()
+                '''
+                .stripIndent(true)
     }
 
     def 'should handle empty base packages string - complete test' () {
@@ -276,6 +281,7 @@ class CranHelperTest extends Specification {
                 && rm -rf /var/lib/apt/lists/*
             USER root
             ENV R_LIBS_USER="/usr/local/lib/R/site-library"
-            '''.stripIndent()
+            '''
+                .stripIndent(true)
     }
 }
