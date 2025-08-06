@@ -27,66 +27,42 @@ import groovy.util.logging.Slf4j
 import io.seqera.serde.encode.StringEncodingStrategy
 import io.seqera.util.retry.ExponentialAttempt
 /**
- * Abstract base implementation of a message stream that provides asynchronous message consumption.
+ * Abstract base implementation of a message stream producer that provides message publishing functionality.
  * 
- * <p>This class implements the core functionality for a message stream that continuously consumes
- * messages from underlying streams and delivers them to registered consumers. It provides:</p>
+ * <p>This class implements the core functionality for producing messages to streams. It provides:</p>
  * 
  * <ul>
- *   <li><strong>Asynchronous Processing:</strong> Uses a background thread to continuously poll for messages</li>
- *   <li><strong>Consumer Management:</strong> Manages registration of message consumers for different streams</li>
- *   <li><strong>Error Resilience:</strong> Implements exponential backoff for error recovery</li>
- *   <li><strong>Message Serialization:</strong> Handles encoding/decoding of messages transparently</li>
- *   <li><strong>Resource Management:</strong> Proper cleanup and shutdown of background resources</li>
+ *   <li><strong>Message Serialization:</strong> Handles encoding of messages transparently using configurable encoding strategies</li>
+ *   <li><strong>Stream Publishing:</strong> Provides a simple interface to offer messages to named streams</li>
+ *   <li><strong>Type Safety:</strong> Generic type support ensures type-safe message handling</li>
  * </ul>
- * 
- * <p>The implementation follows a reactor pattern where:</p>
- * <ol>
- *   <li>Consumers register their interest in specific streams</li>
- *   <li>A background thread continuously polls all registered streams</li>
- *   <li>Messages are deserialized and delivered to appropriate consumers</li>
- *   <li>Consumer acknowledgments control message processing flow</li>
- * </ol>
  * 
  * <p>Usage pattern:</p>
  * <pre>{@code
  * // Subclass implementation
- * public class MyMessageStream extends AbstractMessageStream<MyEvent> {
+ * public class MyMessageStreamProducer extends AbstractMessageStreamProducer<MyEvent> {
  *     protected StringEncodingStrategy<MyEvent> createEncodingStrategy() {
  *         return new JsonEncodingStrategy<>() {};
  *     }
- *     
- *     protected String name() { return "my-events"; }
- *     protected Duration pollInterval() { return Duration.ofSeconds(1); }
  * }
  * 
  * // Usage
- * MyMessageStream stream = new MyMessageStream(underlyingStream);
+ * MyMessageStreamProducer producer = new MyMessageStreamProducer(underlyingStream);
  * 
- * // Add consumer for a specific stream
- * stream.addConsumer("user-events", event -> {
- *     processUserEvent(event);
- *     return true; // Acknowledge successful processing
- * });
- * 
- * // Send messages (will be processed asynchronously by registered consumers)
- * stream.offer("user-events", new UserLoginEvent(userId));
+ * // Send messages to streams
+ * producer.offer("user-events", new UserLoginEvent(userId));
+ * producer.offer("system-events", new SystemEvent("startup"));
  * }</pre>
  * 
- * <p>Key features:</p>
- * <ul>
- *   <li><strong>Single Consumer per Stream:</strong> Each stream can have only one registered consumer</li>
- *   <li><strong>Automatic Thread Management:</strong> Background thread is started when first consumer is added</li>
- *   <li><strong>Graceful Shutdown:</strong> Implements {@link Closeable} for proper resource cleanup</li>
- *   <li><strong>Error Recovery:</strong> Uses exponential backoff to handle transient failures</li>
- * </ul>
+ * <p>This class is designed to work in conjunction with {@link AbstractMessageStreamConsumer}
+ * which handles the consumption side of message streaming.</p>
  *
- * @param <M> the type of messages that can be processed by this stream
+ * @param <M> the type of messages that can be produced by this stream
  * 
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  * @see MessageStream
- * @see MessageConsumer
+ * @see AbstractMessageStreamConsumer
  */
 @Slf4j
 @CompileStatic

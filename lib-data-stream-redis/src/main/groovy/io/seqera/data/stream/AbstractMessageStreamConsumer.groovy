@@ -27,16 +27,16 @@ import groovy.util.logging.Slf4j
 import io.seqera.serde.encode.StringEncodingStrategy
 import io.seqera.util.retry.ExponentialAttempt
 /**
- * Abstract base implementation of a message stream that provides asynchronous message consumption.
+ * Abstract base implementation of a message stream consumer that provides asynchronous message consumption.
  * 
- * <p>This class implements the core functionality for a message stream that continuously consumes
- * messages from underlying streams and delivers them to registered consumers. It provides:</p>
+ * <p>This class implements the core functionality for consuming messages from underlying streams 
+ * and delivering them to registered consumers. It provides:</p>
  * 
  * <ul>
  *   <li><strong>Asynchronous Processing:</strong> Uses a background thread to continuously poll for messages</li>
  *   <li><strong>Consumer Management:</strong> Manages registration of message consumers for different streams</li>
  *   <li><strong>Error Resilience:</strong> Implements exponential backoff for error recovery</li>
- *   <li><strong>Message Serialization:</strong> Handles encoding/decoding of messages transparently</li>
+ *   <li><strong>Message Deserialization:</strong> Handles decoding of messages transparently</li>
  *   <li><strong>Resource Management:</strong> Proper cleanup and shutdown of background resources</li>
  * </ul>
  * 
@@ -51,7 +51,7 @@ import io.seqera.util.retry.ExponentialAttempt
  * <p>Usage pattern:</p>
  * <pre>{@code
  * // Subclass implementation
- * public class MyMessageStream extends AbstractMessageStream<MyEvent> {
+ * public class MyMessageStreamConsumer extends AbstractMessageStreamConsumer<MyEvent> {
  *     protected StringEncodingStrategy<MyEvent> createEncodingStrategy() {
  *         return new JsonEncodingStrategy<>() {};
  *     }
@@ -61,16 +61,13 @@ import io.seqera.util.retry.ExponentialAttempt
  * }
  * 
  * // Usage
- * MyMessageStream stream = new MyMessageStream(underlyingStream);
+ * MyMessageStreamConsumer consumer = new MyMessageStreamConsumer(underlyingStream);
  * 
  * // Add consumer for a specific stream
- * stream.addConsumer("user-events", event -> {
+ * consumer.addConsumer("user-events", event -> {
  *     processUserEvent(event);
  *     return true; // Acknowledge successful processing
  * });
- * 
- * // Send messages (will be processed asynchronously by registered consumers)
- * stream.offer("user-events", new UserLoginEvent(userId));
  * }</pre>
  * 
  * <p>Key features:</p>
@@ -80,13 +77,17 @@ import io.seqera.util.retry.ExponentialAttempt
  *   <li><strong>Graceful Shutdown:</strong> Implements {@link Closeable} for proper resource cleanup</li>
  *   <li><strong>Error Recovery:</strong> Uses exponential backoff to handle transient failures</li>
  * </ul>
+ * 
+ * <p>This class is designed to work in conjunction with {@link AbstractMessageStreamProducer}
+ * which handles the production side of message streaming.</p>
  *
- * @param <M> the type of messages that can be processed by this stream
+ * @param <M> the type of messages that can be consumed by this stream
  * 
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  * @see MessageStream
  * @see MessageConsumer
+ * @see AbstractMessageStreamProducer
  */
 @Slf4j
 @CompileStatic
