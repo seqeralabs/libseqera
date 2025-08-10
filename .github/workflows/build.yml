@@ -69,6 +69,7 @@ jobs:
           bash publish.sh lib-data-stream-redis
           bash publish.sh lib-fixtures-redis          
           bash publish.sh lib-lang
+          bash publish.sh lib-httpx
           bash publish.sh lib-mail
           bash publish.sh lib-pool
           bash publish.sh lib-random

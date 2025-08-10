@@ -29,6 +29,7 @@ This is a library collection (`libseqera`) containing reusable components for Se
 - **wave-utils**: Utility classes for Wave (Docker helpers, file operations, template rendering)
 - **lib-activator**: Conditional activation markers for enabling components based on infrastructure availability
 - **lib-crypto**: Cryptographic utilities (asymmetric encryption, HMAC signatures, secure tokens)
+- **lib-httpx**: Enhanced HTTP client with automatic retry logic and JWT token refresh
 - **lib-mail**: Email functionality with Micronaut integration
 - **lib-retry**: Retry mechanisms with exponential backoff
 - **lib-pool**: Simple object pooling utilities

@@ -20,6 +20,7 @@ jobs:
           "lib-data-stream-redis",
           "lib-fixtures-redis",
           "lib-lang",
+          "lib-httpx",
           "lib-mail",
           "lib-pool",
           "lib-random",

@@ -45,7 +45,7 @@ import groovy.util.logging.Slf4j
 @Slf4j
 class Retryable<R> {
 
-    interface Config {
+    static interface Config {
         Duration getDelay()
         Duration getMaxDelay()
         int getMaxAttempts()

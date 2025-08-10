@@ -1,0 +1,129 @@
+/*
+ * Copyright 2025, Seqera Labs
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+package io.seqera.http
+
+import java.time.Duration
+
+import io.seqera.util.retry.Retryable
+import spock.lang.Specification
+
+/**
+ * Unit tests for HxConfig
+ *
+ * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
+ */
+class HxConfigTest extends Specification {
+
+    def 'should create config with defaults'() {
+        when:
+        def config = HxConfig.builder().build()
+
+        then:
+        config.delay == Duration.ofMillis(500)
+        config.maxDelay == Duration.ofSeconds(30)
+        config.maxAttempts == 5
+        config.jitter == 0.25d
+        config.multiplier == 2.0
+        config.retryStatusCodes == [429, 500, 502, 503, 504] as Set
+        config.tokenRefreshTimeout == Duration.ofSeconds(30)
+        config.jwtToken == null
+        config.refreshToken == null
+        config.refreshTokenUrl == null
+    }
+
+    def 'should create config with custom values'() {
+        when:
+        def config = HxConfig.builder()
+                .withDelay(Duration.ofSeconds(1))
+                .withMaxDelay(Duration.ofMinutes(2))
+                .withMaxAttempts(3)
+                .withJitter(0.5)
+                .withMultiplier(1.5)
+                .withRetryStatusCodes([429, 503] as Set)
+                .withJwtToken('jwt-token')
+                .withRefreshToken('refresh-token')
+                .withRefreshTokenUrl('https://example.com/oauth/token')
+                .withTokenRefreshTimeout(Duration.ofSeconds(60))
+                .build()
+
+        then:
+        config.delay == Duration.ofSeconds(1)
+        config.maxDelay == Duration.ofMinutes(2)
+        config.maxAttempts == 3
+        config.jitter == 0.5
+        config.multiplier == 1.5
+        config.retryStatusCodes == [429, 503] as Set
+        config.jwtToken == 'jwt-token'
+        config.refreshToken == 'refresh-token'
+        config.refreshTokenUrl == 'https://example.com/oauth/token'
+        config.tokenRefreshTimeout == Duration.ofSeconds(60)
+    }
+
+    def 'should implement Retryable.Config interface'() {
+        given:
+        def config = HxConfig.builder()
+                .withDelay(Duration.ofSeconds(2))
+                .withMaxDelay(Duration.ofMinutes(1))
+                .withMaxAttempts(10)
+                .withJitter(0.1)
+                .withMultiplier(3.0)
+                .build()
+
+        expect:
+        config.getDelay() == Duration.ofSeconds(2)
+        config.getMaxDelay() == Duration.ofMinutes(1)
+        config.getMaxAttempts() == 10
+        config.getJitter() == 0.1
+        config.getMultiplier() == 3.0
+    }
+
+    def 'should build from Retryable.Config'() {
+        given:
+        def retryableConfig = Retryable.ofDefaults().config()
+        
+        when:
+        def httpConfig = HxConfig.builder()
+                .withRetryConfig(retryableConfig)
+                .withJwtToken('test-token')
+                .build()
+
+        then:
+        httpConfig.getDelay() == retryableConfig.getDelay()
+        httpConfig.getMaxDelay() == retryableConfig.getMaxDelay()
+        httpConfig.getMaxAttempts() == retryableConfig.getMaxAttempts()
+        httpConfig.getJitter() == retryableConfig.getJitter()
+        httpConfig.getMultiplier() == retryableConfig.getMultiplier()
+        httpConfig.jwtToken == 'test-token'
+    }
+
+    def 'should handle null Retryable.Config gracefully'() {
+        when:
+        def httpConfig = HxConfig.builder()
+                .withRetryConfig(null)
+                .withJwtToken('test-token')
+                .build()
+
+        then:
+        httpConfig.getDelay() == Duration.ofMillis(500)
+        httpConfig.getMaxDelay() == Duration.ofSeconds(30)
+        httpConfig.getMaxAttempts() == 5
+        httpConfig.getJitter() == 0.25d
+        httpConfig.getMultiplier() == 2.0
+        httpConfig.jwtToken == 'test-token'
+    }
+}
