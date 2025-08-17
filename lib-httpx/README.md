@@ -2,11 +2,27 @@
 
 Enhanced HTTP client extension for Java `HttpClient` with built-in retry logic and JWT token refresh capabilities.
 
+## Installation
+
+### Gradle
+
+Add the dependency to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation 'io.seqera:lib-httpx:1.0.0'
+}
+```
+
+**Note:** Check the project's `VERSION` file for the current version number.
+
 ## Features
 
 - **Retry Logic**: Automatic retry for configurable HTTP status codes (default: 429, 500, 502, 503, 504)
 - **JWT Token Refresh**: Automatic JWT token refresh when receiving 401 Unauthorized responses
-- **Configurable**: Customizable retry policies, timeouts, and token refresh settings
+- **WWW-Authenticate Support**: Automatic handling of HTTP authentication challenges (Basic and Bearer schemes)
+- **Anonymous Authentication**: Fallback to anonymous authentication when credentials aren't provided
+- **Configurable**: Customizable retry policies, timeouts, token refresh, and authentication settings
 - **Generic Integration**: Compatible with any `Retryable.Config` for flexible retry configuration
 - **Thread-safe**: Safe for concurrent use
 - **Async Support**: Support for both synchronous and asynchronous requests
@@ -46,6 +62,44 @@ def config = HxConfig.builder()
 
 def client = HxClient.create(config)
 ```
+
+### WWW-Authenticate Configuration
+
+The client can automatically handle HTTP authentication challenges (401 responses with WWW-Authenticate headers):
+
+```groovy
+// Enable WWW-Authenticate handling with anonymous authentication fallback
+def config = HxConfig.builder()
+    .withWwwAuthentication(true)
+    .build()
+
+def client = HxClient.create(config)
+
+// With custom authentication callback
+def config = HxConfig.builder()
+    .withWwwAuthentication(true)
+    .withWwwAuthenticationCallback({ scheme, realm ->
+        if (scheme == AuthenticationScheme.BASIC) {
+            // Return base64-encoded credentials for Basic auth
+            return Base64.getEncoder().encodeToString("user:pass".getBytes())
+        } else if (scheme == AuthenticationScheme.BEARER) {
+            // Return bearer token
+            return "your-bearer-token"
+        }
+        return null // Fall back to anonymous auth
+    } as AuthenticationCallback)
+    .build()
+
+def client = HxClient.create(config)
+```
+
+**Supported Authentication Schemes:**
+- **Basic**: Supports both credential-based and anonymous authentication
+- **Bearer**: Attempts to retrieve anonymous tokens from OAuth2 endpoints when no credentials are provided
+
+**Anonymous Authentication:**
+- **Basic**: Uses empty credentials (base64 encoded `:`)
+- **Bearer**: Attempts to get anonymous tokens from the authentication endpoint using OAuth2 flow
 
 ### Custom Retry Configuration
 
@@ -87,6 +141,8 @@ def client = HxClient.create(config)
 | `multiplier` | Exponential backoff multiplier | 2.0 |
 | `retryStatusCodes` | HTTP status codes to retry | [429, 500, 502, 503, 504] |
 | `tokenRefreshTimeout` | Timeout for token refresh requests | 30s |
+| `wwwAuthentication` | Enable WWW-Authenticate challenge handling | false |
+| `wwwAuthenticationCallback` | Callback for providing authentication credentials | null |
 
 ## API Documentation
 
@@ -100,12 +156,16 @@ All classes and methods include comprehensive Javadoc documentation covering:
 
 ### Key Classes
 
-- **`HxClient`** (Http eXtended Client): Main client class with retry and JWT functionality
+- **`HxClient`** (Http eXtended Client): Main client class with retry, JWT, and WWW-Authenticate functionality
 - **`HxConfig`**: Configuration builder with all available options including Retryable.Config integration
 - **`HxTokenManager`**: Thread-safe JWT token lifecycle management
+- **`AuthenticationChallenge`**: Represents a parsed WWW-Authenticate challenge
+- **`AuthenticationScheme`**: Enumeration of supported authentication schemes (Basic, Bearer)
+- **`AuthenticationCallback`**: Interface for providing authentication credentials
+- **`WwwAuthenticateParser`**: RFC 7235 compliant parser for WWW-Authenticate headers
 
 ## Dependencies
 
 - `lib-retry`: Provides the underlying retry mechanism using Failsafe
-- `groovy-json`: For JSON processing during token refresh
 - `dev.failsafe:failsafe`: Core retry and circuit breaker library
+- `com.google.code.gson:gson`: For JSON parsing in WWW-Authenticate anonymous token retrieval

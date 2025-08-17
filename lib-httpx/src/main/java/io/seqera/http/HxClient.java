@@ -17,13 +17,23 @@
 
 package io.seqera.http;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Base64;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+import io.seqera.http.auth.AuthenticationCallback;
+import io.seqera.http.auth.AuthenticationChallenge;
+import io.seqera.http.auth.AuthenticationScheme;
+import io.seqera.http.auth.WwwAuthenticateParser;
 import io.seqera.util.retry.Retryable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,6 +109,27 @@ public class HxClient {
     private final HxConfig config;
     private final HxTokenManager tokenManager;
 
+    /**
+     * Creates a new HxClient with the specified HttpClient and configuration.
+     * 
+     * <p>This constructor allows full control over both the underlying HTTP client
+     * and the retry/authentication behavior. The provided HttpClient is wrapped
+     * with enhanced functionality while preserving its original configuration.
+     * 
+     * <p><strong>Thread Safety:</strong><br>
+     * The created HxClient is thread-safe and can be shared across multiple threads.
+     * The provided HttpClient should also be thread-safe for concurrent use.
+     * 
+     * <p><strong>HttpClient Configuration:</strong><br>
+     * The HttpClient's configuration (timeouts, redirects, executor) is preserved
+     * and used for all requests. HxClient adds retry logic and authentication
+     * handling on top of the existing client behavior.
+     * 
+     * @param httpClient the underlying HttpClient to wrap with retry and authentication functionality.
+     *                   Must not be null and should be configured for concurrent use.
+     * @param config the configuration for retry behavior, JWT token management, and WWW-Authenticate handling.
+     *               If null, default configuration will be used.
+     */
     public HxClient(HttpClient httpClient, HxConfig config) {
         this.httpClient = httpClient;
         this.config = config;
@@ -292,16 +323,30 @@ public class HxClient {
             final HttpRequest actualRequest = tokenManager.addAuthHeader(request);
             final HttpResponse<T> response = httpClient.send(actualRequest, responseBodyHandler);
             
-            if (response.statusCode() == 401 && !tokenRefreshed[0] && tokenManager.canRefreshToken()) {
-                log.debug("Received 401 status, attempting coordinated token refresh");
-                try {
-                    if (tokenManager.getOrRefreshTokenAsync().get()) {
-                        tokenRefreshed[0] = true;
-                        final HttpRequest refreshedRequest = tokenManager.addAuthHeader(request);
-                        return httpClient.send(refreshedRequest, responseBodyHandler);
+            if (response.statusCode() == 401 && !tokenRefreshed[0]) {
+                // Try JWT token refresh first if available
+                if (tokenManager.canRefreshToken()) {
+                    log.debug("Received 401 status, attempting coordinated token refresh");
+                    try {
+                        if (tokenManager.getOrRefreshTokenAsync().get()) {
+                            tokenRefreshed[0] = true;
+                            final HttpRequest refreshedRequest = tokenManager.addAuthHeader(request);
+                            closeResponse(response);
+                            return httpClient.send(refreshedRequest, responseBodyHandler);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Token refresh failed: " + e.getMessage());
                     }
-                } catch (Exception e) {
-                    log.warn("Token refresh failed: " + e.getMessage());
+                }
+                
+                // Try WWW-Authenticate challenge handling if enabled
+                if (config.isWwwAuthenticateEnabled()) {
+                    HttpRequest authenticatedRequest = handleWwwAuthenticate(request, response);
+                    if (authenticatedRequest != null) {
+                        log.debug("Retrying request with WWW-Authenticate credentials");
+                        closeResponse(response);
+                        return httpClient.send(authenticatedRequest, responseBodyHandler);
+                    }
                 }
             }
             
@@ -345,16 +390,30 @@ public class HxClient {
             final HttpRequest actualRequest = tokenManager.addAuthHeader(request);
             final HttpResponse<T> response = httpClient.sendAsync(actualRequest, responseBodyHandler).get();
             
-            if (response.statusCode() == 401 && tokenManager.canRefreshToken()) {
-                log.debug("Received 401 status in async call, attempting coordinated token refresh");
-                try {
-                    final boolean refreshed = tokenManager.getOrRefreshTokenAsync().get();
-                    if (refreshed) {
-                        final HttpRequest refreshedRequest = tokenManager.addAuthHeader(request);
-                        return httpClient.sendAsync(refreshedRequest, responseBodyHandler).get();
+            if (response.statusCode() == 401) {
+                // Try JWT token refresh first if available
+                if (tokenManager.canRefreshToken()) {
+                    log.debug("Received 401 status in async call, attempting coordinated token refresh");
+                    try {
+                        final boolean refreshed = tokenManager.getOrRefreshTokenAsync().get();
+                        if (refreshed) {
+                            final HttpRequest refreshedRequest = tokenManager.addAuthHeader(request);
+                            closeResponse(response);
+                            return httpClient.sendAsync(refreshedRequest, responseBodyHandler).get();
+                        }
+                    } catch (Exception e) {
+                        log.warn("Async token refresh failed: " + e.getMessage());
                     }
-                } catch (Exception e) {
-                    log.warn("Async token refresh failed: " + e.getMessage());
+                }
+                
+                // Try WWW-Authenticate challenge handling if enabled
+                if (config.isWwwAuthenticateEnabled()) {
+                    HttpRequest authenticatedRequest = handleWwwAuthenticate(request, response);
+                    if (authenticatedRequest != null) {
+                        log.debug("Retrying async request with WWW-Authenticate credentials");
+                        closeResponse(response);
+                        return httpClient.sendAsync(authenticatedRequest, responseBodyHandler).get();
+                    }
                 }
             }
             
@@ -407,5 +466,254 @@ public class HxClient {
 
     public HxTokenManager getTokenManager() {
         return tokenManager;
+    }
+
+    /**
+     * Handles WWW-Authenticate challenges from a 401 response by parsing challenges and
+     * attempting to provide appropriate authentication credentials.
+     * 
+     * <p>This method implements the complete WWW-Authenticate challenge handling flow:
+     * <ol>
+     *   <li>Extracts all WWW-Authenticate headers from the 401 response</li>
+     *   <li>Parses challenges for supported schemes (Basic, Bearer only)</li>
+     *   <li>For each challenge, attempts to get credentials from the configured callback</li>
+     *   <li>Falls back to anonymous authentication if no credentials are provided</li>
+     *   <li>Returns a new request with the first successful Authorization header</li>
+     * </ol>
+     * 
+     * <p><strong>Credential Fallback Chain:</strong>
+     * <ol>
+     *   <li><strong>Callback credentials</strong>: Uses {@link AuthenticationCallback} if configured</li>
+     *   <li><strong>Anonymous authentication</strong>: Attempts to get anonymous credentials</li>
+     *   <li><strong>Failure</strong>: Returns null if no authentication method succeeds</li>
+     * </ol>
+     * 
+     * <p><strong>Anonymous Authentication Behavior:</strong>
+     * <ul>
+     *   <li><strong>Basic</strong>: Uses empty credentials (base64 encoded ":")</li>
+     *   <li><strong>Bearer</strong>: Attempts OAuth2 anonymous token retrieval from realm URL</li>
+     * </ul>
+     * 
+     * <p><strong>Error Handling:</strong><br>
+     * If the authentication callback throws an exception, it's logged as a warning
+     * and the method continues with anonymous authentication fallback.
+     * 
+     * @param originalRequest the original HTTP request that received 401. Must not be null.
+     * @param response the 401 HTTP response containing WWW-Authenticate headers. Must not be null.
+     * @return a new HttpRequest with Authorization header added, or null if no suitable
+     *         authentication method could be found or if all authentication attempts failed
+     */
+    protected HttpRequest handleWwwAuthenticate(HttpRequest originalRequest, HttpResponse<?> response) {
+        List<String> wwwAuthHeaders = response.headers().allValues("WWW-Authenticate");
+        if (wwwAuthHeaders.isEmpty()) {
+            log.debug("No WWW-Authenticate headers found in 401 response");
+            return null;
+        }
+
+        for (String headerValue : wwwAuthHeaders) {
+            List<AuthenticationChallenge> challenges = WwwAuthenticateParser.parse(headerValue);
+            
+            for (AuthenticationChallenge challenge : challenges) {
+                HttpRequest authenticatedRequest = createAuthenticatedRequest(originalRequest, challenge);
+                if (authenticatedRequest != null) {
+                    return authenticatedRequest;
+                }
+            }
+        }
+
+        log.debug("No suitable authentication method found for WWW-Authenticate challenges");
+        return null;
+    }
+
+    /**
+     * Creates an authenticated request for a specific challenge by obtaining credentials
+     * and adding the appropriate Authorization header.
+     * 
+     * @param originalRequest the original HTTP request
+     * @param challenge the authentication challenge to handle
+     * @return a new HttpRequest with Authorization header, or null if credentials are not available
+     */
+    protected HttpRequest createAuthenticatedRequest(HttpRequest originalRequest, AuthenticationChallenge challenge) {
+        String credentials = null;
+        
+        // Try to get credentials from callback if available
+        AuthenticationCallback callback = config.getAuthenticationCallback();
+        if (callback != null) {
+            try {
+                credentials = callback.getCredentials(challenge.getScheme(), challenge.getRealm());
+            } catch (Exception e) {
+                log.warn("Authentication callback failed for scheme {} realm {}: {}", 
+                        challenge.getScheme(), challenge.getRealm(), e.getMessage());
+            }
+        }
+        
+        // Fall back to anonymous authentication if no credentials provided
+        if (credentials == null) {
+            credentials = getAnonymousCredentials(challenge.getScheme(), challenge);
+        }
+        
+        if (credentials != null) {
+            String authorizationHeader = createAuthorizationHeader(challenge.getScheme(), credentials);
+            if (authorizationHeader != null) {
+                log.debug("Creating authenticated request for scheme {} realm {}", 
+                        challenge.getScheme(), challenge.getRealm());
+                return HttpRequest.newBuilder(originalRequest, (name, value) -> true)
+                        .header("Authorization", authorizationHeader)
+                        .build();
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * Gets anonymous credentials for the specified authentication scheme.
+     * 
+     * @param scheme the authentication scheme
+     * @param challenge the authentication challenge containing parameters like realm, service, scope
+     * @return anonymous credentials, or null if not supported
+     */
+    protected String getAnonymousCredentials(AuthenticationScheme scheme, AuthenticationChallenge challenge) {
+        switch (scheme) {
+            case BASIC:
+                // Anonymous basic auth with empty credentials
+                return Base64.getEncoder().encodeToString(":".getBytes());
+            case BEARER:
+                // For Bearer tokens, attempt to get anonymous token from auth endpoint
+                return getAnonymousBearerToken(challenge);
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Attempts to get an anonymous Bearer token from the OAuth2 authentication endpoint.
+     * 
+     * <p>This method implements the OAuth2 anonymous token flow by making a request
+     * to the realm URL (token endpoint) with service and scope parameters from the
+     * authentication challenge. This is commonly used by container registries to
+     * provide anonymous read access to public repositories.
+     * 
+     * <p><strong>Token Request Process:</strong>
+     * <ol>
+     *   <li>Constructs token URL from challenge realm parameter</li>
+     *   <li>Adds service and scope query parameters if present in challenge</li>
+     *   <li>Makes HTTP GET request to token endpoint</li>
+     *   <li>Parses JSON response to extract token or access_token field</li>
+     * </ol>
+     * 
+     * <p><strong>Expected Token Response Format:</strong>
+     * <pre>
+     * {
+     *   "token": "anonymous-token-value",
+     *   "expires_in": 300,
+     *   "issued_at": "2023-01-01T00:00:00Z"
+     * }
+     * </pre>
+     * or
+     * <pre>
+     * {
+     *   "access_token": "anonymous-token-value",
+     *   "token_type": "Bearer"
+     * }
+     * </pre>
+     * 
+     * <p><strong>Error Handling:</strong><br>
+     * Network failures, non-200 responses, and JSON parsing errors are logged
+     * and result in null being returned. This method never throws exceptions.
+     * 
+     * @param challenge the Bearer authentication challenge containing realm, service, and scope parameters.
+     *                 The realm parameter is required; service and scope are optional.
+     * @return the anonymous bearer token value (without "Bearer " prefix), or null if the token
+     *         could not be retrieved due to network errors, invalid responses, or missing realm
+     */
+    protected String getAnonymousBearerToken(AuthenticationChallenge challenge) {
+        String realm = challenge.getRealm();
+        String service = challenge.getParameter("service");
+        String scope = challenge.getParameter("scope");
+        
+        if (realm == null) {
+            log.debug("No realm specified in Bearer challenge, cannot get anonymous token");
+            return null;
+        }
+        
+        try {
+            StringBuilder tokenUrl = new StringBuilder(realm);
+            tokenUrl.append("?");
+            
+            if (service != null) {
+                tokenUrl.append("service=").append(java.net.URLEncoder.encode(service, "UTF-8")).append("&");
+            }
+            if (scope != null) {
+                tokenUrl.append("scope=").append(java.net.URLEncoder.encode(scope, "UTF-8"));
+            }
+            
+            log.debug("Requesting anonymous Bearer token from: {}", tokenUrl);
+            
+            HttpRequest tokenRequest = HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(tokenUrl.toString()))
+                    .GET()
+                    .timeout(config.getTokenRefreshTimeout())
+                    .build();
+            
+            HttpClient tokenClient = HttpClient.newHttpClient();
+            HttpResponse<String> tokenResponse = tokenClient.send(tokenRequest, HttpResponse.BodyHandlers.ofString());
+            
+            if (tokenResponse.statusCode() == 200) {
+                // Parse JSON response to extract token
+                try {
+                    JsonObject jsonResponse = JsonParser.parseString(tokenResponse.body()).getAsJsonObject();
+                    if (jsonResponse.has("token")) {
+                        String token = jsonResponse.get("token").getAsString();
+                        log.debug("Successfully obtained anonymous Bearer token");
+                        return token;
+                    } else if (jsonResponse.has("access_token")) {
+                        String token = jsonResponse.get("access_token").getAsString();
+                        log.debug("Successfully obtained anonymous Bearer access_token");
+                        return token;
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to parse token response JSON: {}", e.getMessage());
+                }
+            } else {
+                log.debug("Token endpoint returned status {}: {}", tokenResponse.statusCode(), tokenResponse.body());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get anonymous Bearer token: {}", e.getMessage());
+        }
+        
+        return null;
+    }
+
+    /**
+     * Creates the Authorization header value for the given scheme and credentials.
+     * 
+     * @param scheme the authentication scheme
+     * @param credentials the credentials (already encoded if necessary)
+     * @return the Authorization header value, or null if scheme is not supported
+     */
+    protected String createAuthorizationHeader(AuthenticationScheme scheme, String credentials) {
+        switch (scheme) {
+            case BASIC:
+                return "Basic " + credentials;
+            case BEARER:
+                return "Bearer " + credentials;
+            default:
+                log.warn("Unsupported authentication scheme for header creation: {}", scheme);
+                return null;
+        }
+    }
+
+    static void closeResponse(HttpResponse<?> response) {
+        try {
+            // close the httpclient response to prevent leaks
+            // https://bugs.openjdk.org/browse/JDK-8308364
+            final var b0 = response.body();
+            if( b0 instanceof Closeable)
+                ((Closeable)b0).close();
+        }
+        catch (Throwable e) {
+            log.debug("Unexpected error while closing http response - cause: {}", e.getMessage());
+        }
     }
 }

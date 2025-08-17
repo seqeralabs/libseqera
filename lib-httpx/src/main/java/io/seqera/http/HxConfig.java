@@ -20,6 +20,7 @@ package io.seqera.http;
 import java.time.Duration;
 import java.util.Set;
 
+import io.seqera.http.auth.AuthenticationCallback;
 import io.seqera.util.retry.Retryable;
 
 /**
@@ -76,6 +77,9 @@ public class HxConfig implements Retryable.Config {
     private String refreshTokenUrl;
     private Duration tokenRefreshTimeout = Duration.ofSeconds(30);
 
+    private boolean wwwAuthenticateEnabled = false;
+    private AuthenticationCallback authenticationCallback;
+
     @Override
     public Duration getDelay() {
         return delay;
@@ -121,6 +125,14 @@ public class HxConfig implements Retryable.Config {
         return tokenRefreshTimeout;
     }
 
+    public boolean isWwwAuthenticateEnabled() {
+        return wwwAuthenticateEnabled;
+    }
+
+    public AuthenticationCallback getAuthenticationCallback() {
+        return authenticationCallback;
+    }
+
     /**
      * Creates a new builder instance for constructing HttpConfig objects.
      * 
@@ -147,6 +159,8 @@ public class HxConfig implements Retryable.Config {
         private String refreshToken;
         private String refreshTokenUrl;
         private Duration tokenRefreshTimeout = Duration.ofSeconds(30);
+        private boolean wwwAuthenticationEnabled = false;
+        private AuthenticationCallback wwwAuthenticationCallback;
 
         public Builder withDelay(Duration delay) {
             this.delay = delay;
@@ -199,6 +213,79 @@ public class HxConfig implements Retryable.Config {
         }
 
         /**
+         * Enables or disables automatic WWW-Authenticate challenge handling for 401 responses.
+         * 
+         * <p>When enabled, HxClient will automatically handle 401 Unauthorized responses that
+         * include WWW-Authenticate headers by attempting to provide appropriate credentials
+         * or falling back to anonymous authentication.
+         * 
+         * <p><strong>Supported Authentication Schemes:</strong>
+         * <ul>
+         *   <li><strong>Basic</strong>: HTTP Basic authentication with username/password</li>
+         *   <li><strong>Bearer</strong>: Bearer token authentication (OAuth2/JWT)</li>
+         * </ul>
+         * 
+         * <p><strong>When to Enable:</strong>
+         * <ul>
+         *   <li>Accessing APIs that require authentication challenges (e.g., Docker registries)</li>
+         *   <li>Services that use WWW-Authenticate for anonymous access tokens</li>
+         *   <li>Applications that need automatic credential handling</li>
+         * </ul>
+         * 
+         * <p><strong>Security Considerations:</strong><br>
+         * Enabling this feature means the client will automatically send credentials
+         * in response to authentication challenges. Ensure your AuthenticationCallback
+         * properly validates realms and only provides credentials to trusted endpoints.
+         * 
+         * @param value true to enable WWW-Authenticate handling, false to disable
+         * @return this builder instance for method chaining
+         */
+        public Builder withWwwAuthentication(boolean value) {
+            this.wwwAuthenticationEnabled = value;
+            return this;
+        }
+
+        /**
+         * Sets the callback for providing authentication credentials during WWW-Authenticate challenges.
+         * 
+         * <p>This callback is invoked when a 401 Unauthorized response includes WWW-Authenticate
+         * headers and WWW-Authenticate handling is enabled. The callback should examine the
+         * authentication scheme and realm to determine if appropriate credentials are available.
+         * 
+         * <p><strong>Callback Behavior:</strong>
+         * <ul>
+         *   <li>Return properly formatted credentials for the scheme/realm</li>
+         *   <li>Return null if no credentials are available (triggers anonymous auth fallback)</li>
+         *   <li>Throw an exception if credentials cannot be safely retrieved</li>
+         * </ul>
+         * 
+         * <p><strong>Credential Format Requirements:</strong>
+         * <ul>
+         *   <li><strong>Basic</strong>: Base64-encoded "username:password" string</li>
+         *   <li><strong>Bearer</strong>: Token value without "Bearer " prefix</li>
+         * </ul>
+         * 
+         * <p><strong>Example Implementation:</strong>
+         * <pre>{@code
+         * .withWwwAuthenticationCallback((scheme, realm) -> {
+         *     if (scheme == AuthenticationScheme.BASIC && "Protected Area".equals(realm)) {
+         *         return Base64.getEncoder().encodeToString("user:pass".getBytes());
+         *     } else if (scheme == AuthenticationScheme.BEARER && "api".equals(realm)) {
+         *         return getApiToken(); // Your token retrieval logic
+         *     }
+         *     return null; // Fall back to anonymous authentication
+         * })
+         * }</pre>
+         * 
+         * @param value the authentication callback, or null to rely only on anonymous authentication
+         * @return this builder instance for method chaining
+         */
+        public Builder withWwwAuthenticationCallback(AuthenticationCallback value) {
+            this.wwwAuthenticationCallback = value;
+            return this;
+        }
+
+        /**
          * Configures retry settings from a generic Retryable.Config instance.
          * This allows building HttpConfig with retry configuration from other sources.
          * 
@@ -233,6 +320,8 @@ public class HxConfig implements Retryable.Config {
             config.refreshToken = this.refreshToken;
             config.refreshTokenUrl = this.refreshTokenUrl;
             config.tokenRefreshTimeout = this.tokenRefreshTimeout;
+            config.wwwAuthenticateEnabled = this.wwwAuthenticationEnabled;
+            config.authenticationCallback = this.wwwAuthenticationCallback;
             return config;
         }
     }
