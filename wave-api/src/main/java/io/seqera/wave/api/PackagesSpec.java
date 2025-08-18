@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Objects;
 
 import io.seqera.wave.config.CondaOpts;
+import io.seqera.wave.config.PixiOpts;
 
 /**
  * Model a Package environment requirements
@@ -49,6 +50,11 @@ public class PackagesSpec {
     public CondaOpts condaOpts;
 
     /**
+     * Pixi build options
+     */
+    public PixiOpts pixiOpts;
+
+    /**
      * channels used for downloading packages
      */
     public List<String> channels;
@@ -62,6 +68,7 @@ public class PackagesSpec {
                 && Objects.equals(environment, that.environment)
                 && Objects.equals(entries, that.entries)
                 && Objects.equals(condaOpts, that.condaOpts)
+                && Objects.equals(pixiOpts, that.pixiOpts)
                 && Objects.equals(channels, that.channels);
     }
 
@@ -77,6 +84,7 @@ public class PackagesSpec {
                 ", envFile='" + environment + '\'' +
                 ", packages=" + entries +
                 ", condaOpts=" + condaOpts +
+                ", pixiOpts=" + pixiOpts +
                 ", channels=" + ObjectUtils.toString(channels) +
                 '}';
     }
@@ -106,4 +114,8 @@ public class PackagesSpec {
         return this;
     }
 
+    public PackagesSpec withPixiOpts(PixiOpts opts) {
+        this.pixiOpts = opts;
+        return this;
+    }
 }
