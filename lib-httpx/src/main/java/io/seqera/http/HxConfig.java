@@ -19,6 +19,7 @@ package io.seqera.http;
 
 import java.time.Duration;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import io.seqera.http.auth.AuthenticationCallback;
 import io.seqera.util.retry.Retryable;
@@ -64,11 +65,15 @@ import io.seqera.util.retry.Retryable;
  */
 public class HxConfig implements Retryable.Config {
 
+    private static final Predicate<? extends Throwable> DEFAULT_RETRY_COND = throwable -> throwable instanceof java.io.IOException;
+
     private Duration delay = Duration.ofMillis(500);
     private Duration maxDelay = Duration.ofSeconds(30);
     private int maxAttempts = 5;
     private double jitter = 0.25d;
     private double multiplier = 2.0;
+
+    private Predicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
 
     private Set<Integer> retryStatusCodes = Set.of(429, 500, 502, 503, 504);
 
@@ -107,6 +112,10 @@ public class HxConfig implements Retryable.Config {
 
     public Set<Integer> getRetryStatusCodes() {
         return retryStatusCodes;
+    }
+
+    public Predicate<? extends Throwable> getRetryCondition() {
+        return retryCondition;
     }
 
     public String getJwtToken() {
@@ -154,6 +163,7 @@ public class HxConfig implements Retryable.Config {
         private int maxAttempts = 5;
         private double jitter = 0.25d;
         private double multiplier = 2.0;
+        private Predicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
         private Set<Integer> retryStatusCodes = Set.of(429, 500, 502, 503, 504);
         private String jwtToken;
         private String refreshToken;
@@ -184,6 +194,11 @@ public class HxConfig implements Retryable.Config {
 
         public Builder withMultiplier(double multiplier) {
             this.multiplier = multiplier;
+            return this;
+        }
+
+        public Builder withRetryCondition(Predicate<? extends Throwable> condition) {
+            this.retryCondition = condition;
             return this;
         }
 
@@ -315,6 +330,7 @@ public class HxConfig implements Retryable.Config {
             config.maxAttempts = this.maxAttempts;
             config.jitter = this.jitter;
             config.multiplier = this.multiplier;
+            config.retryCondition = this.retryCondition;
             config.retryStatusCodes = this.retryStatusCodes;
             config.jwtToken = this.jwtToken;
             config.refreshToken = this.refreshToken;

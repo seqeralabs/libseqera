@@ -17,11 +17,11 @@
 
 package io.seqera.http
 
+
 import java.time.Duration
 
 import io.seqera.util.retry.Retryable
 import spock.lang.Specification
-
 /**
  * Unit tests for HxConfig
  *
@@ -38,12 +38,15 @@ class HxConfigTest extends Specification {
         config.maxDelay == Duration.ofSeconds(30)
         config.maxAttempts == 5
         config.jitter == 0.25d
-        config.multiplier == 2.0
+        config.multiplier == 2.0d
         config.retryStatusCodes == [429, 500, 502, 503, 504] as Set
         config.tokenRefreshTimeout == Duration.ofSeconds(30)
         config.jwtToken == null
         config.refreshToken == null
         config.refreshTokenUrl == null
+        config.retryCondition != null
+        config.retryCondition.test(new IOException('test')) == true
+        config.retryCondition.test(new RuntimeException('test')) == false
     }
 
     def 'should create config with custom values'() {
@@ -72,6 +75,42 @@ class HxConfigTest extends Specification {
         config.refreshToken == 'refresh-token'
         config.refreshTokenUrl == 'https://example.com/oauth/token'
         config.tokenRefreshTimeout == Duration.ofSeconds(60)
+    }
+
+    def 'should use default retry condition'() {
+        when:
+        def config = HxConfig.builder().build()
+
+        then:
+        config.retryCondition != null
+        
+        // Should retry on IOException and its subclasses
+        config.retryCondition.test(new IOException('network error')) == true
+        config.retryCondition.test(new java.net.ConnectException('connection refused')) == true
+        config.retryCondition.test(new java.net.SocketTimeoutException('timeout')) == true
+        config.retryCondition.test(new java.io.FileNotFoundException('file not found')) == true
+        
+        // Should NOT retry on other exceptions
+        config.retryCondition.test(new RuntimeException('runtime error')) == false
+        config.retryCondition.test(new IllegalArgumentException('invalid arg')) == false
+        config.retryCondition.test(new NullPointerException('null pointer')) == false
+        config.retryCondition.test(new Exception('generic exception')) == false
+    }
+
+    def 'should create config with custom retry condition'() {
+        given:
+        def customCondition = { throwable -> throwable instanceof IllegalArgumentException }
+
+        when:
+        def config = HxConfig.builder()
+                .withRetryCondition(customCondition)
+                .build()
+
+        then:
+        config.retryCondition != null
+        config.retryCondition.test(new IllegalArgumentException('test')) == true
+        config.retryCondition.test(new IOException('test')) == false
+        config.retryCondition.test(new RuntimeException('test')) == false
     }
 
     def 'should implement Retryable.Config interface'() {

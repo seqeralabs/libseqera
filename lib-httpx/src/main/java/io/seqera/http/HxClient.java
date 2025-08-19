@@ -306,12 +306,11 @@ public class HxClient {
      * @throws IOException if all retry attempts fail
      * @throws InterruptedException if the operation is interrupted
      */
-    protected <T> HttpResponse<T> sendWithRetry(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) 
-            throws IOException, InterruptedException {
+    protected <T> HttpResponse<T> sendWithRetry(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) {
         final boolean[] tokenRefreshed = {false};
         
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
-                .retryCondition(this::shouldRetryOnException)
+                .retryCondition(config.getRetryCondition())
                 .retryIf(this::shouldRetryOnResponse)
                 .onRetry(event -> {
                     String message = event.getFailure() != null ? event.getFailure().getMessage() 
@@ -343,7 +342,7 @@ public class HxClient {
                 if (config.isWwwAuthenticateEnabled()) {
                     HttpRequest authenticatedRequest = handleWwwAuthenticate(request, response);
                     if (authenticatedRequest != null) {
-                        log.debug("Retrying request with WWW-Authenticate credentials");
+                        log.debug("Retrying request with WWW-Authenticate challenge");
                         closeResponse(response);
                         return httpClient.send(authenticatedRequest, responseBodyHandler);
                     }
@@ -377,7 +376,7 @@ public class HxClient {
             Executor executor) {
         
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
-                .retryCondition(this::shouldRetryOnException)
+                .retryCondition(config.getRetryCondition())
                 .retryIf(this::shouldRetryOnResponse)
                 .onRetry(event -> {
                     String message = event.getFailure() != null ? event.getFailure().getMessage() 
