@@ -112,11 +112,11 @@ public class WwwAuthenticateParser {
         List<AuthenticationChallenge> challenges = new ArrayList<>();
         
         if (headerValue == null || headerValue.trim().isEmpty()) {
-            log.debug("WWW-Authenticate header value is null or empty");
+            log.trace("WWW-Authenticate header value is null or empty");
             return challenges;
         }
         
-        log.debug("Parsing WWW-Authenticate header: {}", headerValue);
+        log.trace("Parsing WWW-Authenticate header: {}", headerValue);
         
         // Split the header by commas, but be careful with quoted values
         String[] challengeTokens = splitChallenges(headerValue);
@@ -128,7 +128,7 @@ public class WwwAuthenticateParser {
             }
         }
         
-        log.debug("Parsed {} authentication challenges", challenges.size());
+        log.trace("Parsed {} authentication challenges", challenges.size());
         return challenges;
     }
     
@@ -209,7 +209,7 @@ public class WwwAuthenticateParser {
             parseParameters(parametersString.trim(), parameters);
         }
         
-        log.debug("Parsed challenge: scheme={}, parameters={}", scheme, parameters);
+        log.trace("Parsed challenge: scheme={}, parameters={}", scheme, parameters);
         return new AuthenticationChallenge(scheme, parameters);
     }
     
