@@ -45,11 +45,36 @@ import groovy.util.logging.Slf4j
 @Slf4j
 class Retryable<R> {
 
+    /**
+     * Configuration interface for retry policy settings.
+     * Defines the parameters that control the retry behavior including delays,
+     * maximum attempts, jitter, and backoff multiplier.
+     */
     static interface Config {
+        
+        /**
+         * @return The initial delay between retry attempts
+         */
         Duration getDelay()
+        
+        /**
+         * @return The maximum delay allowed between retry attempts
+         */
         Duration getMaxDelay()
+        
+        /**
+         * @return The maximum number of retry attempts allowed
+         */
         int getMaxAttempts()
+        
+        /**
+         * @return The jitter factor to add randomness to delay calculations (0.0 to 1.0)
+         */
         double getJitter()
+        
+        /**
+         * @return The multiplier used for exponential backoff delay calculations
+         */
         double getMultiplier()
     }
 
