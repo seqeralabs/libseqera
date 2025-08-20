@@ -19,6 +19,7 @@ package io.seqera.http;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -243,6 +244,18 @@ public class HxClient {
         return sendWithRetry(request, responseBodyHandler);
     }
 
+    public HttpResponse<String> sendAsString(HttpRequest request) {
+        return sendWithRetry(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    public HttpResponse<byte[]> sendAsBytes(HttpRequest request) {
+        return sendWithRetry(request, HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    public HttpResponse<InputStream> sendAsStream(HttpRequest request) {
+        return sendWithRetry(request, HttpResponse.BodyHandlers.ofInputStream());
+    }
+
     /**
      * Sends an HTTP request asynchronously with automatic retry logic and JWT token refresh.
      * 
@@ -322,30 +335,32 @@ public class HxClient {
             final HttpRequest actualRequest = tokenManager.addAuthHeader(request);
             final HttpResponse<T> response = httpClient.send(actualRequest, responseBodyHandler);
             
-            if (response.statusCode() == 401 && !tokenRefreshed[0]) {
-                // Try JWT token refresh first if available
-                if (tokenManager.canRefreshToken()) {
-                    log.debug("Received 401 status, attempting coordinated token refresh");
-                    try {
-                        if (tokenManager.getOrRefreshTokenAsync().get()) {
-                            tokenRefreshed[0] = true;
-                            final HttpRequest refreshedRequest = tokenManager.addAuthHeader(request);
-                            closeResponse(response);
-                            return httpClient.send(refreshedRequest, responseBodyHandler);
-                        }
-                    } catch (Exception e) {
-                        log.warn("Token refresh failed: " + e.getMessage());
-                    }
-                }
-                
-                // Try WWW-Authenticate challenge handling if enabled
-                if (config.isWwwAuthenticateEnabled()) {
-                    HttpRequest authenticatedRequest = handleWwwAuthenticate(request, response);
-                    if (authenticatedRequest != null) {
-                        log.debug("Retrying request with WWW-Authenticate challenge");
+            if (response.statusCode() != 401 || tokenRefreshed[0]) {
+                return response;
+            }
+            
+            // Try JWT token refresh first if available
+            if (tokenManager.canRefreshToken()) {
+                log.debug("Received 401 status, attempting coordinated token refresh");
+                try {
+                    if (tokenManager.getOrRefreshTokenAsync().get()) {
+                        tokenRefreshed[0] = true;
+                        final HttpRequest refreshedRequest = tokenManager.addAuthHeader(request);
                         closeResponse(response);
-                        return httpClient.send(authenticatedRequest, responseBodyHandler);
+                        return httpClient.send(refreshedRequest, responseBodyHandler);
                     }
+                } catch (Exception e) {
+                    log.warn("Token refresh failed: " + e.getMessage());
+                }
+            }
+            
+            // Try WWW-Authenticate challenge handling if enabled
+            if (config.isWwwAuthenticateEnabled()) {
+                HttpRequest authenticatedRequest = handleWwwAuthenticate(request, response);
+                if (authenticatedRequest != null) {
+                    log.debug("Retrying request with WWW-Authenticate challenge");
+                    closeResponse(response);
+                    return httpClient.send(authenticatedRequest, responseBodyHandler);
                 }
             }
             
@@ -375,6 +390,8 @@ public class HxClient {
             HttpResponse.BodyHandler<T> responseBodyHandler, 
             Executor executor) {
         
+        final boolean[] tokenRefreshed = {false};
+        
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
                 .retryCondition(config.getRetryCondition())
                 .retryIf(this::shouldRetryOnResponse)
@@ -387,15 +404,21 @@ public class HxClient {
         return retry.applyAsync(() -> {
             // Perform the HTTP request and coordinated JWT refresh within the retry
             final HttpRequest actualRequest = tokenManager.addAuthHeader(request);
-            final HttpResponse<T> response = httpClient.sendAsync(actualRequest, responseBodyHandler).get();
             
-            if (response.statusCode() == 401) {
+            try {
+                final HttpResponse<T> response = httpClient.sendAsync(actualRequest, responseBodyHandler).get();
+                
+                if (response.statusCode() != 401 || tokenRefreshed[0]) {
+                    return response;
+                }
+                
                 // Try JWT token refresh first if available
                 if (tokenManager.canRefreshToken()) {
                     log.debug("Received 401 status in async call, attempting coordinated token refresh");
                     try {
                         final boolean refreshed = tokenManager.getOrRefreshTokenAsync().get();
                         if (refreshed) {
+                            tokenRefreshed[0] = true;
                             final HttpRequest refreshedRequest = tokenManager.addAuthHeader(request);
                             closeResponse(response);
                             return httpClient.sendAsync(refreshedRequest, responseBodyHandler).get();
@@ -414,9 +437,21 @@ public class HxClient {
                         return httpClient.sendAsync(authenticatedRequest, responseBodyHandler).get();
                     }
                 }
+                
+                return response;
+            } catch (java.util.concurrent.ExecutionException e) {
+                // Unwrap ExecutionException to get the original cause for retry mechanism
+                if (e.getCause() instanceof IOException) {
+                    throw (IOException) e.getCause();
+                } else if (e.getCause() instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted during async request", e.getCause());
+                } else if (e.getCause() instanceof RuntimeException) {
+                    throw (RuntimeException) e.getCause();
+                } else {
+                    throw new IOException("Async request failed", e.getCause());
+                }
             }
-            
-            return response;
         }, executor);
     }
 
@@ -703,6 +738,77 @@ public class HxClient {
         }
     }
 
+    /**
+     * Returns the currently active JWT token, if any.
+     * 
+     * <p>This method provides access to the JWT token that is currently being used
+     * for authentication headers in HTTP requests. The token may be null if:
+     * <ul>
+     *   <li>No JWT token was initially configured</li>
+     *   <li>Token refresh failed and no valid token is available</li>
+     *   <li>The token has expired and automatic refresh is disabled</li>
+     * </ul>
+     * 
+     * <p><strong>Token Management:</strong><br>
+     * The returned token represents the current state and may change over time
+     * due to automatic token refresh operations. For thread-safety, this method
+     * returns a snapshot of the current token value.
+     * 
+     * @return the current JWT token string, or null if no token is available
+     * @see #getCurrentRefreshToken()
+     * @see HxTokenManager#getCurrentJwtToken()
+     */
+    public String getCurrentJwtToken() {
+        return tokenManager.getCurrentJwtToken();
+    }
+
+    /**
+     * Returns the currently active refresh token, if any.
+     * 
+     * <p>This method provides access to the refresh token that is used for
+     * automatic JWT token renewal when a 401 Unauthorized response is received.
+     * The refresh token may be null if:
+     * <ul>
+     *   <li>No refresh token was initially configured</li>
+     *   <li>The refresh token has been revoked or expired</li>
+     *   <li>Token refresh functionality is not enabled</li>
+     * </ul>
+     * 
+     * <p><strong>Security Note:</strong><br>
+     * Refresh tokens are sensitive credentials that should be handled with care.
+     * Avoid logging or exposing refresh tokens in client-side code or unsecured
+     * storage locations.
+     * 
+     * @return the current refresh token string, or null if no refresh token is available
+     * @see #getCurrentJwtToken()
+     * @see HxTokenManager#getCurrentRefreshToken()
+     */
+    public String getCurrentRefreshToken() {
+        return tokenManager.getCurrentRefreshToken();
+    }
+
+    /**
+     * Safely closes an HTTP response to prevent resource leaks.
+     * 
+     * <p>This utility method properly disposes of HTTP response resources by closing
+     * the response body if it implements {@link Closeable}. This is particularly
+     * important for streaming response bodies and helps prevent memory leaks.
+     * 
+     * <p><strong>Background:</strong><br>
+     * Java's HttpClient can leave response bodies unclosed in certain scenarios,
+     * leading to resource leaks. This method addresses the issue described in
+     * <a href="https://bugs.openjdk.org/browse/JDK-8308364">JDK-8308364</a>.
+     * 
+     * <p><strong>Error Handling:</strong><br>
+     * Any exceptions during the close operation are caught and logged at debug level
+     * to prevent disrupting the main request flow. This method never throws exceptions.
+     * 
+     * <p><strong>Thread Safety:</strong><br>
+     * This method is thread-safe and can be called concurrently on different
+     * response instances.
+     * 
+     * @param response the HTTP response to close, may be null (no-op if null)
+     */
     static void closeResponse(HttpResponse<?> response) {
         try {
             // close the httpclient response to prevent leaks

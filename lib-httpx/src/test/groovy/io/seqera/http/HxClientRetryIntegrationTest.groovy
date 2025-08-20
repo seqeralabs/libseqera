@@ -17,9 +17,12 @@
 
 package io.seqera.http
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*
+
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.concurrent.ExecutionException
 
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock
@@ -27,9 +30,6 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration
 import com.github.tomakehurst.wiremock.http.Fault
 import spock.lang.Shared
 import spock.lang.Specification
-
-import static com.github.tomakehurst.wiremock.client.WireMock.*
-
 /**
  * Integration tests for HxClient retry functionality using WireMock
  *
@@ -351,5 +351,68 @@ class HxClientRetryIntegrationTest extends Specification {
         response.statusCode() == 200
         response.body() == 'Async Success'
         wireMockServer.verify(2, getRequestedFor(urlEqualTo('/api/async')))
+    }
+
+    def 'should throw IOException when persistent connection errors occur'() {
+        given:
+        def config = HxConfig.builder()
+                .withMaxAttempts(3)
+                .withDelay(Duration.ofMillis(50))
+                .build()
+        def client = HxClient.create(config)
+
+        and: 'server always returns connection reset error'
+        wireMockServer.stubFor(get(urlEqualTo('/api/persistent-io-error'))
+                .willReturn(aResponse()
+                        .withFault(Fault.CONNECTION_RESET_BY_PEER)))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/persistent-io-error"))
+                .GET()
+                .build()
+
+        when:
+        client.send(request, HttpResponse.BodyHandlers.ofString())
+
+        then:
+        thrown(IOException)
+
+        and: 'all 3 attempts should be made'
+        wireMockServer.verify(3, getRequestedFor(urlEqualTo('/api/persistent-io-error')))
+    }
+
+    def 'should throw IOException when persistent connection errors occur with sendAsync'() {
+        given:
+        def config = HxConfig.builder()
+                .withMaxAttempts(3)
+                .withDelay(Duration.ofMillis(50))
+                .build()
+        def client = HxClient.create(config)
+
+        and: 'server always returns connection reset error'
+        wireMockServer.stubFor(get(urlEqualTo('/api/persistent-io-error-async'))
+                .willReturn(aResponse()
+                        .withFault(Fault.CONNECTION_RESET_BY_PEER)))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/persistent-io-error-async"))
+                .GET()
+                .build()
+
+        when:
+        client
+                .sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .get()
+
+        then:
+        // The async method should throw an ExecutionException wrapping an IOException
+        def ex = thrown(ExecutionException)
+        // The underlying cause should be an IOException or its subclass (like SocketException)
+        ex.cause instanceof IOException
+
+        and: 'all 3 attempts should be made'
+        wireMockServer.verify(3, getRequestedFor(urlEqualTo('/api/persistent-io-error-async')))
     }
 }
