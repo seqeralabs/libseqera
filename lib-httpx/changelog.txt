@@ -1,5 +1,8 @@
 # lib-httpx changelog
 
+1.4.1 - 21 Aug 2025
+- Remove Groovy unneeded dependency from lib-httpx module, making it purely Java-based [82a2cc7]
+
 1.4.0 - 21 Aug 2025
 - Add Basic Authentication support to HxClient with simplified token-based API [25918af]
 - Add validation to prevent configuring both JWT and Basic authentication simultaneously [25918af]
