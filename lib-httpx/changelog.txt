@@ -1,5 +1,10 @@
 # lib-httpx changelog
 
+1.5.0 - 21 Aug 2025
+- Fix HxConfig to use new duration conversion methods from lib-retry [1decb5b]
+- Update retry configuration to use getDelayAsDuration() and getMaxDelayAsDuration() [1decb5b]
+- Improve compatibility with lib-retry 2.0.0 interface changes [1decb5b]
+
 1.4.1 - 21 Aug 2025
 - Remove Groovy unneeded dependency from lib-httpx module, making it purely Java-based [82a2cc7]
 
