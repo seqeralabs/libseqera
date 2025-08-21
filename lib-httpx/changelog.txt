@@ -1,0 +1,24 @@
+# lib-httpx changelog
+
+1.4.0 - 21 Aug 2025
+- Add Basic Authentication support to HxClient with simplified token-based API [25918af]
+- Add validation to prevent configuring both JWT and Basic authentication simultaneously [25918af]
+- Update documentation with Basic auth examples and configuration options [25918af]
+
+1.3.0 - 18 Aug 2025
+- Fix async retry mechanism and improve HxClient API [c9c1222]
+- Add comprehensive Javadocs to Retryable interface [9606cc1]
+- Make HxClient logs less verbose for better production use [bbda8fb]
+
+1.2.0 - Aug 2025
+- Make retry condition configurable via HxConfig for flexible error handling [6905062]
+
+1.1.0 - Aug 2025
+- Add WWW-Authenticate support to lib-httpx with automatic challenge handling [047b275]
+- Implement Basic and Bearer scheme support with anonymous authentication fallback [047b275]
+
+1.0.0 - Aug 2025
+- Initial release of lib-httpx module with HxClient (Http eXtended Client) [61fe705]
+- Add automatic retry logic with exponential backoff and configurable jitter [61fe705]
+- Implement JWT token refresh on 401 Unauthorized responses [61fe705]
+- Provide thread-safe HTTP client wrapper with async support [61fe705]
