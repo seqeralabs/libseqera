@@ -33,11 +33,9 @@ class ExponentialAttemptTest extends Specification {
     def 'should compute delay' () {
         expect:
         new ExponentialAttempt()
-                .builder()
                 .withBackOffBase(BACKOFF)
                 .withBackOffDelay(DELAY)
                 .withMaxDelay(MAX)
-                .build()
                 .delay(ATTEMPT) == Duration.ofMillis(EXPECTED)
 
         where:
