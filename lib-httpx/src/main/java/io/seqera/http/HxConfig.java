@@ -364,8 +364,8 @@ public class HxConfig implements Retryable.Config {
          */
         public Builder withRetryConfig(Retryable.Config retryConfig) {
             if (retryConfig != null) {
-                this.delay = retryConfig.getDelay();
-                this.maxDelay = retryConfig.getMaxDelay();
+                this.delay = retryConfig.getDelayAsDuration();
+                this.maxDelay = retryConfig.getMaxDelayAsDuration();
                 this.maxAttempts = retryConfig.getMaxAttempts();
                 this.jitter = retryConfig.getJitter();
                 this.multiplier = retryConfig.getMultiplier();

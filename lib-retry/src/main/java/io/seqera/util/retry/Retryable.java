@@ -21,6 +21,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAmount;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -57,13 +59,45 @@ public class Retryable<R> {
         /**
          * @return The initial delay between retry attempts
          */
-        Duration getDelay();
-        
+        TemporalAmount getDelay();
+
+        /**
+         * Converts the delay to a {@link Duration} object.
+         * If the delay is already a Duration, returns it directly.
+         * Otherwise, converts using milliseconds as the unit.
+         *
+         * @return The delay as a Duration object, or null if no delay is configured
+         */
+        default Duration getDelayAsDuration() {
+            final var amount = getDelay();
+            if( amount==null )
+                return null;
+            if( amount instanceof Duration )
+                return (Duration) amount;
+            return Duration.ofMillis(amount.get(ChronoUnit.MILLIS));
+        }
+
         /**
          * @return The maximum delay allowed between retry attempts
          */
-        Duration getMaxDelay();
-        
+        TemporalAmount getMaxDelay();
+
+        /**
+         * Converts the maximum delay to a {@link Duration} object.
+         * If the maximum delay is already a Duration, returns it directly.
+         * Otherwise, converts using milliseconds as the unit.
+         *
+         * @return The maximum delay as a Duration object, or null if no maximum delay is configured
+         */
+        default Duration getMaxDelayAsDuration() {
+            final var amount = getMaxDelay();
+            if( amount==null )
+                return null;
+            if( amount instanceof Duration )
+                return (Duration) amount;
+            return Duration.ofMillis(amount.get(ChronoUnit.MILLIS));
+        }
+
         /**
          * @return The maximum number of retry attempts allowed
          */
@@ -81,8 +115,8 @@ public class Retryable<R> {
     }
 
     private static class ConfigImpl implements Config {
-        private final Duration delay;
-        private final Duration maxDelay;
+        private final TemporalAmount delay;
+        private final TemporalAmount maxDelay;
         private final int maxAttempts;
         private final double jitter;
         private final double multiplier;
@@ -104,12 +138,12 @@ public class Retryable<R> {
         }
 
         @Override
-        public Duration getDelay() {
+        public TemporalAmount getDelay() {
             return delay;
         }
 
         @Override
-        public Duration getMaxDelay() {
+        public TemporalAmount getMaxDelay() {
             return maxDelay;
         }
 
@@ -129,12 +163,27 @@ public class Retryable<R> {
         }
     }
 
+    /**
+     * Represents a retry event containing information about the execution attempt.
+     * This class captures the details of each retry attempt including the attempt number,
+     * result, and any failure that occurred.
+     *
+     * @param <R> The type of the result returned by the retried operation
+     */
     public static class Event<R> {
         public final String event;
         public final int attempt;
         public final R result;
         public final Throwable failure;
 
+        /**
+         * Creates a new retry event with the specified parameters.
+         *
+         * @param event The type of event (e.g., "Retry", "Failure")
+         * @param attempt The attempt number (1-based)
+         * @param result The result of the execution attempt, if successful
+         * @param failure The exception that caused the failure, if any
+         */
         public Event(String event, int attempt, R result, Throwable failure) {
             this.event = event;
             this.attempt = attempt;
@@ -142,18 +191,38 @@ public class Retryable<R> {
             this.failure = failure;
         }
 
+        /**
+         * Gets the event type.
+         *
+         * @return The event type string
+         */
         public String getEvent() {
             return event;
         }
 
+        /**
+         * Gets the attempt number for this event.
+         *
+         * @return The 1-based attempt number
+         */
         public int getAttempt() {
             return attempt;
         }
 
+        /**
+         * Gets the result of the execution attempt.
+         *
+         * @return The result if the attempt was successful, null otherwise
+         */
         public R getResult() {
             return result;
         }
 
+        /**
+         * Gets the exception that caused the failure.
+         *
+         * @return The failure exception, or null if the attempt was successful
+         */
         public Throwable getFailure() {
             return failure;
         }
@@ -245,7 +314,7 @@ public class Retryable<R> {
 
         final RetryPolicyBuilder<R> policy = RetryPolicy.<R>builder()
                 .handleIf(condition != null ? condition : DEFAULT_CONDITION)
-                .withBackoff(config.getDelay(), config.getMaxDelay(), config.getMultiplier())
+                .withBackoff(config.getDelayAsDuration(), config.getMaxDelayAsDuration(), config.getMultiplier())
                 .withMaxAttempts(config.getMaxAttempts())
                 .withJitter(config.getJitter())
                 .onRetry(retry0)
@@ -272,6 +341,16 @@ public class Retryable<R> {
         throw (T) throwable;
     }
 
+    /**
+     * Executes the given action asynchronously with retry logic using the specified executor.
+     * The retry policy configured for this instance will be applied to handle failures.
+     *
+     * @param action The action to execute, which may throw checked exceptions
+     * @param executor The executor to use for asynchronous execution
+     * @return A CompletableFuture containing the result of the successful execution
+     * @throws RuntimeException If the action fails after all retry attempts are exhausted,
+     *         the original exception will be re-thrown as a runtime exception
+     */
     public CompletableFuture<R> applyAsync(CheckedSupplier<R> action, Executor executor) {
         final RetryPolicy policy = retryPolicy();
         try {
