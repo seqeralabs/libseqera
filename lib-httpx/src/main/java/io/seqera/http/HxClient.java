@@ -40,11 +40,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * HxClient (Http eXtended Client) - An enhanced HTTP client that wraps Java's {@link HttpClient} with automatic retry logic and JWT token refresh.
+ * HxClient (Http eXtended Client) - An enhanced HTTP client that wraps Java's {@link HttpClient} with automatic retry logic and authentication support.
  * 
  * <p>This class provides a drop-in replacement for HttpClient that adds enterprise-ready features:
  * <ul>
  *   <li><strong>Automatic Retry</strong>: Configurable retry on HTTP error status codes and network failures</li>
+ *   <li><strong>Authentication Support</strong>: Built-in support for JWT Bearer tokens and HTTP Basic authentication</li>
  *   <li><strong>JWT Token Management</strong>: Automatic token refresh on 401 Unauthorized responses</li>
  *   <li><strong>Thread Safety</strong>: Safe for concurrent use across multiple threads</li>
  *   <li><strong>Async Support</strong>: Full support for both synchronous and asynchronous requests</li>
@@ -80,12 +81,18 @@ import org.slf4j.LoggerFactory;
  *     .build();
  * HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
  * 
- * // With custom configuration
- * HttpConfig config = HttpConfig.builder()
+ * // With JWT token configuration
+ * HxConfig config = HxConfig.builder()
  *     .withMaxAttempts(3)
  *     .withJwtToken("your-jwt-token")
  *     .withRefreshToken("your-refresh-token")
  *     .withRefreshTokenUrl("https://api.example.com/oauth/token")
+ *     .build();
+ * HxClient client = HxClient.create(config);
+ * 
+ * // With Basic Authentication configuration
+ * HxConfig config = HxConfig.builder()
+ *     .withBasicAuth("username", "password")
  *     .build();
  * HxClient client = HxClient.create(config);
  * 

@@ -19,6 +19,7 @@ dependencies {
 ## Features
 
 - **Retry Logic**: Automatic retry for configurable HTTP status codes (default: 429, 500, 502, 503, 504)
+- **Authentication Support**: Built-in support for JWT Bearer tokens and HTTP Basic authentication
 - **JWT Token Refresh**: Automatic JWT token refresh when receiving 401 Unauthorized responses
 - **WWW-Authenticate Support**: Automatic handling of HTTP authentication challenges (Basic and Bearer schemes)
 - **Anonymous Authentication**: Fallback to anonymous authentication when credentials aren't provided
@@ -51,7 +52,9 @@ def request = HttpRequest.newBuilder()
 def response = client.send(request, HttpResponse.BodyHandlers.ofString())
 ```
 
-### JWT Token Configuration
+### Authentication Configuration
+
+#### JWT Token Configuration
 
 ```groovy
 def config = HxConfig.builder()
@@ -62,6 +65,29 @@ def config = HxConfig.builder()
 
 def client = HxClient.create(config)
 ```
+
+#### Basic Authentication Configuration
+
+```groovy
+// Using username and password
+def config = HxConfig.builder()
+    .withBasicAuth("your-username", "your-password")
+    .build()
+
+def client = HxClient.create(config)
+
+// Or using a pre-formatted token
+def config = HxConfig.builder()
+    .withBasicAuth("username:password")
+    .build()
+
+def client = HxClient.create(config)
+```
+
+**Authentication Constraints:**
+- Cannot configure both JWT and Basic authentication simultaneously 
+- Choose one authentication method - the configuration builder will reject conflicting setups
+- Use JWT tokens for modern APIs, Basic auth for legacy systems
 
 ### WWW-Authenticate Configuration
 
@@ -140,7 +166,11 @@ def client = HxClient.create(config)
 | `jitter` | Random jitter factor (0-1) | 0.25 |
 | `multiplier` | Exponential backoff multiplier | 2.0 |
 | `retryStatusCodes` | HTTP status codes to retry | [429, 500, 502, 503, 504] |
+| `jwtToken` | JWT Bearer token for authentication | null |
+| `refreshToken` | Refresh token for JWT renewal | null |
+| `refreshTokenUrl` | URL for token refresh requests | null |
 | `tokenRefreshTimeout` | Timeout for token refresh requests | 30s |
+| `basicAuthToken` | Token for HTTP Basic authentication (username:password format) | null |
 | `wwwAuthentication` | Enable WWW-Authenticate challenge handling | false |
 | `wwwAuthenticationCallback` | Callback for providing authentication credentials | null |
 

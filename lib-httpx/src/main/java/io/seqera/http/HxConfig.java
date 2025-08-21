@@ -82,6 +82,8 @@ public class HxConfig implements Retryable.Config {
     private String refreshTokenUrl;
     private Duration tokenRefreshTimeout = Duration.ofSeconds(30);
 
+    private String basicAuthToken;
+
     private boolean wwwAuthenticateEnabled = false;
     private AuthenticationCallback authenticationCallback;
 
@@ -142,6 +144,10 @@ public class HxConfig implements Retryable.Config {
         return authenticationCallback;
     }
 
+    public String getBasicAuthToken() {
+        return basicAuthToken;
+    }
+
     /**
      * Creates a new builder instance for constructing HttpConfig objects.
      * 
@@ -169,6 +175,7 @@ public class HxConfig implements Retryable.Config {
         private String refreshToken;
         private String refreshTokenUrl;
         private Duration tokenRefreshTimeout = Duration.ofSeconds(30);
+        private String basicAuthToken;
         private boolean wwwAuthenticationEnabled = false;
         private AuthenticationCallback wwwAuthenticationCallback;
 
@@ -224,6 +231,54 @@ public class HxConfig implements Retryable.Config {
 
         public Builder withTokenRefreshTimeout(Duration tokenRefreshTimeout) {
             this.tokenRefreshTimeout = tokenRefreshTimeout;
+            return this;
+        }
+
+        /**
+         * Sets the token for HTTP Basic authentication.
+         * 
+         * <p>The token should be in the format "username:password". This will be Base64-encoded
+         * automatically when creating the Authorization header.
+         * 
+         * <p><strong>Security Notes:</strong>
+         * <ul>
+         *   <li>Basic authentication sends credentials in every request</li>
+         *   <li>Always use HTTPS when using basic authentication</li>
+         *   <li>Consider using Bearer tokens for better security when possible</li>
+         * </ul>
+         * 
+         * <p><strong>Authentication Priority:</strong><br>
+         * If both JWT tokens and basic authentication are configured, JWT authentication
+         * takes precedence. Basic authentication will only be used if no JWT token is available.
+         * 
+         * @param token the basic auth token in "username:password" format
+         * @return this builder instance for method chaining
+         */
+        public Builder withBasicAuth(String token) {
+            this.basicAuthToken = token;
+            return this;
+        }
+
+        /**
+         * Sets both username and password for HTTP Basic authentication in a single call.
+         * 
+         * <p>This is a convenience method that combines the username and password into
+         * the required "username:password" format internally.
+         * 
+         * <p><strong>Security Considerations:</strong>
+         * <ul>
+         *   <li>Store credentials securely and avoid hardcoding in source code</li>
+         *   <li>Use environment variables or secure configuration stores</li>
+         *   <li>Rotate credentials regularly according to security policies</li>
+         *   <li>Always use HTTPS to protect credentials in transit</li>
+         * </ul>
+         * 
+         * @param username the username for basic authentication
+         * @param password the password for basic authentication
+         * @return this builder instance for method chaining
+         */
+        public Builder withBasicAuth(String username, String password) {
+            this.basicAuthToken = username + ":" + password;
             return this;
         }
 
@@ -336,8 +391,15 @@ public class HxConfig implements Retryable.Config {
             config.refreshToken = this.refreshToken;
             config.refreshTokenUrl = this.refreshTokenUrl;
             config.tokenRefreshTimeout = this.tokenRefreshTimeout;
+            config.basicAuthToken = this.basicAuthToken;
             config.wwwAuthenticateEnabled = this.wwwAuthenticationEnabled;
             config.authenticationCallback = this.wwwAuthenticationCallback;
+            
+            // Validate authentication configuration
+            if (this.jwtToken != null && this.basicAuthToken != null) {
+                throw new IllegalArgumentException("Cannot configure both JWT token and Basic authentication. Choose one authentication method.");
+            }
+            
             return config;
         }
     }

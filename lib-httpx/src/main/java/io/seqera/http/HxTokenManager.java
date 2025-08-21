@@ -23,6 +23,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.regex.Pattern;
@@ -116,28 +117,52 @@ public class HxTokenManager {
     }
 
     /**
-     * Adds an Authorization header with the current JWT token to the given HTTP request.
+     * Adds an Authorization header to the given HTTP request using the configured authentication method.
      * 
-     * <p>This method:
+     * <p>This method handles authentication in the following priority order:
+     * <ol>
+     *   <li><strong>JWT Bearer Token</strong>: If a JWT token is configured, adds "Bearer token" header</li>
+     *   <li><strong>Basic Authentication</strong>: If username/password are configured, adds "Basic base64(user:pass)" header</li>
+     *   <li><strong>No Authentication</strong>: Returns the original request unchanged</li>
+     * </ol>
+     * 
+     * <p><strong>JWT Token Handling:</strong>
      * <ul>
-     *   <li>Returns the original request unchanged if no JWT token is configured</li>
      *   <li>Adds "Bearer " prefix to the token if not already present</li>
-     *   <li>Creates a new HttpRequest with the Authorization header</li>
+     *   <li>Uses the current JWT token (which may have been refreshed)</li>
+     * </ul>
+     * 
+     * <p><strong>Basic Authentication Handling:</strong>
+     * <ul>
+     *   <li>Combines username and password with ":" separator</li>
+     *   <li>Base64 encodes the credentials</li>
+     *   <li>Adds "Basic " prefix to the encoded credentials</li>
      * </ul>
      * 
      * @param originalRequest the original HTTP request
-     * @return a new HttpRequest with Authorization header, or the original request if no token
+     * @return a new HttpRequest with Authorization header, or the original request if no authentication is configured
      */
     public HttpRequest addAuthHeader(HttpRequest originalRequest) {
-        final String token = getCurrentJwtToken();
-        if (token == null || token.isEmpty()) {
-            return originalRequest;
+        // Priority 1: JWT Bearer token
+        final String jwtToken = getCurrentJwtToken();
+        if (jwtToken != null && !jwtToken.isEmpty()) {
+            final String headerValue = jwtToken.startsWith(BEARER_PREFIX) ? jwtToken : BEARER_PREFIX + jwtToken;
+            return HttpRequest.newBuilder(originalRequest, (name, value) -> true)
+                    .header("Authorization", headerValue)
+                    .build();
         }
 
-        final String headerValue = token.startsWith(BEARER_PREFIX) ? token : BEARER_PREFIX + token;
-        return HttpRequest.newBuilder(originalRequest, (name, value) -> true)
-                .header("Authorization", headerValue)
-                .build();
+        // Priority 2: Basic authentication
+        if (config.getBasicAuthToken() != null && !config.getBasicAuthToken().isEmpty()) {
+            final String encodedCredentials = Base64.getEncoder().encodeToString(config.getBasicAuthToken().getBytes());
+            final String headerValue = "Basic " + encodedCredentials;
+            return HttpRequest.newBuilder(originalRequest, (name, value) -> true)
+                    .header("Authorization", headerValue)
+                    .build();
+        }
+
+        // No authentication configured
+        return originalRequest;
     }
 
     /**
@@ -464,6 +489,34 @@ public class HxTokenManager {
         } finally {
             lock.readLock().unlock();
         }
+    }
+
+    /**
+     * Returns the configured basic authentication token, if any.
+     * 
+     * <p>This method provides read-only access to the basic authentication token
+     * configured in the HxConfig. This can be useful for logging, debugging, or
+     * conditional authentication logic.
+     * 
+     * @return the basic authentication token in "username:password" format, or null if not configured
+     */
+    public String getBasicAuthToken() {
+        return config.getBasicAuthToken();
+    }
+
+    /**
+     * Checks if basic authentication is properly configured.
+     * 
+     * <p>Basic authentication is considered properly configured when the
+     * token is non-null, non-empty, and not just a colon (which would be
+     * the result of empty username and password).
+     * 
+     * @return true if basic auth token is configured, false otherwise
+     */
+    public boolean hasBasicAuth() {
+        return config.getBasicAuthToken() != null && 
+               !config.getBasicAuthToken().isEmpty() &&
+               !":".equals(config.getBasicAuthToken());
     }
 
     /**
