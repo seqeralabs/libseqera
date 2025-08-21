@@ -1,0 +1,26 @@
+# lib-retry changelog
+
+2.0.0 - 21 Aug 2025
+- Add comprehensive Javadocs and tests for Retryable class [1decb5b]
+- Add Javadocs for getDelayAsDuration(), getMaxDelayAsDuration(), and applyAsync() methods [1decb5b]
+- Add complete Javadocs for Event class and all its methods [1decb5b]
+- Add tests for async retry functionality with executor [1decb5b]
+- Add tests for duration conversion methods and Event class [1decb5b]
+- Refactor lib-retry to pure Java, removing Groovy dependencies [03a9bba]
+
+1.2.0 - 10 Aug 2025
+- Make Retryable.Config interface static to enable external implementation [61fe705]
+- Enable seamless integration with lib-httpx module through HxConfig [61fe705]
+- Add Gradle dependency snippets to README file [a1dc392]
+
+1.1.0 - 26 Jul 2025
+- Add comprehensive Javadocs to Retryable interface [9606cc1]
+- Fix async retry mechanism and improve API [c9c1222]
+- Make retry condition configurable for flexible error handling [6905062]
+
+1.0.0
+- Initial release of lib-retry module with Retryable interface [2491ba4]
+- Implement retry mechanisms with exponential backoff and configurable jitter [a939e42]
+- Add Event class for retry event handling and monitoring [a939e42]
+- Provide both synchronous and asynchronous retry execution [a939e42]
+- Support configurable retry conditions and result handling [a939e42]
