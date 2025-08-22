@@ -17,11 +17,13 @@
 
 package io.seqera.http;
 
+import java.net.CookieManager;
+import java.net.HttpCookie;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
@@ -98,6 +100,7 @@ public class HxTokenManager {
 
     private final HxConfig config;
     private final HttpClient refreshHttpClient;
+    private final CookieManager cookieManager;
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     private volatile String currentJwtToken;
@@ -111,9 +114,63 @@ public class HxTokenManager {
         this.config = config;
         this.currentJwtToken = config.getJwtToken();
         this.currentRefreshToken = config.getRefreshToken();
+        
+        // Validate JWT token refresh configuration
+        validateTokenRefreshConfig();
+        
+        this.cookieManager = new CookieManager();
         this.refreshHttpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .cookieHandler(cookieManager)
                 .connectTimeout(config.getTokenRefreshTimeout())
                 .build();
+    }
+
+    /**
+     * Validates that JWT token refresh configuration follows the allowed patterns.
+     * 
+     * <p>This method enforces that JWT configuration must be one of:
+     * <ul>
+     *   <li><strong>JWT only</strong>: Just JWT token (no refresh capability)</li>
+     *   <li><strong>Complete JWT refresh</strong>: JWT token + refresh token + refresh URL (full refresh capability)</li>
+     *   <li><strong>No JWT</strong>: No JWT components at all</li>
+     * </ul>
+     * 
+     * <p>Partial configurations are not allowed as they would lead to confusing runtime behavior.
+     * 
+     * @throws IllegalArgumentException if the JWT configuration is incomplete or inconsistent
+     */
+    private void validateTokenRefreshConfig() {
+        final boolean hasJwtToken = currentJwtToken != null && !currentJwtToken.trim().isEmpty();
+        final boolean hasRefreshToken = currentRefreshToken != null && !currentRefreshToken.trim().isEmpty();
+        final boolean hasRefreshUrl = config.getRefreshTokenUrl() != null && !config.getRefreshTokenUrl().trim().isEmpty();
+        
+        // Count how many refresh components we have
+        int refreshComponents = 0;
+        if (hasRefreshToken) refreshComponents++;
+        if (hasRefreshUrl) refreshComponents++;
+        
+        // Valid configurations:
+        // 1. JWT only: hasJwtToken=true, refreshComponents=0
+        // 2. Complete refresh: hasJwtToken=true, refreshComponents=2
+        // 3. No JWT: hasJwtToken=false, refreshComponents=0
+        
+        if (hasJwtToken) {
+            if (refreshComponents == 0) {
+                log.trace("JWT token configured without refresh capability");
+            } else if (refreshComponents == 2) {
+                log.trace("JWT token refresh is fully configured and ready");
+            } else {
+                throw new IllegalArgumentException("JWT token refresh configuration is incomplete. Either provide only JWT token, or provide JWT token + refresh token + refresh URL");
+            }
+        } else {
+            if (refreshComponents == 0) {
+                log.trace("No JWT token authentication configured");
+            } else {
+                throw new IllegalArgumentException("Refresh components are configured without JWT token. Either remove refresh components or add JWT token");
+            }
+        }
     }
 
     /**
@@ -192,8 +249,7 @@ public class HxTokenManager {
      */
     public boolean refreshToken() {
         if (!canRefreshToken()) {
-            log.warn("Cannot refresh token: refreshToken={} refreshTokenUrl={}", 
-                    (currentRefreshToken != null), config.getRefreshTokenUrl());
+            log.warn("Cannot refresh token: refreshToken={} refreshTokenUrl={}", (currentRefreshToken != null), config.getRefreshTokenUrl());
             return false;
         }
 
@@ -229,15 +285,14 @@ public class HxTokenManager {
      */
     public CompletableFuture<Boolean> getOrRefreshTokenAsync() {
         if (!canRefreshToken()) {
-            log.warn("Cannot refresh token: refreshToken={} refreshTokenUrl={}", 
-                    (currentRefreshToken != null), config.getRefreshTokenUrl());
+            log.warn("Cannot refresh token: refreshToken={} refreshTokenUrl={}", (currentRefreshToken != null), config.getRefreshTokenUrl());
             return CompletableFuture.completedFuture(false);
         }
 
         // Check if there's already a refresh in progress
         CompletableFuture<Boolean> refresh = currentRefresh;
         if (refresh != null && !refresh.isDone()) {
-            log.debug("Token refresh already in progress, waiting for completion");
+            log.trace("Token refresh already in progress, waiting for completion");
             return refresh;
         }
 
@@ -245,12 +300,12 @@ public class HxTokenManager {
         synchronized(this) {
             refresh = currentRefresh;
             if (refresh != null && !refresh.isDone()) {
-                log.debug("Token refresh already in progress (double-check), waiting for completion");
+                log.trace("Token refresh already in progress (double-check), waiting for completion");
                 return refresh;
             }
 
             // Start new refresh operation
-            log.debug("Starting coordinated token refresh");
+            log.trace("Starting coordinated token refresh");
             currentRefresh = CompletableFuture.supplyAsync(() -> {
                 lock.writeLock().lock();
                 try {
@@ -269,7 +324,7 @@ public class HxTokenManager {
                 if (throwable != null) {
                     log.error("Coordinated token refresh failed: " + throwable.getMessage(), throwable);
                 } else {
-                    log.debug("Coordinated token refresh completed with result: " + result);
+                    log.trace("Coordinated token refresh completed with result: " + result);
                 }
             });
             
@@ -289,8 +344,7 @@ public class HxTokenManager {
      */
     public CompletableFuture<Boolean> refreshTokenAsync() {
         if (!canRefreshToken()) {
-            log.warn("Cannot refresh token asynchronously: refreshToken={} refreshTokenUrl={}", 
-                    (currentRefreshToken != null), config.getRefreshTokenUrl());
+            log.warn("Cannot refresh token asynchronously: refreshToken={} refreshTokenUrl={}", (currentRefreshToken != null), config.getRefreshTokenUrl());
             return CompletableFuture.completedFuture(false);
         }
 
@@ -323,21 +377,26 @@ public class HxTokenManager {
      */
     protected boolean doRefreshToken() {
         try {
-            log.debug("Attempting to refresh JWT token using refresh token");
+            final var refreshUrl = URI.create(config.getRefreshTokenUrl());
+            log.trace("Attempting to refresh JWT token using refresh token at URL: {}", refreshUrl);
             
-            final String body = "grant_type=refresh_token&refresh_token=" + 
-                    URLEncoder.encode(currentRefreshToken, StandardCharsets.UTF_8.toString());
+            final String body = "grant_type=refresh_token&refresh_token=" +
+                    URLEncoder.encode(currentRefreshToken, StandardCharsets.UTF_8);
+            
             final HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(config.getRefreshTokenUrl()))
+                    .uri(refreshUrl)
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .timeout(config.getTokenRefreshTimeout())
                     .build();
 
             final HttpResponse<String> response = refreshHttpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            log.trace("Token refresh response: [{}]", response.statusCode());
             
             if (response.statusCode() == 200) {
-                return handleRefreshResponse(response);
+                final var result = handleRefreshResponse(response);
+                log.debug("JWT token refresh completed with result: {}", result);
+                return result;
             } else {
                 log.warn("Token refresh failed with status {}: {}", response.statusCode(), response.body());
                 return false;
@@ -353,7 +412,7 @@ public class HxTokenManager {
      * 
      * <p>This method supports multiple response formats:
      * <ul>
-     *   <li><strong>Cookie-based</strong>: Extracts JWT and JWT_REFRESH_TOKEN from Set-Cookie headers</li>
+     *   <li><strong>Cookie-based</strong>: Extracts JWT and JWT_REFRESH_TOKEN from cookie store</li>
      *   <li><strong>JSON-based</strong>: Parses JSON response body for access_token and refresh_token fields</li>
      * </ul>
      * 
@@ -365,44 +424,43 @@ public class HxTokenManager {
      */
     protected boolean handleRefreshResponse(HttpResponse<String> response) {
         try {
-            final String newJwtToken = extractTokenFromCookies(response, "JWT");
-            final String newRefreshToken = extractTokenFromCookies(response, "JWT_REFRESH_TOKEN");
+            // First try to extract tokens from cookie store (same approach as TowerXAuth)
+            final HttpCookie authCookie = getCookie("JWT");
+            final HttpCookie refreshCookie = getCookie("JWT_REFRESH_TOKEN");
 
-            if (newJwtToken != null) {
+            if (authCookie != null && authCookie.getValue() != null) {
                 log.trace("Successfully refreshed JWT token");
-                currentJwtToken = newJwtToken;
+                currentJwtToken = authCookie.getValue();
                 
-                if (newRefreshToken != null) {
+                if (refreshCookie != null && refreshCookie.getValue() != null) {
                     log.trace("Successfully refreshed refresh token");
-                    currentRefreshToken = newRefreshToken;
-                } else {
-                    log.debug("No new refresh token in response, keeping existing one");
+                    currentRefreshToken = refreshCookie.getValue();
                 }
                 
                 return true;
             } else {
-                log.warn("No JWT token found in refresh response");
-                
+                log.trace("No JWT token found in cookies, trying JSON response");
+
                 try {
                     final JsonObject jsonResponse = JsonParser.parseString(response.body()).getAsJsonObject();
                     if (jsonResponse.has("access_token")) {
                         final String accessToken = jsonResponse.get("access_token").getAsString();
                         if (isValidJwtToken(accessToken)) {
-                            log.trace("Successfully extracted JWT token from JSON response");
+                            log.trace("Successfully extracted JWT token from JSON");
                             currentJwtToken = accessToken;
-                            
+
                             if (jsonResponse.has("refresh_token")) {
                                 currentRefreshToken = jsonResponse.get("refresh_token").getAsString();
-                                log.trace("Successfully extracted refresh token from JSON response");
+                                log.trace("Successfully extracted refresh token from JSON");
                             }
-                            
+
                             return true;
                         }
                     }
-                } catch (Exception jsonEx) {
-                    log.debug("Response is not valid JSON, trying to parse as form data");
+                } catch (Exception e) {
+                    log.trace("Response is not valid JSON, trying to parse as form data");
                 }
-                
+
                 return false;
             }
         } catch (Exception e) {
@@ -412,34 +470,21 @@ public class HxTokenManager {
     }
 
     /**
-     * Extracts a token value from HTTP cookies in the response.
+     * Extracts a cookie from the cookie store by name (same approach as TowerXAuth).
      * 
-     * <p>This method searches through all Set-Cookie headers for a cookie with the
-     * specified name and returns its value. The cookie value is extracted from the
-     * first occurrence of "cookieName=value" format, ignoring any cookie attributes
-     * like Path, HttpOnly, etc.
+     * <p>This method searches through the cookie store for a cookie with the
+     * specified name and returns the HttpCookie object if found.
      * 
-     * @param response the HTTP response containing Set-Cookie headers
      * @param cookieName the name of the cookie to extract (e.g., "JWT", "JWT_REFRESH_TOKEN")
-     * @return the cookie value if found, null otherwise
+     * @return the HttpCookie if found, null otherwise
      */
-    protected String extractTokenFromCookies(HttpResponse<String> response, String cookieName) {
-        return response.headers().allValues("Set-Cookie").stream()
-                .filter(cookie -> cookie.startsWith(cookieName + "="))
-                .map(cookie -> {
-                    final String[] parts = cookie.split(";");
-                    if (parts.length > 0) {
-                        final String cookieValue = parts[0];
-                        final int equalIndex = cookieValue.indexOf('=');
-                        if (equalIndex > 0 && equalIndex < cookieValue.length() - 1) {
-                            return cookieValue.substring(equalIndex + 1);
-                        }
-                    }
-                    return null;
-                })
-                .filter(value -> value != null)
-                .findFirst()
-                .orElse(null);
+    protected HttpCookie getCookie(String cookieName) {
+        for (HttpCookie cookie : cookieManager.getCookieStore().getCookies()) {
+            if (cookieName.equals(cookie.getName())) {
+                return cookie;
+            }
+        }
+        return null;
     }
 
     /**
