@@ -1,5 +1,13 @@
 # lib-httpx changelog
 
+1.6.0 - 22 Aug 2025
+- Improve JWT token refresh robustness and validation [5f0f806]
+- Add comprehensive validation for JWT token refresh configuration patterns [5f0f806]
+- Enhance token extraction with cookie manager support and fallback to JSON parsing [5f0f806]
+- Improve error handling and logging consistency in refresh operations [5f0f806]
+- Add extensive test coverage for configuration validation scenarios [5f0f806]
+- Reduce log noise by changing debug messages to trace level [5f0f806]
+
 1.5.0 - 21 Aug 2025
 - Fix HxConfig to use new duration conversion methods from lib-retry [1decb5b]
 - Update retry configuration to use getDelayAsDuration() and getMaxDelayAsDuration() [1decb5b]
