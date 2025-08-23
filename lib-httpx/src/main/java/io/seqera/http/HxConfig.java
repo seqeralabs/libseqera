@@ -44,17 +44,17 @@ import io.seqera.util.retry.Retryable;
  * <p><strong>Usage Examples:</strong>
  * <pre>{@code
  * // Default configuration
- * HxConfig config = HxConfig.builder().build();
+ * HxConfig config = HxConfig.newBuilder().build();
  * 
  * // Custom retry configuration
- * HxConfig config = HxConfig.builder()
+ * HxConfig config = HxConfig.newBuilder()
  *     .withMaxAttempts(3)
  *     .withDelay(Duration.ofSeconds(1))
  *     .withRetryStatusCodes(Set.of(429, 503))
  *     .build();
  * 
  * // With JWT token configuration
- * HxConfig config = HxConfig.builder()
+ * HxConfig config = HxConfig.newBuilder()
  *     .withJwtToken("your-jwt-token")
  *     .withRefreshToken("your-refresh-token")
  *     .withRefreshTokenUrl("https://api.example.com/oauth/token")
@@ -153,7 +153,7 @@ public class HxConfig implements Retryable.Config {
      * 
      * @return a new Builder with default values pre-populated
      */
-    public static Builder builder() {
+    public static Builder newBuilder() {
         return new Builder();
     }
 
@@ -171,7 +171,7 @@ public class HxConfig implements Retryable.Config {
         private double multiplier = 2.0;
         private Predicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
         private Set<Integer> retryStatusCodes = Set.of(429, 500, 502, 503, 504);
-        private String jwtToken;
+        private String bearerToken;
         private String refreshToken;
         private String refreshTokenUrl;
         private Duration tokenRefreshTimeout = Duration.ofSeconds(30);
@@ -214,8 +214,8 @@ public class HxConfig implements Retryable.Config {
             return this;
         }
 
-        public Builder withJwtToken(String jwtToken) {
-            this.jwtToken = jwtToken;
+        public Builder withBearerToken(String jwtToken) {
+            this.bearerToken = jwtToken;
             return this;
         }
 
@@ -387,7 +387,7 @@ public class HxConfig implements Retryable.Config {
             config.multiplier = this.multiplier;
             config.retryCondition = this.retryCondition;
             config.retryStatusCodes = this.retryStatusCodes;
-            config.jwtToken = this.jwtToken;
+            config.jwtToken = this.bearerToken;
             config.refreshToken = this.refreshToken;
             config.refreshTokenUrl = this.refreshTokenUrl;
             config.tokenRefreshTimeout = this.tokenRefreshTimeout;
@@ -396,7 +396,7 @@ public class HxConfig implements Retryable.Config {
             config.authenticationCallback = this.wwwAuthenticationCallback;
             
             // Validate authentication configuration
-            if (this.jwtToken != null && this.basicAuthToken != null) {
+            if (this.bearerToken != null && this.basicAuthToken != null) {
                 throw new IllegalArgumentException("Cannot configure both JWT token and Basic authentication. Choose one authentication method.");
             }
             

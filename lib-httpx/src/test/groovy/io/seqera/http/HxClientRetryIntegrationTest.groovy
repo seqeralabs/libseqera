@@ -56,11 +56,11 @@ class HxClientRetryIntegrationTest extends Specification {
 
     def 'should retry on 500 server error and eventually succeed'() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(100))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'server returns 500 twice, then 200'
         wireMockServer.stubFor(get(urlEqualTo('/api/data'))
@@ -105,11 +105,11 @@ class HxClientRetryIntegrationTest extends Specification {
 
     def 'should retry on 503 service unavailable'() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withMaxAttempts(2)
                 .withDelay(Duration.ofMillis(50))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'server returns 503 once, then 200'
         wireMockServer.stubFor(get(urlEqualTo('/api/service'))
@@ -144,11 +144,11 @@ class HxClientRetryIntegrationTest extends Specification {
 
     def 'should retry on 429 rate limit'() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(100))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'server returns 429 with retry-after header, then 200'
         wireMockServer.stubFor(get(urlEqualTo('/api/throttled'))
@@ -184,11 +184,11 @@ class HxClientRetryIntegrationTest extends Specification {
 
     def 'should not retry on 404 client error'() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(50))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'server always returns 404'
         wireMockServer.stubFor(get(urlEqualTo('/api/notfound'))
@@ -215,12 +215,12 @@ class HxClientRetryIntegrationTest extends Specification {
 
     def 'should respect custom retry status codes'() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withMaxAttempts(2)
                 .withDelay(Duration.ofMillis(50))
                 .withRetryStatusCodes([502] as Set) // only retry on 502
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'server returns 500 (which should NOT be retried with custom config)'
         wireMockServer.stubFor(get(urlEqualTo('/api/custom'))
@@ -247,11 +247,11 @@ class HxClientRetryIntegrationTest extends Specification {
 
     def 'should exhaust all retry attempts and return final error'() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(50))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'server always returns 503'
         wireMockServer.stubFor(get(urlEqualTo('/api/persistent-error'))
@@ -278,11 +278,11 @@ class HxClientRetryIntegrationTest extends Specification {
 
     def 'should retry on connection errors'() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(50))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'server returns connection error first, then success'
         wireMockServer.stubFor(get(urlEqualTo('/api/connection'))
@@ -315,11 +315,11 @@ class HxClientRetryIntegrationTest extends Specification {
 
     def 'should work with async requests and retry'() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withMaxAttempts(2)
                 .withDelay(Duration.ofMillis(100))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'server returns 502 once, then 200'
         wireMockServer.stubFor(get(urlEqualTo('/api/async'))
@@ -355,11 +355,11 @@ class HxClientRetryIntegrationTest extends Specification {
 
     def 'should throw IOException when persistent connection errors occur'() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(50))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'server always returns connection reset error'
         wireMockServer.stubFor(get(urlEqualTo('/api/persistent-io-error'))
@@ -384,11 +384,11 @@ class HxClientRetryIntegrationTest extends Specification {
 
     def 'should throw IOException when persistent connection errors occur with sendAsync'() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(50))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'server always returns connection reset error'
         wireMockServer.stubFor(get(urlEqualTo('/api/persistent-io-error-async'))

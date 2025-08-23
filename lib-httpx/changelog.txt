@@ -1,5 +1,17 @@
 # lib-httpx changelog
 
+2.0.0 - 23 Aug 2025
+- **BREAKING CHANGE**: Implement Java HttpClient.Builder pattern with HxClient.newBuilder()
+- **BREAKING CHANGE**: Replace HxClient.create() methods with HxClient.newBuilder() for consistent API
+- **BREAKING CHANGE**: Rename HxConfig.builder() to HxConfig.newBuilder() for API consistency
+- Add HxClient.newHxClient() convenience method as shortcut for HxClient.newBuilder().build()
+- Add HxClient.Builder.retryConfig() method for easy integration with existing Retryable.Config instances
+- Add comprehensive JavaDoc documentation for HxClient.Builder.basicAuth(String token) method
+- Rename JWT token methods from jwtToken to bearerToken throughout the API for clarity
+- Rename refresh token URL methods for consistency across the codebase
+- Update all test suites to use new builder patterns and method names
+- Improve API consistency and align with Java standard library conventions
+
 1.6.0 - 22 Aug 2025
 - Improve JWT token refresh robustness and validation [5f0f806]
 - Add comprehensive validation for JWT token refresh configuration patterns [5f0f806]

@@ -23,6 +23,7 @@ import java.io.InputStream;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -73,28 +74,43 @@ import org.slf4j.LoggerFactory;
  * 
  * <p><strong>Usage Examples:</strong>
  * <pre>{@code
- * // Basic usage with default configuration
- * HxClient client = HxClient.create();
+ * // Simple usage with default configuration
+ * HxClient client = HxClient.newHxClient();
  * HttpRequest request = HttpRequest.newBuilder()
  *     .uri(URI.create("https://api.example.com/data"))
  *     .GET()
  *     .build();
  * HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
  * 
+ * // Equivalent builder approach
+ * HxClient client = HxClient.newBuilder().build();
+ * 
  * // With JWT token configuration
- * HxConfig config = HxConfig.builder()
- *     .withMaxAttempts(3)
- *     .withJwtToken("your-jwt-token")
- *     .withRefreshToken("your-refresh-token")
- *     .withRefreshTokenUrl("https://api.example.com/oauth/token")
+ * HxClient client = HxClient.newBuilder()
+ *     .maxAttempts(3)
+ *     .bearerToken("your-jwt-token")
+ *     .refreshToken("your-refresh-token")
+ *     .refreshTokenUrl("https://api.example.com/oauth/token")
  *     .build();
- * HxClient client = HxClient.create(config);
  * 
  * // With Basic Authentication configuration
- * HxConfig config = HxConfig.builder()
- *     .withBasicAuth("username", "password")
+ * HxClient client = HxClient.newBuilder()
+ *     .basicAuth("username", "password")
  *     .build();
- * HxClient client = HxClient.create(config);
+ * 
+ * // Configure HTTP client settings
+ * HxClient client = HxClient.newBuilder()
+ *     .connectTimeout(Duration.ofSeconds(10))
+ *     .followRedirects(HttpClient.Redirect.NORMAL)
+ *     .bearerToken("your-token")
+ *     .build();
+ * 
+ * // Use existing HttpClient with enhanced functionality
+ * HttpClient existingClient = HttpClient.newHttpClient();
+ * HxClient client = HxClient.newBuilder()
+ *     .httpClient(existingClient)
+ *     .bearerToken("token")
+ *     .build();
  * 
  * // Async usage
  * CompletableFuture<HttpResponse<String>> future = 
@@ -136,96 +152,91 @@ public class HxClient {
      * @param httpClient the underlying HttpClient to wrap with retry and authentication functionality.
      *                   Must not be null and should be configured for concurrent use.
      * @param config the configuration for retry behavior, JWT token management, and WWW-Authenticate handling.
-     *               If null, default configuration will be used.
+     *               If null, the default configuration will be used.
      */
-    public HxClient(HttpClient httpClient, HxConfig config) {
+    protected HxClient(HttpClient httpClient, HxConfig config) {
         this.httpClient = httpClient;
         this.config = config;
         this.tokenManager = new HxTokenManager(config);
     }
 
     /**
-     * Creates a new HxClient with a default HttpClient and the specified configuration.
+     * Creates a new Builder instance for constructing HxClient objects with a fluent API.
      * 
-     * @param config the configuration for retry behavior and JWT token management.
-     *               If null, default configuration will be used.
-     * @return a new HxClient instance
+     * <p>The Builder follows the same pattern as Java's {@link HttpClient.Builder}, providing
+     * a familiar and consistent API for configuring HTTP clients with enhanced retry and
+     * authentication capabilities.
+     * 
+     * <p><strong>Usage Examples:</strong>
+     * <pre>{@code
+     * // Basic builder usage with default settings
+     * HxClient client = HxClient.newBuilder().build();
+     * 
+     * // Configure HTTP client settings
+     * HxClient client = HxClient.newBuilder()
+     *     .connectTimeout(Duration.ofSeconds(10))
+     *     .executor(customExecutor)
+     *     .followRedirects(HttpClient.Redirect.NORMAL)
+     *     .build();
+     * 
+     * // Configure authentication and retry settings
+     * HxClient client = HxClient.newBuilder()
+     *     .bearerToken("your-jwt-token")
+     *     .refreshToken("your-refresh-token")
+     *     .refreshTokenUrl("https://api.example.com/oauth/token")
+     *     .maxAttempts(3)
+     *     .build();
+     * 
+     * // Use existing retry configuration
+     * var retryConfig = Retryable.ofDefaults().config();
+     * HxClient client = HxClient.newBuilder()
+     *     .retryConfig(retryConfig)
+     *     .bearerToken("token")
+     *     .build();
+     * 
+     * // Use existing HttpClient with enhanced functionality
+     * HttpClient existingClient = HttpClient.newHttpClient();
+     * HxClient client = HxClient.newBuilder()
+     *     .httpClient(existingClient)
+     *     .bearerToken("token")
+     *     .build();
+     * }</pre>
+     * 
+     * @return a new Builder instance with default settings
+     * @see Builder
      */
-    public static HxClient create(HxConfig config) {
-        if (config == null) {
-            config = HxConfig.builder().build();
-        }
-        final HttpClient client = HttpClient.newHttpClient();
-        return new HxClient(client, config);
+    public static Builder newBuilder() {
+        return new Builder();
     }
 
     /**
-     * Creates a new HxClient with a default HttpClient and default configuration.
+     * Creates a new HxClient instance with default settings.
      * 
-     * @return a new HxClient instance
+     * <p>This is a convenience method equivalent to {@code HxClient.newBuilder().build()}.
+     * It creates an HxClient with:
+     * <ul>
+     *   <li>Default HttpClient configuration</li>
+     *   <li>Default retry settings (5 attempts, 500ms initial delay, exponential backoff)</li>
+     *   <li>Default retry status codes (429, 500, 502, 503, 504)</li>
+     *   <li>No authentication configured</li>
+     * </ul>
+     * 
+     * <p>For custom configuration, use {@link #newBuilder()} instead.
+     * 
+     * <p><strong>Usage Examples:</strong>
+     * <pre>{@code
+     * // Simple usage with defaults
+     * HxClient client = HxClient.newHxClient();
+     * 
+     * // Equivalent to:
+     * HxClient client = HxClient.newBuilder().build();
+     * }</pre>
+     * 
+     * @return a new HxClient instance with default configuration
+     * @see #newBuilder()
      */
-    public static HxClient create() {
-        return create(HxConfig.builder().build());
-    }
-
-    /**
-     * Creates a new HxClient with the specified HttpClient and configuration.
-     * 
-     * @param httpClient the underlying HttpClient to wrap with retry and JWT functionality
-     * @param config the configuration for retry behavior and JWT token management.
-     *               If null, default configuration will be used.
-     * @return a new HxClient instance
-     */
-    public static HxClient create(HttpClient httpClient, HxConfig config) {
-        if (config == null) {
-            config = HxConfig.builder().build();
-        }
-        return new HxClient(httpClient, config);
-    }
-
-    /**
-     * Creates a new HxClient with the specified HttpClient and default configuration.
-     * 
-     * @param httpClient the underlying HttpClient to wrap with retry and JWT functionality
-     * @return a new HxClient instance
-     */
-    public static HxClient create(HttpClient httpClient) {
-        return create(httpClient, HxConfig.builder().build());
-    }
-
-    /**
-     * Creates a new HxClient with a default HttpClient and configuration based on a generic Retryable.Config.
-     * 
-     * <p>This factory method allows creating HxClient instances from any Retryable.Config source,
-     * making it easy to integrate with existing retry configurations while using default HTTP-specific settings.
-     * 
-     * @param retryConfig the retry configuration to use. HTTP-specific settings (JWT tokens, retry status codes)
-     *                   will use their default values. If null, default configuration will be used.
-     * @return a new HxClient instance
-     */
-    public static HxClient create(Retryable.Config retryConfig) {
-        final HxConfig config = HxConfig.builder()
-                .withRetryConfig(retryConfig)
-                .build();
-        return create(config);
-    }
-
-    /**
-     * Creates a new HxClient with the specified HttpClient and configuration based on a generic Retryable.Config.
-     * 
-     * <p>This factory method allows creating HxClient instances from any Retryable.Config source,
-     * making it easy to integrate with existing retry configurations while using default HTTP-specific settings.
-     * 
-     * @param httpClient the underlying HttpClient to wrap with retry and JWT functionality
-     * @param retryConfig the retry configuration to use. HTTP-specific settings (JWT tokens, retry status codes)
-     *                   will use their default values. If null, default configuration will be used.
-     * @return a new HxClient instance
-     */
-    public static HxClient create(HttpClient httpClient, Retryable.Config retryConfig) {
-        final HxConfig config = HxConfig.builder()
-                .withRetryConfig(retryConfig)
-                .build();
-        return create(httpClient, config);
+    public static HxClient newHxClient() {
+        return newBuilder().build();
     }
 
     /**
@@ -826,6 +837,291 @@ public class HxClient {
         }
         catch (Throwable e) {
             log.debug("Unexpected error while closing http response - cause: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Builder class for constructing HxClient instances with a fluent API.
+     * 
+     * <p>The Builder provides a familiar interface similar to {@link HttpClient.Builder},
+     * allowing configuration of both the underlying HTTP client and HxClient-specific
+     * features like retry logic and authentication.
+     * 
+     * <p>All builder methods return the builder instance to enable method chaining.
+     * The {@link #build()} method creates the final immutable HxClient instance.
+     * 
+     * <p><strong>Thread Safety:</strong><br>
+     * Builder instances are not thread-safe and should not be used concurrently
+     * from multiple threads without external synchronization.
+     */
+    public static class Builder {
+        private HttpClient.Builder httpClientBuilder;
+        private HttpClient httpClient;
+        private HxConfig.Builder configBuilder;
+        
+        /**
+         * Creates a new Builder with default settings.
+         */
+        public Builder() {
+            this.httpClientBuilder = HttpClient.newBuilder();
+            this.configBuilder = HxConfig.newBuilder();
+        }
+        
+        /**
+         * Sets the underlying HttpClient to use.
+         * 
+         * <p>If this method is called, the HttpClient configuration methods
+         * ({@link #connectTimeout}, {@link #executor}, etc.) will be ignored
+         * as the provided HttpClient will be used directly.
+         * 
+         * @param httpClient the HttpClient to use
+         * @return this Builder instance
+         * @throws NullPointerException if httpClient is null
+         */
+        public Builder httpClient(HttpClient httpClient) {
+            this.httpClient = java.util.Objects.requireNonNull(httpClient, "httpClient cannot be null");
+            return this;
+        }
+        
+        /**
+         * Sets the HxConfig to use directly.
+         * 
+         * <p>If this method is called, HxConfig-specific builder methods
+         * will be ignored as the provided configuration will be used directly.
+         * 
+         * @param config the HxConfig to use
+         * @return this Builder instance
+         * @throws NullPointerException if config is null
+         */
+        public Builder config(HxConfig config) {
+            this.configBuilder = HxConfig.newBuilder()
+                    .withRetryConfig(config)
+                    .withBearerToken(config.getJwtToken())
+                    .withRefreshToken(config.getRefreshToken())
+                    .withRefreshTokenUrl(config.getRefreshTokenUrl())
+                    .withBasicAuth(config.getBasicAuthToken())
+                    .withRetryStatusCodes(config.getRetryStatusCodes())
+                    .withWwwAuthentication(config.isWwwAuthenticateEnabled())
+                    .withWwwAuthenticationCallback(config.getAuthenticationCallback());
+            return this;
+        }
+        
+        // HttpClient.Builder methods
+        
+        /**
+         * Sets the connect timeout duration for this client.
+         * 
+         * @param timeout the connect timeout duration
+         * @return this Builder instance
+         * @see HttpClient.Builder#connectTimeout(Duration)
+         */
+        public Builder connectTimeout(Duration timeout) {
+            this.httpClientBuilder.connectTimeout(timeout);
+            return this;
+        }
+        
+        /**
+         * Sets the executor to be used for asynchronous and dependent tasks.
+         * 
+         * @param executor the executor for async operations
+         * @return this Builder instance
+         * @see HttpClient.Builder#executor(Executor)
+         */
+        public Builder executor(Executor executor) {
+            this.httpClientBuilder.executor(executor);
+            return this;
+        }
+        
+        /**
+         * Specifies whether requests will automatically follow redirects.
+         * 
+         * @param policy the redirect policy
+         * @return this Builder instance
+         * @see HttpClient.Builder#followRedirects(HttpClient.Redirect)
+         */
+        public Builder followRedirects(HttpClient.Redirect policy) {
+            this.httpClientBuilder.followRedirects(policy);
+            return this;
+        }
+        
+        /**
+         * Requests a specific HTTP protocol version where possible.
+         * 
+         * @param version the HTTP version to prefer
+         * @return this Builder instance
+         * @see HttpClient.Builder#version(HttpClient.Version)
+         */
+        public Builder version(HttpClient.Version version) {
+            this.httpClientBuilder.version(version);
+            return this;
+        }
+        
+        // HxConfig convenience methods
+        
+        /**
+         * Sets the maximum number of retry attempts.
+         * 
+         * @param attempts maximum retry attempts (must be positive)
+         * @return this Builder instance
+         */
+        public Builder maxAttempts(int attempts) {
+            this.configBuilder.withMaxAttempts(attempts);
+            return this;
+        }
+        
+        /**
+         * Sets the initial retry delay duration.
+         * 
+         * @param delay the initial delay between retries
+         * @return this Builder instance
+         */
+        public Builder retryDelay(Duration delay) {
+            this.configBuilder.withDelay(delay);
+            return this;
+        }
+        
+        /**
+         * Sets the retry configuration from a generic Retryable.Config.
+         * 
+         * <p>This allows configuring all retry parameters at once from an existing
+         * Retryable.Config instance. This is useful for integrating with existing
+         * retry configurations or when you want to configure multiple retry parameters
+         * with a single method call.
+         * 
+         * <p>The following retry parameters will be copied:
+         * <ul>
+         *   <li>Initial delay</li>
+         *   <li>Maximum delay</li>
+         *   <li>Maximum attempts</li>
+         *   <li>Jitter factor</li>
+         *   <li>Backoff multiplier</li>
+         * </ul>
+         * 
+         * <p><strong>Usage Examples:</strong>
+         * <pre>{@code
+         * // Using existing Retryable configuration
+         * var retryConfig = Retryable.ofDefaults().config();
+         * HxClient client = HxClient.newBuilder()
+         *     .retryConfig(retryConfig)
+         *     .bearerToken("token")
+         *     .build();
+         * 
+         * // Equivalent to setting individual parameters
+         * HxClient client = HxClient.newBuilder()
+         *     .maxAttempts(retryConfig.getMaxAttempts())
+         *     .retryDelay(retryConfig.getDelayAsDuration())
+         *     .bearerToken("token")
+         *     .build();
+         * }</pre>
+         * 
+         * @param retryConfig the retry configuration to use. If null, no changes are made.
+         * @return this Builder instance
+         */
+        public Builder retryConfig(Retryable.Config retryConfig) {
+            if (retryConfig != null) {
+                this.configBuilder.withRetryConfig(retryConfig);
+            }
+            return this;
+        }
+        
+        /**
+         * Sets the Bearer/JWT token for authentication.
+         * 
+         * @param token the Bearer token to use for authentication
+         * @return this Builder instance
+         */
+        public Builder bearerToken(String token) {
+            this.configBuilder.withBearerToken(token);
+            return this;
+        }
+        
+        /**
+         * Sets the refresh token for automatic JWT token renewal.
+         * 
+         * @param token the refresh token
+         * @return this Builder instance
+         */
+        public Builder refreshToken(String token) {
+            this.configBuilder.withRefreshToken(token);
+            return this;
+        }
+        
+        /**
+         * Sets the URL endpoint for refreshing JWT tokens.
+         * 
+         * @param url the token refresh endpoint URL
+         * @return this Builder instance
+         */
+        public Builder refreshTokenUrl(String url) {
+            this.configBuilder.withRefreshTokenUrl(url);
+            return this;
+        }
+        
+        /**
+         * Sets basic authentication credentials.
+         * 
+         * @param username the username for basic auth
+         * @param password the password for basic auth
+         * @return this Builder instance
+         */
+        public Builder basicAuth(String username, String password) {
+            this.configBuilder.withBasicAuth(username, password);
+            return this;
+        }
+
+        /**
+         * Sets basic authentication using a pre-formatted token.
+         * 
+         * <p>This method accepts a token that is already in the "username:password" format
+         * expected by HTTP Basic authentication. The token will be Base64-encoded automatically
+         * when creating the Authorization header.
+         * 
+         * <p><strong>Token Format:</strong><br>
+         * The token must be in the format "username:password". For example:
+         * <pre>{@code
+         * client = HxClient.newBuilder()
+         *     .basicAuth("myuser:mypassword")
+         *     .build();
+         * }</pre>
+         * 
+         * <p><strong>Security Considerations:</strong>
+         * <ul>
+         *   <li>Basic authentication sends credentials in every request</li>
+         *   <li>Always use HTTPS when using basic authentication</li>
+         *   <li>Store credentials securely and avoid hardcoding in source code</li>
+         *   <li>Consider using Bearer tokens for better security when possible</li>
+         * </ul>
+         * 
+         * <p><strong>Authentication Priority:</strong><br>
+         * If both JWT tokens and basic authentication are configured, JWT authentication
+         * takes precedence. Basic authentication will only be used if no JWT token is available.
+         * 
+         * <p><strong>Alternative:</strong><br>
+         * For separate username and password parameters, use {@link #basicAuth(String, String)} instead.
+         * 
+         * @param token the basic auth token in "username:password" format
+         * @return this Builder instance
+         * @see #basicAuth(String, String)
+         */
+        public Builder basicAuth(String token) {
+            this.configBuilder.withBasicAuth(token);
+            return this;
+        }
+        
+        /**
+         * Builds and returns a new HxClient instance.
+         * 
+         * <p>This method creates the final HxClient using either the provided
+         * HttpClient or building one from the configured HttpClient.Builder settings.
+         * 
+         * @return a new HxClient instance
+         */
+        public HxClient build() {
+            final HttpClient actualHttpClient = (httpClient != null) 
+                    ? httpClient 
+                    : httpClientBuilder.build();
+            final HxConfig actualConfig = configBuilder.build();
+            return new HxClient(actualHttpClient, actualConfig);
         }
     }
 }

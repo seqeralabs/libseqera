@@ -55,7 +55,7 @@ import io.seqera.http.HxConfig;
  *     return null; // No credentials available
  * };
  * 
- * HxConfig config = HxConfig.builder()
+ * HxConfig config = HxConfig.newBuilder()
  *     .withWwwAuthenticateHandling(true)
  *     .withAuthenticationCallback(callback)
  *     .build();

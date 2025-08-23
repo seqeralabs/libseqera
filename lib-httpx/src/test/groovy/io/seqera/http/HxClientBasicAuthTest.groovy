@@ -20,7 +20,6 @@ package io.seqera.http
 import spock.lang.Specification
 
 import java.net.http.HttpRequest
-import java.util.Base64
 
 /**
  * Test cases for HTTP Basic Authentication support in HxClient.
@@ -31,10 +30,10 @@ class HxClientBasicAuthTest extends Specification {
 
     def "should add basic auth header to request"() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withBasicAuth("testuser", "testpass")
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
         
         def originalRequest = HttpRequest.newBuilder()
                 .uri(URI.create("https://example.com/api"))
@@ -60,10 +59,10 @@ class HxClientBasicAuthTest extends Specification {
 
     def "should support basic auth token directly"() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withBasicAuth("user123:pass456")
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
         
         def originalRequest = HttpRequest.newBuilder()
                 .uri(URI.create("https://example.com/api"))
@@ -82,10 +81,10 @@ class HxClientBasicAuthTest extends Specification {
 
     def "should work with JWT token authentication separately"() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken("jwt.token.here")
+        def config = HxConfig.newBuilder()
+                .withBearerToken("jwt.token.here")
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
         
         def originalRequest = HttpRequest.newBuilder()
                 .uri(URI.create("https://example.com/api"))
@@ -103,10 +102,10 @@ class HxClientBasicAuthTest extends Specification {
 
     def "should use basic auth when only basic auth is configured"() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withBasicAuth("fallback-user", "fallback-pass")
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
         
         def originalRequest = HttpRequest.newBuilder()
                 .uri(URI.create("https://example.com/api"))
@@ -128,8 +127,7 @@ class HxClientBasicAuthTest extends Specification {
 
     def "should return original request when no auth configured"() {
         given:
-        def config = HxConfig.builder().build()  // No auth configured
-        def client = HxClient.create(config)
+        def client = HxClient.newHxClient()  // No auth configured
         
         def originalRequest = HttpRequest.newBuilder()
                 .uri(URI.create("https://example.com/api"))
@@ -146,10 +144,10 @@ class HxClientBasicAuthTest extends Specification {
 
     def "should handle empty basic auth token"() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withBasicAuth("")  // Empty token
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
         
         def originalRequest = HttpRequest.newBuilder()
                 .uri(URI.create("https://example.com/api"))
@@ -166,10 +164,10 @@ class HxClientBasicAuthTest extends Specification {
 
     def "should handle empty credentials via username/password method"() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withBasicAuth("", "")  // Empty credentials
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
         
         when:
         def hasBasicAuth = client.tokenManager.hasBasicAuth()
@@ -180,18 +178,17 @@ class HxClientBasicAuthTest extends Specification {
 
     def "should correctly identify when basic auth is configured"() {
         when:
-        def config1 = HxConfig.builder()
+        def config1 = HxConfig.newBuilder()
                 .withBasicAuth("user", "pass")
                 .build()
-        def client1 = HxClient.create(config1)
+        def client1 = HxClient.newBuilder().config(config1).build()
         
         then:
         client1.tokenManager.hasBasicAuth()
         client1.tokenManager.basicAuthToken == "user:pass"
         
         when:
-        def config2 = HxConfig.builder().build()  // No basic auth
-        def client2 = HxClient.create(config2)
+        def client2 = HxClient.newHxClient()  // No basic auth
         
         then:
         !client2.tokenManager.hasBasicAuth()
@@ -200,10 +197,10 @@ class HxClientBasicAuthTest extends Specification {
 
     def "should preserve request properties when adding auth header"() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withBasicAuth("user", "pass")
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
         
         def originalRequest = HttpRequest.newBuilder()
                 .uri(URI.create("https://example.com/api"))
@@ -228,8 +225,8 @@ class HxClientBasicAuthTest extends Specification {
 
     def "should reject configuration with both JWT and Basic auth"() {
         when:
-        def config = HxConfig.builder()
-                .withJwtToken("jwt.token.here")
+        def config = HxConfig.newBuilder()
+                .withBearerToken("jwt.token.here")
                 .withBasicAuth("user", "pass")
                 .build()
         

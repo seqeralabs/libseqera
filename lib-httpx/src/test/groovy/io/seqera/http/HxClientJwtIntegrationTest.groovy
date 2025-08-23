@@ -59,13 +59,13 @@ class HxClientJwtIntegrationTest extends Specification {
 
     def 'should refresh JWT token on 401 and retry request with new token'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 .withRefreshToken('old_refresh_token')
                 .withRefreshTokenUrl("http://localhost:${wireMockServer.port()}/oauth/token")
                 .withMaxAttempts(3)
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'API returns 401 with old token, 200 with new token'
         wireMockServer.stubFor(get(urlEqualTo('/api/protected'))
@@ -118,12 +118,12 @@ class HxClientJwtIntegrationTest extends Specification {
 
     def 'should handle JSON response format for token refresh'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 .withRefreshToken('json_refresh_token')
                 .withRefreshTokenUrl("http://localhost:${wireMockServer.port()}/oauth/token")
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'API returns 401, then 200 with refreshed token'
         wireMockServer.stubFor(get(urlEqualTo('/api/json-protected'))
@@ -179,11 +179,11 @@ class HxClientJwtIntegrationTest extends Specification {
 
     def 'should not attempt refresh when no refresh token configured'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 // No refresh token configured
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'API returns 401'
         wireMockServer.stubFor(get(urlEqualTo('/api/no-refresh'))
@@ -212,12 +212,12 @@ class HxClientJwtIntegrationTest extends Specification {
 
     def 'should handle token refresh failure gracefully'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 .withRefreshToken('failing_refresh_token')
                 .withRefreshTokenUrl("http://localhost:${wireMockServer.port()}/oauth/token")
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'API returns 401'
         wireMockServer.stubFor(get(urlEqualTo('/api/refresh-fail'))
@@ -253,12 +253,12 @@ class HxClientJwtIntegrationTest extends Specification {
 
     def 'should work with async requests and JWT refresh'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 .withRefreshToken('async_refresh_token')
                 .withRefreshTokenUrl("http://localhost:${wireMockServer.port()}/oauth/token")
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'API returns 401 with old token, 200 with new token'
         wireMockServer.stubFor(get(urlEqualTo('/api/async-protected'))
@@ -307,12 +307,12 @@ class HxClientJwtIntegrationTest extends Specification {
 
     def 'should handle concurrent requests with token refresh'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 .withRefreshToken('concurrent_refresh_token')
                 .withRefreshTokenUrl("http://localhost:${wireMockServer.port()}/oauth/token")
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'API returns 401 for initial requests, then 200 with refreshed token'
         wireMockServer.stubFor(get(urlEqualTo('/api/concurrent'))
@@ -358,10 +358,10 @@ class HxClientJwtIntegrationTest extends Specification {
     def 'should add Bearer prefix to JWT token automatically'() {
         given:
         def tokenWithoutBearer = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0IiwibmFtZSI6IlRlc3QiLCJpYXQiOjE1MTYyMzkwMjJ9.signature'
-        def config = HxConfig.builder()
-                .withJwtToken(tokenWithoutBearer)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(tokenWithoutBearer)
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'API expects Bearer prefix'
         wireMockServer.stubFor(get(urlEqualTo('/api/bearer-test'))
@@ -389,10 +389,10 @@ class HxClientJwtIntegrationTest extends Specification {
     def 'should preserve existing Bearer prefix in JWT token'() {
         given:
         def tokenWithBearer = "Bearer ${INITIAL_JWT}"
-        def config = HxConfig.builder()
-                .withJwtToken(tokenWithBearer)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(tokenWithBearer)
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'API expects Bearer prefix (should not be doubled)'
         wireMockServer.stubFor(get(urlEqualTo('/api/bearer-preserve'))

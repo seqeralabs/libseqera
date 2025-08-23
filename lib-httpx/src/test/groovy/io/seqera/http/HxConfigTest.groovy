@@ -31,7 +31,7 @@ class HxConfigTest extends Specification {
 
     def 'should create config with defaults'() {
         when:
-        def config = HxConfig.builder().build()
+        def config = HxConfig.newBuilder().build()
 
         then:
         config.delay == Duration.ofMillis(500)
@@ -51,14 +51,14 @@ class HxConfigTest extends Specification {
 
     def 'should create config with custom values'() {
         when:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withDelay(Duration.ofSeconds(1))
                 .withMaxDelay(Duration.ofMinutes(2))
                 .withMaxAttempts(3)
                 .withJitter(0.5)
                 .withMultiplier(1.5)
                 .withRetryStatusCodes([429, 503] as Set)
-                .withJwtToken('jwt-token')
+                .withBearerToken('jwt-token')
                 .withRefreshToken('refresh-token')
                 .withRefreshTokenUrl('https://example.com/oauth/token')
                 .withTokenRefreshTimeout(Duration.ofSeconds(60))
@@ -79,7 +79,7 @@ class HxConfigTest extends Specification {
 
     def 'should use default retry condition'() {
         when:
-        def config = HxConfig.builder().build()
+        def config = HxConfig.newBuilder().build()
 
         then:
         config.retryCondition != null
@@ -102,7 +102,7 @@ class HxConfigTest extends Specification {
         def customCondition = { throwable -> throwable instanceof IllegalArgumentException }
 
         when:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withRetryCondition(customCondition)
                 .build()
 
@@ -115,7 +115,7 @@ class HxConfigTest extends Specification {
 
     def 'should implement Retryable.Config interface'() {
         given:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withDelay(Duration.ofSeconds(2))
                 .withMaxDelay(Duration.ofMinutes(1))
                 .withMaxAttempts(10)
@@ -136,9 +136,9 @@ class HxConfigTest extends Specification {
         def retryableConfig = Retryable.ofDefaults().config()
         
         when:
-        def httpConfig = HxConfig.builder()
+        def httpConfig = HxConfig.newBuilder()
                 .withRetryConfig(retryableConfig)
-                .withJwtToken('test-token')
+                .withBearerToken('test-token')
                 .build()
 
         then:
@@ -152,9 +152,9 @@ class HxConfigTest extends Specification {
 
     def 'should handle null Retryable.Config gracefully'() {
         when:
-        def httpConfig = HxConfig.builder()
+        def httpConfig = HxConfig.newBuilder()
                 .withRetryConfig(null)
-                .withJwtToken('test-token')
+                .withBearerToken('test-token')
                 .build()
 
         then:

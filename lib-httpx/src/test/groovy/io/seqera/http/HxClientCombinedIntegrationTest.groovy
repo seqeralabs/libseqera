@@ -59,14 +59,14 @@ class HxClientCombinedIntegrationTest extends Specification {
 
     def 'should handle JWT refresh followed by server error retry'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 .withRefreshToken('combined_refresh_token')
                 .withRefreshTokenUrl("http://localhost:${wireMockServer.port()}/oauth/token")
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(50))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'Complex scenario: 401 -> refresh -> 500 -> retry -> success'
         wireMockServer.stubFor(get(urlEqualTo('/api/complex'))
@@ -124,13 +124,13 @@ class HxClientCombinedIntegrationTest extends Specification {
 
     def 'should handle rate limiting with JWT token'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(100))
                 .withRetryStatusCodes([429, 500, 502, 503, 504] as Set)
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'API returns 429 with rate limiting, then success'
         wireMockServer.stubFor(get(urlEqualTo('/api/rate-limited'))
@@ -171,13 +171,13 @@ class HxClientCombinedIntegrationTest extends Specification {
 
     def 'should handle multiple 401s without duplicate token refresh'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 .withRefreshToken('no_duplicate_refresh')
                 .withRefreshTokenUrl("http://localhost:${wireMockServer.port()}/oauth/token")
                 .withMaxAttempts(2)
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'API always returns 401 (token refresh fails to fix the issue)'
         wireMockServer.stubFor(get(urlEqualTo('/api/persistent-401'))
@@ -214,12 +214,12 @@ class HxClientCombinedIntegrationTest extends Specification {
 
     def 'should handle network errors with JWT authentication'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(50))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'API returns connection error, then success'
         wireMockServer.stubFor(get(urlEqualTo('/api/network-error'))
@@ -257,12 +257,12 @@ class HxClientCombinedIntegrationTest extends Specification {
 
     def 'should work with POST requests and JWT refresh'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 .withRefreshToken('post_refresh_token')
                 .withRefreshTokenUrl("http://localhost:${wireMockServer.port()}/oauth/token")
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'POST API returns 401 with old token, 201 with new token'
         wireMockServer.stubFor(post(urlEqualTo('/api/create'))
@@ -318,14 +318,14 @@ class HxClientCombinedIntegrationTest extends Specification {
 
     def 'should preserve request body and headers through JWT refresh and retry'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken(INITIAL_JWT)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(INITIAL_JWT)
                 .withRefreshToken('preserve_test_token')
                 .withRefreshTokenUrl("http://localhost:${wireMockServer.port()}/oauth/token")
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(50))
                 .build()
-        def client = HxClient.create(config)
+        def client = HxClient.newBuilder().config(config).build()
 
         and: 'Complex flow: 401 -> refresh -> 503 -> retry -> success'
         def customHeaderValue = 'custom-value-12345'

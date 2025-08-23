@@ -28,8 +28,8 @@ class HxConfigValidationTest extends Specification {
 
     def "should allow JWT token only"() {
         when:
-        def config = HxConfig.builder()
-                .withJwtToken("jwt.token.here")
+        def config = HxConfig.newBuilder()
+                .withBearerToken("jwt.token.here")
                 .build()
         
         then:
@@ -39,7 +39,7 @@ class HxConfigValidationTest extends Specification {
 
     def "should allow Basic auth only"() {
         when:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withBasicAuth("user", "pass")
                 .build()
         
@@ -50,7 +50,7 @@ class HxConfigValidationTest extends Specification {
 
     def "should allow Basic auth token directly"() {
         when:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withBasicAuth("user:pass:with:colons")
                 .build()
         
@@ -61,8 +61,8 @@ class HxConfigValidationTest extends Specification {
 
     def "should reject both JWT and Basic auth configured"() {
         when:
-        HxConfig.builder()
-                .withJwtToken("jwt.token.here")
+        HxConfig.newBuilder()
+                .withBearerToken("jwt.token.here")
                 .withBasicAuth("user", "pass")
                 .build()
         
@@ -73,8 +73,8 @@ class HxConfigValidationTest extends Specification {
 
     def "should reject both JWT and Basic auth token configured"() {
         when:
-        HxConfig.builder()
-                .withJwtToken("jwt.token.here")
+        HxConfig.newBuilder()
+                .withBearerToken("jwt.token.here")
                 .withBasicAuth("user:pass")
                 .build()
         
@@ -85,7 +85,7 @@ class HxConfigValidationTest extends Specification {
 
     def "should allow no authentication"() {
         when:
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withMaxAttempts(3)
                 .build()
         
@@ -97,8 +97,8 @@ class HxConfigValidationTest extends Specification {
 
     def "should allow null JWT token with Basic auth"() {
         when:
-        def config = HxConfig.builder()
-                .withJwtToken(null)
+        def config = HxConfig.newBuilder()
+                .withBearerToken(null)
                 .withBasicAuth("user", "pass")
                 .build()
         

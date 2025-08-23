@@ -46,7 +46,7 @@ class HxClientWwwAuthIntegrationTest extends Specification {
     @Timeout(30)
     def "should automatically handle WWW-Authenticate challenge when enabled"() {
         given: "HxClient configured for WWW-Authenticate handling"
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withWwwAuthentication(true)
                 .build()
 
@@ -56,7 +56,7 @@ class HxClientWwwAuthIntegrationTest extends Specification {
                 .connectTimeout(Duration.ofSeconds(10))
                 .build()
 
-        def client = HxClient.create(httpClient, config)
+        def client = HxClient.newBuilder().httpClient(httpClient).config(config).build()
 
         when: "making request to endpoint that requires authentication"
         def request = HttpRequest.newBuilder()
@@ -85,7 +85,7 @@ class HxClientWwwAuthIntegrationTest extends Specification {
         } as AuthenticationCallback
 
         and: "HxClient configured with authentication callback"
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withWwwAuthentication(true)
                 .withWwwAuthenticationCallback(callback)
                 .build()
@@ -96,7 +96,7 @@ class HxClientWwwAuthIntegrationTest extends Specification {
                 .connectTimeout(Duration.ofSeconds(10))
                 .build()
 
-        def client = HxClient.create(httpClient, config)
+        def client = HxClient.newBuilder().httpClient(httpClient).config(config).build()
 
         when: "making request to endpoint that requires authentication"
         def request = HttpRequest.newBuilder()
@@ -119,7 +119,7 @@ class HxClientWwwAuthIntegrationTest extends Specification {
     @Timeout(30)
     def "should not handle WWW-Authenticate when feature is disabled"() {
         given: "HxClient with WWW-Authenticate handling disabled"
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withWwwAuthentication(false) // Explicitly disabled
                 .build()
 
@@ -129,7 +129,7 @@ class HxClientWwwAuthIntegrationTest extends Specification {
                 .connectTimeout(Duration.ofSeconds(10))
                 .build()
 
-        def client = HxClient.create(httpClient, config)
+        def client = HxClient.newBuilder().httpClient(httpClient).config(config).build()
 
         when: "making request to endpoint that requires authentication"
         def request = HttpRequest.newBuilder()
@@ -200,7 +200,7 @@ class HxClientWwwAuthIntegrationTest extends Specification {
         def callback = callbackBehavior as AuthenticationCallback
 
         and: "HxClient configured with callback"
-        def config = HxConfig.builder()
+        def config = HxConfig.newBuilder()
                 .withWwwAuthentication(true)
                 .withWwwAuthenticationCallback(callback)
                 .build()
@@ -211,7 +211,7 @@ class HxClientWwwAuthIntegrationTest extends Specification {
                 .connectTimeout(Duration.ofSeconds(10))
                 .build()
 
-        def client = HxClient.create(httpClient, config)
+        def client = HxClient.newBuilder().httpClient(httpClient).config(config).build()
 
         when: "making request"
         def request = HttpRequest.newBuilder()

@@ -30,8 +30,8 @@ class HxTokenManagerTest extends Specification {
 
     def 'should add authorization header to request'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken('fake.jwt.token')
+        def config = HxConfig.newBuilder()
+                .withBearerToken('fake.jwt.token')
                 .build()
         def tokenManager = new HxTokenManager(config)
         def originalRequest = HttpRequest.newBuilder()
@@ -48,7 +48,7 @@ class HxTokenManagerTest extends Specification {
 
     def 'should not add authorization header when no token'() {
         given:
-        def config = HxConfig.builder().build()
+        def config = HxConfig.newBuilder().build()
         def tokenManager = new HxTokenManager(config)
         def originalRequest = HttpRequest.newBuilder()
                 .uri(URI.create('https://example.com/api'))
@@ -65,8 +65,8 @@ class HxTokenManagerTest extends Specification {
 
     def 'should handle token already with Bearer prefix'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken('Bearer fake.jwt.token')
+        def config = HxConfig.newBuilder()
+                .withBearerToken('Bearer fake.jwt.token')
                 .build()
         def tokenManager = new HxTokenManager(config)
         def originalRequest = HttpRequest.newBuilder()
@@ -83,15 +83,15 @@ class HxTokenManagerTest extends Specification {
 
     def 'should detect if token refresh is possible'() {
         given:
-        def config1 = HxConfig.builder()
-                .withJwtToken('fake.jwt.token')
+        def config1 = HxConfig.newBuilder()
+                .withBearerToken('fake.jwt.token')
                 .withRefreshToken('fake-refresh-token')
                 .withRefreshTokenUrl('https://example.com/oauth/token')
                 .build()
-        def config2 = HxConfig.builder()
-                .withJwtToken('fake.jwt.token')
+        def config2 = HxConfig.newBuilder()
+                .withBearerToken('fake.jwt.token')
                 .build()
-        def config3 = HxConfig.builder()
+        def config3 = HxConfig.newBuilder()
                 .build()
 
         expect:
@@ -102,7 +102,7 @@ class HxTokenManagerTest extends Specification {
 
     def 'should validate JWT token format'() {
         given:
-        def config = HxConfig.builder().build()
+        def config = HxConfig.newBuilder().build()
         def tokenManager = new HxTokenManager(config)
 
         expect:
@@ -123,8 +123,8 @@ class HxTokenManagerTest extends Specification {
 
     def 'should update tokens thread-safely'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken('fake.jwt.token')
+        def config = HxConfig.newBuilder()
+                .withBearerToken('fake.jwt.token')
                 .withRefreshToken('fake-refresh-token')
                 .withRefreshTokenUrl('https://example.com/oauth/token')
                 .build()
@@ -140,8 +140,8 @@ class HxTokenManagerTest extends Specification {
 
     def 'should not update invalid JWT token'() {
         given:
-        def config = HxConfig.builder()
-                .withJwtToken('fake.jwt.token')
+        def config = HxConfig.newBuilder()
+                .withBearerToken('fake.jwt.token')
                 .build()
         def tokenManager = new HxTokenManager(config)
         def originalToken = tokenManager.getCurrentJwtToken()
@@ -156,8 +156,8 @@ class HxTokenManagerTest extends Specification {
 
     def 'should validate JWT token refresh configuration'() {
         when: 'creating with JWT token + refresh token but missing refresh URL'
-        def config1 = HxConfig.builder()
-                .withJwtToken('fake.jwt.token')
+        def config1 = HxConfig.newBuilder()
+                .withBearerToken('fake.jwt.token')
                 .withRefreshToken('fake-refresh-token')
                 // Missing refresh URL - incomplete configuration
                 .build()
@@ -168,8 +168,8 @@ class HxTokenManagerTest extends Specification {
         ex1.message.contains('JWT token refresh configuration is incomplete')
 
         when: 'creating with JWT token + refresh URL but missing refresh token'
-        def config2 = HxConfig.builder()
-                .withJwtToken('fake.jwt.token')
+        def config2 = HxConfig.newBuilder()
+                .withBearerToken('fake.jwt.token')
                 .withRefreshTokenUrl('https://example.com/oauth/token')
                 // Missing refresh token - incomplete configuration
                 .build()
@@ -180,7 +180,7 @@ class HxTokenManagerTest extends Specification {
         ex2.message.contains('JWT token refresh configuration is incomplete')
 
         when: 'creating with refresh components but no JWT token'
-        def config3 = HxConfig.builder()
+        def config3 = HxConfig.newBuilder()
                 .withRefreshToken('fake-refresh-token')
                 .withRefreshTokenUrl('https://example.com/oauth/token')
                 // Missing JWT token
@@ -192,8 +192,8 @@ class HxTokenManagerTest extends Specification {
         ex3.message.contains('Refresh components are configured without JWT token')
 
         when: 'creating with JWT token only (valid)'
-        def jwtOnlyConfig = HxConfig.builder()
-                .withJwtToken('fake.jwt.token')
+        def jwtOnlyConfig = HxConfig.newBuilder()
+                .withBearerToken('fake.jwt.token')
                 .build()
         def jwtOnlyManager = new HxTokenManager(jwtOnlyConfig)
 
@@ -202,8 +202,8 @@ class HxTokenManagerTest extends Specification {
         !jwtOnlyManager.canRefreshToken()
 
         when: 'creating with complete refresh configuration (valid)'
-        def completeConfig = HxConfig.builder()
-                .withJwtToken('fake.jwt.token')
+        def completeConfig = HxConfig.newBuilder()
+                .withBearerToken('fake.jwt.token')
                 .withRefreshToken('fake-refresh-token')
                 .withRefreshTokenUrl('https://example.com/oauth/token')
                 .build()
@@ -214,7 +214,7 @@ class HxTokenManagerTest extends Specification {
         completeManager.canRefreshToken()
 
         when: 'creating with no JWT configuration (valid)'
-        def noJwtConfig = HxConfig.builder()
+        def noJwtConfig = HxConfig.newBuilder()
                 .build()
         def noJwtManager = new HxTokenManager(noJwtConfig)
 
