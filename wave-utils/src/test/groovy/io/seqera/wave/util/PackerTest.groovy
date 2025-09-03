@@ -133,16 +133,16 @@ class PackerTest extends Specification {
         def buffer = new ByteArrayOutputStream()
         packer.makeTar(rootPath, files, buffer)
         and:
-        TarUtils.untar( new ByteArrayInputStream(buffer.toByteArray()), result, false)
+        TarUtils.untar( new ByteArrayInputStream(buffer.toByteArray()), result, true)
         then:
         result.resolve('main.nf').text == rootPath.resolve('main.nf').text
         result.resolve('this/hola.txt').text == rootPath.resolve('this/hola.txt').text
         result.resolve('this/hello.txt').text == rootPath.resolve('this/hello.txt').text
         result.resolve('this/that/ciao.txt').text == rootPath.resolve('this/that/ciao.txt').text
         and:
-        FileUtils.getPermissionsMode(result.resolve('main.nf')) == 420
-        FileUtils.getPermissionsMode(result.resolve('this/hola.txt')) == 420
-        FileUtils.getPermissionsMode(result.resolve('this/that')) == 493
+        FileUtils.getPermissionsMode(result.resolve('main.nf')) == 0600
+        FileUtils.getPermissionsMode(result.resolve('this/hola.txt')) == 0600
+        FileUtils.getPermissionsMode(result.resolve('this/that')) == 0700
         and:
         Files.getLastModifiedTime(result.resolve('main.nf')) == LAST_MODIFIED
 
