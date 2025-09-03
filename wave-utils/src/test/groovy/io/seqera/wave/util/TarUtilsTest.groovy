@@ -33,9 +33,12 @@ class TarUtilsTest extends Specification {
         def source = folder.resolve('source')
         def target1 = folder.resolve('target1')
         def target2 = folder.resolve('target2')
+        def target3 = folder.resolve('target3')
         Files.createDirectory(source)
         Files.createDirectory(target1)
         Files.createDirectory(target2)
+        Files.createDirectory(target3)
+
         and:
         source.resolve('foo.txt').text  = 'Foo'
         source.resolve('bar.txt').text  = 'Bar'
@@ -57,7 +60,7 @@ class TarUtilsTest extends Specification {
         and:
         def gzip = layer.location.replace('data:','').decodeBase64()
         and:
-        TarUtils.untarGzip( new ByteArrayInputStream(gzip), target1)
+        TarUtils.untarGzip( new ByteArrayInputStream(gzip), target1, true)
         then:
         target1.resolve('foo.txt').text == 'Foo'
         target1.resolve('bar.txt').text == 'Bar'
@@ -78,7 +81,7 @@ class TarUtilsTest extends Specification {
         and:
         gzip = layer.location.replace('data:','').decodeBase64()
         and:
-        TarUtils.untarGzip( new ByteArrayInputStream(gzip), target2)
+        TarUtils.untarGzip( new ByteArrayInputStream(gzip), target2, true)
         then:
         target2.resolve('foo.txt').text == 'Foo'
         target2.resolve('bar.txt').text == 'Bar'
@@ -89,6 +92,19 @@ class TarUtilsTest extends Specification {
         Files.getLastModifiedTime(target2.resolve('foo.txt')).toMillis() == 1_691_100_000
         Files.getLastModifiedTime(target2.resolve('bar.txt')).toMillis() == 1_691_200_000
         Files.getLastModifiedTime(target2.resolve('subdir/baz.txt')).toMillis() == 1_691_300_000
+
+        when:
+        TarUtils.untarGzip( new ByteArrayInputStream(gzip), target3, false)
+        then:
+        target3.resolve('foo.txt').text == 'Foo'
+        target3.resolve('bar.txt').text == 'Bar'
+        target3.resolve('subdir/baz.txt').text == 'Baz'
+        and:
+        FileUtils.getPermissions(target3.resolve('bar.txt')) == 'rw-r--r--'
+        and:
+        Files.getLastModifiedTime(target3.resolve('foo.txt')).toMillis() == 1_691_100_000
+        Files.getLastModifiedTime(target3.resolve('bar.txt')).toMillis() == 1_691_200_000
+        Files.getLastModifiedTime(target3.resolve('subdir/baz.txt')).toMillis() == 1_691_300_000
 
         cleanup:
         folder?.deleteDir()
