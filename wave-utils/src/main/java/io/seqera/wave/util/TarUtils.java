@@ -46,13 +46,13 @@ public class TarUtils {
 
     private static final Logger log = LoggerFactory.getLogger(TarUtils.class);
 
-    static public List<Path> untarGzip(final InputStream is, final Path outputDir) throws IOException {
+    static public List<Path> untarGzip(final InputStream is, final Path outputDir, boolean isPosix) throws IOException {
         try (GzipCompressorInputStream stream = new GzipCompressorInputStream(is)) {
-            return untar(stream, outputDir);
+            return untar(stream, outputDir, isPosix);
         }
     }
 
-    static public List<Path> untar(final InputStream is, final Path outputDir) throws IOException {
+    static public List<Path> untar(final InputStream is, final Path outputDir, boolean isPosix) throws IOException {
         final boolean isUnix = "UnixPath".equals(outputDir.getClass().getSimpleName());
         final List<Path> untaredFiles = new LinkedList<>();
         try ( TarArchiveInputStream tarInputStream = (TarArchiveInputStream) new ArchiveStreamFactory().createArchiveInputStream("tar", is) ) {
@@ -62,7 +62,7 @@ public class TarUtils {
                 if (entry.isDirectory()) {
                     if (!Files.exists(outputFile)) {
                         Files.createDirectories(outputFile);
-                        if( isUnix )
+                        if( isUnix && isPosix)
                             FileUtils.setPermissionsMode( outputFile, entry.getMode() );
                         FileUtils.setLastModified( outputFile, entry.getLastModifiedDate().getTime() );
                     }
@@ -73,7 +73,7 @@ public class TarUtils {
                     final OutputStream outputFileStream = Files.newOutputStream(outputFile, CREATE, APPEND);
                     tarInputStream.transferTo(outputFileStream);
                     outputFileStream.close();
-                    if( isUnix )
+                    if( isUnix && isPosix)
                         FileUtils.setPermissionsMode(outputFile, entry.getMode());
                     FileUtils.setLastModified( outputFile, entry.getLastModifiedDate().getTime() );
                 }
