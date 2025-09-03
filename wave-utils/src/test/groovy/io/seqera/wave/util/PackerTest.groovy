@@ -63,7 +63,7 @@ class PackerTest extends Specification {
         def buffer = new ByteArrayOutputStream()
         packer.makeTar(rootPath, files, buffer)
         and:
-        TarUtils.untar( new ByteArrayInputStream(buffer.toByteArray()), result )
+        TarUtils.untar( new ByteArrayInputStream(buffer.toByteArray()), result, true)
         then:
         result.resolve('main.nf').text == rootPath.resolve('main.nf').text
         result.resolve('this/hola.txt').text == rootPath.resolve('this/hola.txt').text
@@ -84,7 +84,7 @@ class PackerTest extends Specification {
         layer.gzipSize == 251
         and:
         def gzip = layer.location.replace('data:','').decodeBase64()
-        TarUtils.untarGzip( new ByteArrayInputStream(gzip), result2)
+        TarUtils.untarGzip( new ByteArrayInputStream(gzip), result2, false)
         and:
         result2.resolve('main.nf').text == rootPath.resolve('main.nf').text
         result2.resolve('this/hola.txt').text == rootPath.resolve('this/hola.txt').text
@@ -133,16 +133,16 @@ class PackerTest extends Specification {
         def buffer = new ByteArrayOutputStream()
         packer.makeTar(rootPath, files, buffer)
         and:
-        TarUtils.untar( new ByteArrayInputStream(buffer.toByteArray()), result )
+        TarUtils.untar( new ByteArrayInputStream(buffer.toByteArray()), result, false)
         then:
         result.resolve('main.nf').text == rootPath.resolve('main.nf').text
         result.resolve('this/hola.txt').text == rootPath.resolve('this/hola.txt').text
         result.resolve('this/hello.txt').text == rootPath.resolve('this/hello.txt').text
         result.resolve('this/that/ciao.txt').text == rootPath.resolve('this/that/ciao.txt').text
         and:
-        FileUtils.getPermissionsMode(result.resolve('main.nf')) == 0600
-        FileUtils.getPermissionsMode(result.resolve('this/hola.txt')) == 0600
-        FileUtils.getPermissionsMode(result.resolve('this/that')) == 0700
+        FileUtils.getPermissionsMode(result.resolve('main.nf')) == 420
+        FileUtils.getPermissionsMode(result.resolve('this/hola.txt')) == 420
+        FileUtils.getPermissionsMode(result.resolve('this/that')) == 493
         and:
         Files.getLastModifiedTime(result.resolve('main.nf')) == LAST_MODIFIED
 
@@ -154,7 +154,7 @@ class PackerTest extends Specification {
         layer.gzipSize == 254
         and:
         def gzip = layer.location.replace('data:','').decodeBase64()
-        TarUtils.untarGzip( new ByteArrayInputStream(gzip), result2)
+        TarUtils.untarGzip( new ByteArrayInputStream(gzip), result2, true)
         and:
         result2.resolve('main.nf').text == rootPath.resolve('main.nf').text
         result2.resolve('this/hola.txt').text == rootPath.resolve('this/hola.txt').text
@@ -211,7 +211,7 @@ class PackerTest extends Specification {
 
         then:
         def gzip = layer.location.replace('data:','').decodeBase64()
-        TarUtils.untarGzip( new ByteArrayInputStream(gzip), result)
+        TarUtils.untarGzip( new ByteArrayInputStream(gzip), result, false)
         and:
         result.resolve('this/hola.txt').text == rootPath.resolve('this/hola.txt').text
         result.resolve('this/hello.txt').text == rootPath.resolve('this/hello.txt').text
