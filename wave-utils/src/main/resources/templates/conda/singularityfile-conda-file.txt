@@ -3,6 +3,15 @@ From: {{base_image}}
 %files
     {{wave_context_dir}}/conda.yml /scratch/conda.yml
 %post
+    if ls /tmp/layers/* 1> /dev/null 2>&1; then
+        echo "Extracting Docker layers..."
+        for layer in /tmp/layers/layer-*; do
+            echo "Extracting $(basename $layer)..."
+            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C / || true
+        done
+        rm -rf /tmp/layers
+    fi
+
     micromamba install -y -n base -f /scratch/conda.yml
     {{base_packages}}
     micromamba env export --name base --explicit > environment.lock
