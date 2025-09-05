@@ -534,7 +534,7 @@ class DockerHelperTest extends Specification {
                     if ls /opt/layers/* 1> /dev/null 2>&1; then
                         for layer in /opt/layers/layer-*; do
                             echo "Extracting $layer"
-                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C / || true
+                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C /
                         done
                         rm -rf /opt/layers
                     fi
@@ -562,7 +562,7 @@ class DockerHelperTest extends Specification {
                     if ls /opt/layers/* 1> /dev/null 2>&1; then
                         for layer in /opt/layers/layer-*; do
                             echo "Extracting $layer"
-                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C / || true
+                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C /
                         done
                         rm -rf /opt/layers
                     fi
@@ -591,7 +591,7 @@ class DockerHelperTest extends Specification {
                     if ls /opt/layers/* 1> /dev/null 2>&1; then
                         for layer in /opt/layers/layer-*; do
                             echo "Extracting $layer"
-                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C / || true
+                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C /
                         done
                         rm -rf /opt/layers
                     fi
@@ -621,7 +621,7 @@ class DockerHelperTest extends Specification {
                     if ls /opt/layers/* 1> /dev/null 2>&1; then
                         for layer in /opt/layers/layer-*; do
                             echo "Extracting $layer"
-                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C / || true
+                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C /
                         done
                         rm -rf /opt/layers
                     fi
@@ -650,7 +650,7 @@ class DockerHelperTest extends Specification {
                     if ls /opt/layers/* 1> /dev/null 2>&1; then
                         for layer in /opt/layers/layer-*; do
                             echo "Extracting $layer"
-                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C / || true
+                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C /
                         done
                         rm -rf /opt/layers
                     fi
@@ -680,7 +680,7 @@ class DockerHelperTest extends Specification {
                     if ls /opt/layers/* 1> /dev/null 2>&1; then
                         for layer in /opt/layers/layer-*; do
                             echo "Extracting $layer"
-                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C / || true
+                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C /
                         done
                         rm -rf /opt/layers
                     fi
@@ -714,7 +714,7 @@ class DockerHelperTest extends Specification {
                     if ls /opt/layers/* 1> /dev/null 2>&1; then
                         for layer in /opt/layers/layer-*; do
                             echo "Extracting $layer"
-                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C / || true
+                            tar -xzf "$layer" -C / 2>/dev/null || tar -xf "$layer" -C /
                         done
                         rm -rf /opt/layers
                     fi
