@@ -213,18 +213,20 @@ public class DockerHelper {
                 "/templates/conda/dockerfile-conda-packages.txt",
                 packages,
                 condaChannels,
-                opts);
+                opts,
+                null);
     }
 
-    static public String condaPackagesToSingularityFile(String packages, List<String> condaChannels, CondaOpts opts) {
+    static public String condaPackagesToSingularityFile(String packages, List<String> condaChannels, CondaOpts opts, List<String> unTarLayersCmd) {
         return condaPackagesTemplate0(
                 "/templates/conda/singularityfile-conda-packages.txt",
                 packages,
                 condaChannels,
-                opts);
+                opts,
+                unTarLayersCmd);
     }
 
-    static protected String condaPackagesTemplate0(String template, String packages, List<String> condaChannels, CondaOpts opts) {
+    static protected String condaPackagesTemplate0(String template, String packages, List<String> condaChannels, CondaOpts opts, List<String> unTarLayersCmd) {
         final List<String> channels0 = condaChannels!=null ? condaChannels : List.of();
         final String channelsOpts = channels0.stream().map(it -> "-c "+it).collect(Collectors.joining(" "));
         final String image = opts.mambaImage;
@@ -237,6 +239,7 @@ public class DockerHelper {
         binding.put("channel_opts", channelsOpts);
         binding.put("target", target);
         binding.put("base_packages", mambaInstallBasePackage0(opts.basePackages,singularity));
+        binding.put("untar_layers_cmd", joinCommands(unTarLayersCmd));
 
         final String result = renderTemplate0(template, binding) ;
         return addCommands(result, opts.commands, singularity);
@@ -244,19 +247,20 @@ public class DockerHelper {
 
 
     static public String condaFileToDockerFile(CondaOpts opts) {
-        return condaFileTemplate0("/templates/conda/dockerfile-conda-file.txt", opts);
+        return condaFileTemplate0("/templates/conda/dockerfile-conda-file.txt", opts, null);
     }
 
-    static public String condaFileToSingularityFile(CondaOpts opts) {
-        return condaFileTemplate0("/templates/conda/singularityfile-conda-file.txt", opts);
+    static public String condaFileToSingularityFile(CondaOpts opts, List<String> unTarLayersCmd) {
+        return condaFileTemplate0("/templates/conda/singularityfile-conda-file.txt", opts, unTarLayersCmd);
     }
 
-    static protected String condaFileTemplate0(String template, CondaOpts opts) {
+    static protected String condaFileTemplate0(String template, CondaOpts opts, List<String> unTarLayersCmd) {
         final boolean singularity = template.contains("/singularityfile");
         // create the binding map
         final Map<String,String> binding = new HashMap<>();
         binding.put("base_image", opts.mambaImage);
         binding.put("base_packages", mambaInstallBasePackage0(opts.basePackages,singularity));
+        binding.put("untar_layers_cmd", joinCommands(unTarLayersCmd));
 
         final String result = renderTemplate0(template, binding, List.of("wave_context_dir"));
         return addCommands(result, opts.commands, singularity);
