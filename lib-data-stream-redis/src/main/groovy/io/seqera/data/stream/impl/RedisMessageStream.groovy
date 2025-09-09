@@ -182,14 +182,24 @@ class RedisMessageStream implements MessageStream<String> {
         final params = new XAutoClaimParams()
                 // claim one entry at time
                 .count(1)
-        final messages = jedis.xautoclaim(
-                streamId,
-                config.getDefaultConsumerGroupName(),
-                consumerName,
-                config.claimTimeoutMillis,
-                STREAM_ENTRY_ZERO,
-                params
-        )
+        def messages
+        try {
+            messages = jedis.xautoclaim(
+                    streamId,
+                    config.getDefaultConsumerGroupName(),
+                    consumerName,
+                    config.claimTimeoutMillis,
+                    STREAM_ENTRY_ZERO,
+                    params
+            )
+        } catch (JedisDataException e) {
+            if (e.message.contains("NOGROUP")) {
+                // The group does not exist. We initialize it and avoid printing the exception
+                log.info "Redis message stream - consume group=$streamId do not exist"
+                init(streamId)
+            }
+            throw e
+        }
         final entry = messages?.getValue()?[0]
         if( entry!=null )
             log.trace "Redis stream id=$streamId; claimed entry=$entry"
