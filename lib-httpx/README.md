@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-httpx:1.0.0'
+    implementation 'io.seqera:lib-httpx:2.0.0'
 }
 ```
 
