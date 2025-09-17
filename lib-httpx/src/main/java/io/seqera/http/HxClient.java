@@ -896,14 +896,14 @@ public class HxClient {
          */
         public Builder config(HxConfig config) {
             this.configBuilder = HxConfig.newBuilder()
-                    .withRetryConfig(config)
-                    .withBearerToken(config.getJwtToken())
-                    .withRefreshToken(config.getRefreshToken())
-                    .withRefreshTokenUrl(config.getRefreshTokenUrl())
-                    .withBasicAuth(config.getBasicAuthToken())
-                    .withRetryStatusCodes(config.getRetryStatusCodes())
-                    .withWwwAuthentication(config.isWwwAuthenticateEnabled())
-                    .withWwwAuthenticationCallback(config.getAuthenticationCallback());
+                    .retryConfig(config)
+                    .bearerToken(config.getJwtToken())
+                    .refreshToken(config.getRefreshToken())
+                    .refreshTokenUrl(config.getRefreshTokenUrl())
+                    .basicAuth(config.getBasicAuthToken())
+                    .retryStatusCodes(config.getRetryStatusCodes())
+                    .wwwAuthentication(config.isWwwAuthenticateEnabled())
+                    .wwwAuthenticationCallback(config.getAuthenticationCallback());
             return this;
         }
         
@@ -966,7 +966,7 @@ public class HxClient {
          * @return this Builder instance
          */
         public Builder maxAttempts(int attempts) {
-            this.configBuilder.withMaxAttempts(attempts);
+            this.configBuilder.maxAttempts(attempts);
             return this;
         }
         
@@ -977,7 +977,7 @@ public class HxClient {
          * @return this Builder instance
          */
         public Builder retryDelay(Duration delay) {
-            this.configBuilder.withDelay(delay);
+            this.configBuilder.delay(delay);
             return this;
         }
         
@@ -1020,7 +1020,7 @@ public class HxClient {
          */
         public Builder retryConfig(Retryable.Config retryConfig) {
             if (retryConfig != null) {
-                this.configBuilder.withRetryConfig(retryConfig);
+                this.configBuilder.retryConfig(retryConfig);
             }
             return this;
         }
@@ -1032,7 +1032,7 @@ public class HxClient {
          * @return this Builder instance
          */
         public Builder bearerToken(String token) {
-            this.configBuilder.withBearerToken(token);
+            this.configBuilder.bearerToken(token);
             return this;
         }
         
@@ -1043,7 +1043,7 @@ public class HxClient {
          * @return this Builder instance
          */
         public Builder refreshToken(String token) {
-            this.configBuilder.withRefreshToken(token);
+            this.configBuilder.refreshToken(token);
             return this;
         }
         
@@ -1054,7 +1054,7 @@ public class HxClient {
          * @return this Builder instance
          */
         public Builder refreshTokenUrl(String url) {
-            this.configBuilder.withRefreshTokenUrl(url);
+            this.configBuilder.refreshTokenUrl(url);
             return this;
         }
         
@@ -1066,7 +1066,7 @@ public class HxClient {
          * @return this Builder instance
          */
         public Builder basicAuth(String username, String password) {
-            this.configBuilder.withBasicAuth(username, password);
+            this.configBuilder.basicAuth(username, password);
             return this;
         }
 
@@ -1105,7 +1105,7 @@ public class HxClient {
          * @see #basicAuth(String, String)
          */
         public Builder basicAuth(String token) {
-            this.configBuilder.withBasicAuth(token);
+            this.configBuilder.basicAuth(token);
             return this;
         }
         
@@ -1142,7 +1142,7 @@ public class HxClient {
          * @return this Builder instance
          */
         public Builder refreshCookiePolicy(CookiePolicy policy) {
-            this.configBuilder.withRefreshCookiePolicy(policy);
+            this.configBuilder.refreshCookiePolicy(policy);
             return this;
         }
         

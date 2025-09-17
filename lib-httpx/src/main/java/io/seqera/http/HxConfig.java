@@ -187,56 +187,221 @@ public class HxConfig implements Retryable.Config {
         private AuthenticationCallback wwwAuthenticationCallback;
         private CookiePolicy refreshCookiePolicy;
 
+        /**
+         * Sets the initial retry delay duration.
+         * 
+         * @param delay the initial delay between retries
+         * @return this builder instance for method chaining
+         */
+        public Builder delay(Duration delay) {
+            this.delay = delay;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #delay(Duration)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withDelay(Duration delay) {
             this.delay = delay;
             return this;
         }
 
+        /**
+         * Sets the maximum retry delay duration.
+         * 
+         * @param maxDelay the maximum delay between retries
+         * @return this builder instance for method chaining
+         */
+        public Builder maxDelay(Duration maxDelay) {
+            this.maxDelay = maxDelay;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #maxDelay(Duration)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withMaxDelay(Duration maxDelay) {
             this.maxDelay = maxDelay;
             return this;
         }
 
+        /**
+         * Sets the maximum number of retry attempts.
+         * 
+         * @param maxAttempts maximum retry attempts (must be positive)
+         * @return this builder instance for method chaining
+         */
+        public Builder maxAttempts(int maxAttempts) {
+            this.maxAttempts = maxAttempts;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #maxAttempts(int)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withMaxAttempts(int maxAttempts) {
             this.maxAttempts = maxAttempts;
             return this;
         }
 
+        /**
+         * Sets the jitter factor for retry delays.
+         * 
+         * @param jitter the jitter factor (0.0 to 1.0)
+         * @return this builder instance for method chaining
+         */
+        public Builder jitter(double jitter) {
+            this.jitter = jitter;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #jitter(double)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withJitter(double jitter) {
             this.jitter = jitter;
             return this;
         }
 
+        /**
+         * Sets the backoff multiplier for retry delays.
+         * 
+         * @param multiplier the backoff multiplier
+         * @return this builder instance for method chaining
+         */
+        public Builder multiplier(double multiplier) {
+            this.multiplier = multiplier;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #multiplier(double)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withMultiplier(double multiplier) {
             this.multiplier = multiplier;
             return this;
         }
 
+        /**
+         * Sets the retry condition predicate.
+         * 
+         * @param condition the condition to determine if an exception should trigger a retry
+         * @return this builder instance for method chaining
+         */
+        public Builder retryCondition(Predicate<? extends Throwable> condition) {
+            this.retryCondition = condition;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #retryCondition(Predicate)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withRetryCondition(Predicate<? extends Throwable> condition) {
             this.retryCondition = condition;
             return this;
         }
 
+        /**
+         * Sets the HTTP status codes that should trigger a retry.
+         * 
+         * @param retryStatusCodes the set of HTTP status codes to retry on
+         * @return this builder instance for method chaining
+         */
+        public Builder retryStatusCodes(Set<Integer> retryStatusCodes) {
+            this.retryStatusCodes = retryStatusCodes;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #retryStatusCodes(Set)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withRetryStatusCodes(Set<Integer> retryStatusCodes) {
             this.retryStatusCodes = retryStatusCodes;
             return this;
         }
 
+        /**
+         * Sets the Bearer/JWT token for authentication.
+         * 
+         * @param jwtToken the Bearer token to use for authentication
+         * @return this builder instance for method chaining
+         */
+        public Builder bearerToken(String jwtToken) {
+            this.bearerToken = jwtToken;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #bearerToken(String)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withBearerToken(String jwtToken) {
             this.bearerToken = jwtToken;
             return this;
         }
 
+        /**
+         * Sets the refresh token for automatic JWT token renewal.
+         * 
+         * @param refreshToken the refresh token
+         * @return this builder instance for method chaining
+         */
+        public Builder refreshToken(String refreshToken) {
+            this.refreshToken = refreshToken;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #refreshToken(String)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withRefreshToken(String refreshToken) {
             this.refreshToken = refreshToken;
             return this;
         }
 
+        /**
+         * Sets the URL endpoint for refreshing JWT tokens.
+         * 
+         * @param refreshTokenUrl the token refresh endpoint URL
+         * @return this builder instance for method chaining
+         */
+        public Builder refreshTokenUrl(String refreshTokenUrl) {
+            this.refreshTokenUrl = refreshTokenUrl;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #refreshTokenUrl(String)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withRefreshTokenUrl(String refreshTokenUrl) {
             this.refreshTokenUrl = refreshTokenUrl;
             return this;
         }
 
+        /**
+         * Sets the timeout for token refresh operations.
+         * 
+         * @param tokenRefreshTimeout the timeout duration for refresh operations
+         * @return this builder instance for method chaining
+         */
+        public Builder tokenRefreshTimeout(Duration tokenRefreshTimeout) {
+            this.tokenRefreshTimeout = tokenRefreshTimeout;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #tokenRefreshTimeout(Duration)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withTokenRefreshTimeout(Duration tokenRefreshTimeout) {
             this.tokenRefreshTimeout = tokenRefreshTimeout;
             return this;
@@ -262,6 +427,15 @@ public class HxConfig implements Retryable.Config {
          * @param token the basic auth token in "username:password" format
          * @return this builder instance for method chaining
          */
+        public Builder basicAuth(String token) {
+            this.basicAuthToken = token;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #basicAuth(String)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withBasicAuth(String token) {
             this.basicAuthToken = token;
             return this;
@@ -285,6 +459,15 @@ public class HxConfig implements Retryable.Config {
          * @param password the password for basic authentication
          * @return this builder instance for method chaining
          */
+        public Builder basicAuth(String username, String password) {
+            this.basicAuthToken = username + ":" + password;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #basicAuth(String, String)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withBasicAuth(String username, String password) {
             this.basicAuthToken = username + ":" + password;
             return this;
@@ -318,6 +501,15 @@ public class HxConfig implements Retryable.Config {
          * @param value true to enable WWW-Authenticate handling, false to disable
          * @return this builder instance for method chaining
          */
+        public Builder wwwAuthentication(boolean value) {
+            this.wwwAuthenticationEnabled = value;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #wwwAuthentication(boolean)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withWwwAuthentication(boolean value) {
             this.wwwAuthenticationEnabled = value;
             return this;
@@ -345,7 +537,7 @@ public class HxConfig implements Retryable.Config {
          * 
          * <p><strong>Example Implementation:</strong>
          * <pre>{@code
-         * .withWwwAuthenticationCallback((scheme, realm) -> {
+         * .wwwAuthenticationCallback((scheme, realm) -> {
          *     if (scheme == AuthenticationScheme.BASIC && "Protected Area".equals(realm)) {
          *         return Base64.getEncoder().encodeToString("user:pass".getBytes());
          *     } else if (scheme == AuthenticationScheme.BEARER && "api".equals(realm)) {
@@ -358,6 +550,15 @@ public class HxConfig implements Retryable.Config {
          * @param value the authentication callback, or null to rely only on anonymous authentication
          * @return this builder instance for method chaining
          */
+        public Builder wwwAuthenticationCallback(AuthenticationCallback value) {
+            this.wwwAuthenticationCallback = value;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #wwwAuthenticationCallback(AuthenticationCallback)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withWwwAuthenticationCallback(AuthenticationCallback value) {
             this.wwwAuthenticationCallback = value;
             return this;
@@ -387,6 +588,15 @@ public class HxConfig implements Retryable.Config {
          * @param policy the cookie policy for refresh token operations, or null for default behavior
          * @return this builder instance for method chaining
          */
+        public Builder refreshCookiePolicy(CookiePolicy policy) {
+            this.refreshCookiePolicy = policy;
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #refreshCookiePolicy(CookiePolicy)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withRefreshCookiePolicy(CookiePolicy policy) {
             this.refreshCookiePolicy = policy;
             return this;
@@ -399,6 +609,21 @@ public class HxConfig implements Retryable.Config {
          * @param retryConfig the Retryable.Config to copy retry settings from
          * @return this builder instance for method chaining
          */
+        public Builder retryConfig(Retryable.Config retryConfig) {
+            if (retryConfig != null) {
+                this.delay = retryConfig.getDelayAsDuration();
+                this.maxDelay = retryConfig.getMaxDelayAsDuration();
+                this.maxAttempts = retryConfig.getMaxAttempts();
+                this.jitter = retryConfig.getJitter();
+                this.multiplier = retryConfig.getMultiplier();
+            }
+            return this;
+        }
+        
+        /**
+         * @deprecated Use {@link #retryConfig(Retryable.Config)} instead. This method will be removed in a future version.
+         */
+        @Deprecated(since = "2.1.0", forRemoval = true)
         public Builder withRetryConfig(Retryable.Config retryConfig) {
             if (retryConfig != null) {
                 this.delay = retryConfig.getDelayAsDuration();

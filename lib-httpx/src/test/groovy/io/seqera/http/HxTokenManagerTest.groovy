@@ -33,7 +33,7 @@ class HxTokenManagerTest extends Specification {
     def 'should add authorization header to request'() {
         given:
         def config = HxConfig.newBuilder()
-                .withBearerToken('fake.jwt.token')
+                .bearerToken('fake.jwt.token')
                 .build()
         def tokenManager = new HxTokenManager(config)
         def originalRequest = HttpRequest.newBuilder()
@@ -68,7 +68,7 @@ class HxTokenManagerTest extends Specification {
     def 'should handle token already with Bearer prefix'() {
         given:
         def config = HxConfig.newBuilder()
-                .withBearerToken('Bearer fake.jwt.token')
+                .bearerToken('Bearer fake.jwt.token')
                 .build()
         def tokenManager = new HxTokenManager(config)
         def originalRequest = HttpRequest.newBuilder()
@@ -86,12 +86,12 @@ class HxTokenManagerTest extends Specification {
     def 'should detect if token refresh is possible'() {
         given:
         def config1 = HxConfig.newBuilder()
-                .withBearerToken('fake.jwt.token')
-                .withRefreshToken('fake-refresh-token')
-                .withRefreshTokenUrl('https://example.com/oauth/token')
+                .bearerToken('fake.jwt.token')
+                .refreshToken('fake-refresh-token')
+                .refreshTokenUrl('https://example.com/oauth/token')
                 .build()
         def config2 = HxConfig.newBuilder()
-                .withBearerToken('fake.jwt.token')
+                .bearerToken('fake.jwt.token')
                 .build()
         def config3 = HxConfig.newBuilder()
                 .build()
@@ -126,9 +126,9 @@ class HxTokenManagerTest extends Specification {
     def 'should update tokens thread-safely'() {
         given:
         def config = HxConfig.newBuilder()
-                .withBearerToken('fake.jwt.token')
-                .withRefreshToken('fake-refresh-token')
-                .withRefreshTokenUrl('https://example.com/oauth/token')
+                .bearerToken('fake.jwt.token')
+                .refreshToken('fake-refresh-token')
+                .refreshTokenUrl('https://example.com/oauth/token')
                 .build()
         def tokenManager = new HxTokenManager(config)
 
@@ -143,7 +143,7 @@ class HxTokenManagerTest extends Specification {
     def 'should not update invalid JWT token'() {
         given:
         def config = HxConfig.newBuilder()
-                .withBearerToken('fake.jwt.token')
+                .bearerToken('fake.jwt.token')
                 .build()
         def tokenManager = new HxTokenManager(config)
         def originalToken = tokenManager.getCurrentJwtToken()
@@ -159,8 +159,8 @@ class HxTokenManagerTest extends Specification {
     def 'should validate JWT token refresh configuration'() {
         when: 'creating with JWT token + refresh token but missing refresh URL'
         def config1 = HxConfig.newBuilder()
-                .withBearerToken('fake.jwt.token')
-                .withRefreshToken('fake-refresh-token')
+                .bearerToken('fake.jwt.token')
+                .refreshToken('fake-refresh-token')
                 // Missing refresh URL - incomplete configuration
                 .build()
         new HxTokenManager(config1)
@@ -171,8 +171,8 @@ class HxTokenManagerTest extends Specification {
 
         when: 'creating with JWT token + refresh URL but missing refresh token'
         def config2 = HxConfig.newBuilder()
-                .withBearerToken('fake.jwt.token')
-                .withRefreshTokenUrl('https://example.com/oauth/token')
+                .bearerToken('fake.jwt.token')
+                .refreshTokenUrl('https://example.com/oauth/token')
                 // Missing refresh token - incomplete configuration
                 .build()
         new HxTokenManager(config2)
@@ -183,8 +183,8 @@ class HxTokenManagerTest extends Specification {
 
         when: 'creating with refresh components but no JWT token'
         def config3 = HxConfig.newBuilder()
-                .withRefreshToken('fake-refresh-token')
-                .withRefreshTokenUrl('https://example.com/oauth/token')
+                .refreshToken('fake-refresh-token')
+                .refreshTokenUrl('https://example.com/oauth/token')
                 // Missing JWT token
                 .build()
         new HxTokenManager(config3)
@@ -195,7 +195,7 @@ class HxTokenManagerTest extends Specification {
 
         when: 'creating with JWT token only (valid)'
         def jwtOnlyConfig = HxConfig.newBuilder()
-                .withBearerToken('fake.jwt.token')
+                .bearerToken('fake.jwt.token')
                 .build()
         def jwtOnlyManager = new HxTokenManager(jwtOnlyConfig)
 
@@ -205,9 +205,9 @@ class HxTokenManagerTest extends Specification {
 
         when: 'creating with complete refresh configuration (valid)'
         def completeConfig = HxConfig.newBuilder()
-                .withBearerToken('fake.jwt.token')
-                .withRefreshToken('fake-refresh-token')
-                .withRefreshTokenUrl('https://example.com/oauth/token')
+                .bearerToken('fake.jwt.token')
+                .refreshToken('fake-refresh-token')
+                .refreshTokenUrl('https://example.com/oauth/token')
                 .build()
         def completeManager = new HxTokenManager(completeConfig)
 
@@ -228,7 +228,7 @@ class HxTokenManagerTest extends Specification {
     def 'should use custom cookie policy when provided'() {
         given:
         def config = HxConfig.newBuilder()
-                .withRefreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+                .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
                 .build()
         
         when:
@@ -259,10 +259,10 @@ class HxTokenManagerTest extends Specification {
     def 'should create different cookie managers for different policies'() {
         given:
         def configAcceptAll = HxConfig.newBuilder()
-                .withRefreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+                .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
                 .build()
         def configAcceptNone = HxConfig.newBuilder()
-                .withRefreshCookiePolicy(CookiePolicy.ACCEPT_NONE)
+                .refreshCookiePolicy(CookiePolicy.ACCEPT_NONE)
                 .build()
         def configDefault = HxConfig.newBuilder().build()
         

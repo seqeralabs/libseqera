@@ -53,16 +53,16 @@ class HxConfigTest extends Specification {
     def 'should create config with custom values'() {
         when:
         def config = HxConfig.newBuilder()
-                .withDelay(Duration.ofSeconds(1))
-                .withMaxDelay(Duration.ofMinutes(2))
-                .withMaxAttempts(3)
-                .withJitter(0.5)
-                .withMultiplier(1.5)
-                .withRetryStatusCodes([429, 503] as Set)
-                .withBearerToken('jwt-token')
-                .withRefreshToken('refresh-token')
-                .withRefreshTokenUrl('https://example.com/oauth/token')
-                .withTokenRefreshTimeout(Duration.ofSeconds(60))
+                .delay(Duration.ofSeconds(1))
+                .maxDelay(Duration.ofMinutes(2))
+                .maxAttempts(3)
+                .jitter(0.5)
+                .multiplier(1.5)
+                .retryStatusCodes([429, 503] as Set)
+                .bearerToken('jwt-token')
+                .refreshToken('refresh-token')
+                .refreshTokenUrl('https://example.com/oauth/token')
+                .tokenRefreshTimeout(Duration.ofSeconds(60))
                 .build()
 
         then:
@@ -104,7 +104,7 @@ class HxConfigTest extends Specification {
 
         when:
         def config = HxConfig.newBuilder()
-                .withRetryCondition(customCondition)
+                .retryCondition(customCondition)
                 .build()
 
         then:
@@ -117,11 +117,11 @@ class HxConfigTest extends Specification {
     def 'should implement Retryable.Config interface'() {
         given:
         def config = HxConfig.newBuilder()
-                .withDelay(Duration.ofSeconds(2))
-                .withMaxDelay(Duration.ofMinutes(1))
-                .withMaxAttempts(10)
-                .withJitter(0.1)
-                .withMultiplier(3.0)
+                .delay(Duration.ofSeconds(2))
+                .maxDelay(Duration.ofMinutes(1))
+                .maxAttempts(10)
+                .jitter(0.1)
+                .multiplier(3.0)
                 .build()
 
         expect:
@@ -138,8 +138,8 @@ class HxConfigTest extends Specification {
         
         when:
         def httpConfig = HxConfig.newBuilder()
-                .withRetryConfig(retryableConfig)
-                .withBearerToken('test-token')
+                .retryConfig(retryableConfig)
+                .bearerToken('test-token')
                 .build()
 
         then:
@@ -154,8 +154,8 @@ class HxConfigTest extends Specification {
     def 'should handle null Retryable.Config gracefully'() {
         when:
         def httpConfig = HxConfig.newBuilder()
-                .withRetryConfig(null)
-                .withBearerToken('test-token')
+                .retryConfig(null)
+                .bearerToken('test-token')
                 .build()
 
         then:
@@ -170,7 +170,7 @@ class HxConfigTest extends Specification {
     def 'should create config with refreshCookiePolicy'() {
         when:
         def config = HxConfig.newBuilder()
-                .withRefreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+                .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
                 .build()
         
         then:
@@ -188,17 +188,17 @@ class HxConfigTest extends Specification {
     def 'should support all cookie policy types'() {
         expect:
         def config1 = HxConfig.newBuilder()
-                .withRefreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+                .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
                 .build()
         config1.refreshCookiePolicy == CookiePolicy.ACCEPT_ALL
         
         def config2 = HxConfig.newBuilder()
-                .withRefreshCookiePolicy(CookiePolicy.ACCEPT_NONE)
+                .refreshCookiePolicy(CookiePolicy.ACCEPT_NONE)
                 .build()
         config2.refreshCookiePolicy == CookiePolicy.ACCEPT_NONE
         
         def config3 = HxConfig.newBuilder()
-                .withRefreshCookiePolicy(CookiePolicy.ACCEPT_ORIGINAL_SERVER)
+                .refreshCookiePolicy(CookiePolicy.ACCEPT_ORIGINAL_SERVER)
                 .build()
         config3.refreshCookiePolicy == CookiePolicy.ACCEPT_ORIGINAL_SERVER
     }

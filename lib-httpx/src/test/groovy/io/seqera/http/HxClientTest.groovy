@@ -69,7 +69,7 @@ class HxClientTest extends Specification {
     def 'should use custom retry status codes'() {
         given:
         def config = HxConfig.newBuilder()
-                .withRetryStatusCodes([429, 503] as Set)
+                .retryStatusCodes([429, 503] as Set)
                 .build()
         def client = HxClient.newBuilder().config(config).build()
         def response429 = Mock(HttpResponse) { statusCode() >> 429 }
