@@ -17,7 +17,7 @@
 
 package io.seqera.http
 
-
+import java.net.CookiePolicy
 import java.time.Duration
 
 import io.seqera.util.retry.Retryable
@@ -44,6 +44,7 @@ class HxConfigTest extends Specification {
         config.jwtToken == null
         config.refreshToken == null
         config.refreshTokenUrl == null
+        config.refreshCookiePolicy == null
         config.retryCondition != null
         config.retryCondition.test(new IOException('test')) == true
         config.retryCondition.test(new RuntimeException('test')) == false
@@ -164,5 +165,41 @@ class HxConfigTest extends Specification {
         httpConfig.getJitter() == 0.25d
         httpConfig.getMultiplier() == 2.0
         httpConfig.jwtToken == 'test-token'
+    }
+    
+    def 'should create config with refreshCookiePolicy'() {
+        when:
+        def config = HxConfig.newBuilder()
+                .withRefreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+                .build()
+        
+        then:
+        config.refreshCookiePolicy == CookiePolicy.ACCEPT_ALL
+    }
+    
+    def 'should create config with null refreshCookiePolicy by default'() {
+        when:
+        def config = HxConfig.newBuilder().build()
+        
+        then:
+        config.refreshCookiePolicy == null
+    }
+    
+    def 'should support all cookie policy types'() {
+        expect:
+        def config1 = HxConfig.newBuilder()
+                .withRefreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+                .build()
+        config1.refreshCookiePolicy == CookiePolicy.ACCEPT_ALL
+        
+        def config2 = HxConfig.newBuilder()
+                .withRefreshCookiePolicy(CookiePolicy.ACCEPT_NONE)
+                .build()
+        config2.refreshCookiePolicy == CookiePolicy.ACCEPT_NONE
+        
+        def config3 = HxConfig.newBuilder()
+                .withRefreshCookiePolicy(CookiePolicy.ACCEPT_ORIGINAL_SERVER)
+                .build()
+        config3.refreshCookiePolicy == CookiePolicy.ACCEPT_ORIGINAL_SERVER
     }
 }

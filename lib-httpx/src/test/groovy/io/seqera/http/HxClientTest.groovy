@@ -17,6 +17,7 @@
 
 package io.seqera.http
 
+import java.net.CookiePolicy
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -334,5 +335,53 @@ class HxClientTest extends Specification {
         client.config.maxDelay == retryConfig.maxDelay
         client.config.jitter == retryConfig.jitter
         client.config.multiplier == retryConfig.multiplier
+    }
+    
+    def 'should configure refreshCookiePolicy via builder'() {
+        when:
+        def client = HxClient.newBuilder()
+                .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+                .bearerToken('test-token')
+                .build()
+        
+        then:
+        client.config.refreshCookiePolicy == CookiePolicy.ACCEPT_ALL
+        client.config.jwtToken == 'test-token'
+        client.httpClient != null
+        client.tokenManager != null
+        client.tokenManager.cookieManager != null
+    }
+    
+    def 'should handle null refreshCookiePolicy via builder'() {
+        when:
+        def client = HxClient.newBuilder()
+                .refreshCookiePolicy(null)
+                .bearerToken('test-token')
+                .build()
+        
+        then:
+        client.config.refreshCookiePolicy == null
+        client.config.jwtToken == 'test-token'
+        client.httpClient != null
+        client.tokenManager != null
+        client.tokenManager.cookieManager != null
+    }
+    
+    def 'should configure different cookie policies via builder'() {
+        expect:
+        def client1 = HxClient.newBuilder()
+                .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+                .build()
+        client1.config.refreshCookiePolicy == CookiePolicy.ACCEPT_ALL
+        
+        def client2 = HxClient.newBuilder()
+                .refreshCookiePolicy(CookiePolicy.ACCEPT_NONE)
+                .build()
+        client2.config.refreshCookiePolicy == CookiePolicy.ACCEPT_NONE
+        
+        def client3 = HxClient.newBuilder()
+                .refreshCookiePolicy(CookiePolicy.ACCEPT_ORIGINAL_SERVER)
+                .build()
+        client3.config.refreshCookiePolicy == CookiePolicy.ACCEPT_ORIGINAL_SERVER
     }
 }

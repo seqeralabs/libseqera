@@ -17,6 +17,7 @@
 
 package io.seqera.http;
 
+import java.net.CookiePolicy;
 import java.time.Duration;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -87,6 +88,8 @@ public class HxConfig implements Retryable.Config {
     private boolean wwwAuthenticateEnabled = false;
     private AuthenticationCallback authenticationCallback;
 
+    private CookiePolicy refreshCookiePolicy;
+
     @Override
     public Duration getDelay() {
         return delay;
@@ -148,6 +151,10 @@ public class HxConfig implements Retryable.Config {
         return basicAuthToken;
     }
 
+    public CookiePolicy getRefreshCookiePolicy() {
+        return refreshCookiePolicy;
+    }
+
     /**
      * Creates a new builder instance for constructing HttpConfig objects.
      * 
@@ -178,6 +185,7 @@ public class HxConfig implements Retryable.Config {
         private String basicAuthToken;
         private boolean wwwAuthenticationEnabled = false;
         private AuthenticationCallback wwwAuthenticationCallback;
+        private CookiePolicy refreshCookiePolicy;
 
         public Builder withDelay(Duration delay) {
             this.delay = delay;
@@ -356,6 +364,35 @@ public class HxConfig implements Retryable.Config {
         }
 
         /**
+         * Sets the cookie policy for the refresh token HTTP client used by HxTokenManager.
+         * 
+         * <p>This policy controls cookie handling behavior specifically for token refresh operations.
+         * The policy only affects the internal HTTP client used for JWT token refresh, not the main
+         * HTTP client used for regular requests.
+         * 
+         * <p><strong>Cookie Policy Options:</strong>
+         * <ul>
+         *   <li><strong>CookiePolicy.ACCEPT_ALL</strong>: Accept all cookies</li>
+         *   <li><strong>CookiePolicy.ACCEPT_NONE</strong>: Accept no cookies</li>
+         *   <li><strong>CookiePolicy.ACCEPT_ORIGINAL_SERVER</strong>: Accept cookies only from original server</li>
+         * </ul>
+         * 
+         * <p><strong>When to Use:</strong>
+         * <ul>
+         *   <li>OAuth servers that set authentication cookies during token refresh</li>
+         *   <li>Services that require specific cookie handling for token endpoints</li>
+         *   <li>Compliance with security policies that restrict cookie behavior</li>
+         * </ul>
+         * 
+         * @param policy the cookie policy for refresh token operations, or null for default behavior
+         * @return this builder instance for method chaining
+         */
+        public Builder withRefreshCookiePolicy(CookiePolicy policy) {
+            this.refreshCookiePolicy = policy;
+            return this;
+        }
+
+        /**
          * Configures retry settings from a generic Retryable.Config instance.
          * This allows building HttpConfig with retry configuration from other sources.
          * 
@@ -394,6 +431,7 @@ public class HxConfig implements Retryable.Config {
             config.basicAuthToken = this.basicAuthToken;
             config.wwwAuthenticateEnabled = this.wwwAuthenticationEnabled;
             config.authenticationCallback = this.wwwAuthenticationCallback;
+            config.refreshCookiePolicy = this.refreshCookiePolicy;
             
             // Validate authentication configuration
             if (this.bearerToken != null && this.basicAuthToken != null) {

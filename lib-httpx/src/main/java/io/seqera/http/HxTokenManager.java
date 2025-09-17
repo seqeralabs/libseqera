@@ -118,7 +118,10 @@ public class HxTokenManager {
         // Validate JWT token refresh configuration
         validateTokenRefreshConfig();
         
-        this.cookieManager = new CookieManager();
+        // Create CookieManager with custom policy if provided
+        this.cookieManager = (config.getRefreshCookiePolicy() != null) 
+                ? new CookieManager(null, config.getRefreshCookiePolicy())
+                : new CookieManager();
         this.refreshHttpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .followRedirects(HttpClient.Redirect.NORMAL)

@@ -20,6 +20,7 @@ package io.seqera.http;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.CookiePolicy;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -1105,6 +1106,43 @@ public class HxClient {
          */
         public Builder basicAuth(String token) {
             this.configBuilder.withBasicAuth(token);
+            return this;
+        }
+        
+        /**
+         * Sets the cookie policy for the refresh token HTTP client used by HxTokenManager.
+         * 
+         * <p>This policy controls cookie handling behavior specifically for token refresh operations.
+         * The policy only affects the internal HTTP client used for JWT token refresh, not the main
+         * HTTP client used for regular requests.
+         * 
+         * <p><strong>Cookie Policy Options:</strong>
+         * <ul>
+         *   <li><strong>CookiePolicy.ACCEPT_ALL</strong>: Accept all cookies</li>
+         *   <li><strong>CookiePolicy.ACCEPT_NONE</strong>: Accept no cookies</li>
+         *   <li><strong>CookiePolicy.ACCEPT_ORIGINAL_SERVER</strong>: Accept cookies only from original server</li>
+         * </ul>
+         * 
+         * <p><strong>When to Use:</strong>
+         * <ul>
+         *   <li>OAuth servers that set authentication cookies during token refresh</li>
+         *   <li>Services that require specific cookie handling for token endpoints</li>
+         *   <li>Compliance with security policies that restrict cookie behavior</li>
+         * </ul>
+         * 
+         * <p><strong>Usage Example:</strong>
+         * <pre>{@code
+         * HxClient client = HxClient.newBuilder()
+         *     .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+         *     .bearerToken("your-jwt-token")
+         *     .build();
+         * }</pre>
+         * 
+         * @param policy the cookie policy for refresh token operations, or null for default behavior
+         * @return this Builder instance
+         */
+        public Builder refreshCookiePolicy(CookiePolicy policy) {
+            this.configBuilder.withRefreshCookiePolicy(policy);
             return this;
         }
         
