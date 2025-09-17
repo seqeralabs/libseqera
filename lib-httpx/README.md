@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-httpx:2.0.0'
+    implementation 'io.seqera:lib-httpx:2.1.0'
 }
 ```
 
@@ -20,10 +20,10 @@ dependencies {
 
 - **Retry Logic**: Automatic retry for configurable HTTP status codes (default: 429, 500, 502, 503, 504)
 - **Authentication Support**: Built-in support for JWT Bearer tokens and HTTP Basic authentication
-- **JWT Token Refresh**: Automatic JWT token refresh when receiving 401 Unauthorized responses
+- **JWT Token Refresh**: Automatic JWT token refresh when receiving 401 Unauthorized responses with configurable cookie policies
 - **WWW-Authenticate Support**: Automatic handling of HTTP authentication challenges (Basic and Bearer schemes)
 - **Anonymous Authentication**: Fallback to anonymous authentication when credentials aren't provided
-- **Configurable**: Customizable retry policies, timeouts, token refresh, and authentication settings
+- **Configurable**: Customizable retry policies, timeouts, token refresh, authentication settings, and cookie policies
 - **Generic Integration**: Compatible with any `Retryable.Config` for flexible retry configuration
 - **Thread-safe**: Safe for concurrent use
 - **Async Support**: Support for both synchronous and asynchronous requests
@@ -32,56 +32,68 @@ dependencies {
 
 ### Basic Usage
 
-```groovy
+```java
 // Create with default configuration
-def client = HxClient.create()
+HxClient client = HxClient.newHxClient();
 
-// Create with custom configuration
-def config = HxConfig.builder()
-    .withMaxAttempts(3)
-    .withRetryStatusCodes([429, 503] as Set)
-    .build()
-def client = HxClient.create(config)
+// Create with custom configuration using new builder pattern
+HxClient client = HxClient.newBuilder()
+    .maxAttempts(3)
+    .retryStatusCodes(Set.of(429, 503))
+    .build();
 
 // Make HTTP requests
-def request = HttpRequest.newBuilder()
+HttpRequest request = HttpRequest.newBuilder()
     .uri(URI.create("https://api.example.com/data"))
     .GET()
-    .build()
+    .build();
 
-def response = client.send(request, HttpResponse.BodyHandlers.ofString())
+HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 ```
 
 ### Authentication Configuration
 
 #### JWT Token Configuration
 
-```groovy
-def config = HxConfig.builder()
-    .withJwtToken("your-jwt-token")
-    .withRefreshToken("your-refresh-token")
-    .withRefreshTokenUrl("https://api.example.com/oauth/token")
-    .build()
+```java
+// Using new builder pattern (recommended)
+HxClient client = HxClient.newBuilder()
+    .bearerToken("your-jwt-token")
+    .refreshToken("your-refresh-token")
+    .refreshTokenUrl("https://api.example.com/oauth/token")
+    .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL) // New: Configure cookie handling for token refresh
+    .build();
 
-def client = HxClient.create(config)
+// Using HxConfig directly (deprecated methods shown for compatibility)
+HxConfig config = HxConfig.newBuilder()
+    .bearerToken("your-jwt-token")  // Recommended
+    // .withBearerToken("your-jwt-token")  // Deprecated but still works
+    .refreshToken("your-refresh-token")
+    .refreshTokenUrl("https://api.example.com/oauth/token")
+    .build();
+
+HxClient client = HxClient.newBuilder().config(config).build();
 ```
 
 #### Basic Authentication Configuration
 
-```groovy
-// Using username and password
-def config = HxConfig.builder()
-    .withBasicAuth("your-username", "your-password")
-    .build()
-
-def client = HxClient.create(config)
+```java
+// Using HxClient builder (recommended)
+HxClient client = HxClient.newBuilder()
+    .basicAuth("your-username", "your-password")
+    .build();
 
 // Or using a pre-formatted token
-def config = HxConfig.builder()
-    .withBasicAuth("username:password")
-    .build()
+HxClient client = HxClient.newBuilder()
+    .basicAuth("username:password")
+    .build();
 
-def client = HxClient.create(config)
+// Using HxConfig directly
+HxConfig config = HxConfig.newBuilder()
+    .basicAuth("your-username", "your-password")
+    .build();
+
+HxClient client = HxClient.newBuilder().config(config).build();
 ```
 
 **Authentication Constraints:**
@@ -93,30 +105,30 @@ def client = HxClient.create(config)
 
 The client can automatically handle HTTP authentication challenges (401 responses with WWW-Authenticate headers):
 
-```groovy
+```java
 // Enable WWW-Authenticate handling with anonymous authentication fallback
-def config = HxConfig.builder()
-    .withWwwAuthentication(true)
-    .build()
+HxConfig config = HxConfig.newBuilder()
+    .wwwAuthentication(true)
+    .build();
 
-def client = HxClient.create(config)
+HxClient client = HxClient.newBuilder().config(config).build();
 
 // With custom authentication callback
-def config = HxConfig.builder()
-    .withWwwAuthentication(true)
-    .withWwwAuthenticationCallback({ scheme, realm ->
+HxConfig config = HxConfig.newBuilder()
+    .wwwAuthentication(true)
+    .wwwAuthenticationCallback((scheme, realm) -> {
         if (scheme == AuthenticationScheme.BASIC) {
             // Return base64-encoded credentials for Basic auth
-            return Base64.getEncoder().encodeToString("user:pass".getBytes())
+            return Base64.getEncoder().encodeToString("user:pass".getBytes());
         } else if (scheme == AuthenticationScheme.BEARER) {
             // Return bearer token
-            return "your-bearer-token"
+            return "your-bearer-token";
         }
-        return null // Fall back to anonymous auth
-    } as AuthenticationCallback)
-    .build()
+        return null; // Fall back to anonymous auth
+    })
+    .build();
 
-def client = HxClient.create(config)
+HxClient client = HxClient.newBuilder().config(config).build();
 ```
 
 **Supported Authentication Schemes:**
@@ -129,31 +141,87 @@ def client = HxClient.create(config)
 
 ### Custom Retry Configuration
 
-```groovy
-def config = HxConfig.builder()
-    .withMaxAttempts(5)
-    .withDelay(Duration.ofSeconds(1))
-    .withMaxDelay(Duration.ofMinutes(2))
-    .withJitter(0.5)
-    .withMultiplier(2.0)
-    .withRetryStatusCodes([429, 500, 502, 503, 504] as Set)
-    .build()
+```java
+// Using HxClient builder (recommended)
+HxClient client = HxClient.newBuilder()
+    .maxAttempts(5)
+    .retryDelay(Duration.ofSeconds(1))
+    .build();
+
+// Using HxConfig builder for advanced configuration
+HxConfig config = HxConfig.newBuilder()
+    .maxAttempts(5)
+    .delay(Duration.ofSeconds(1))
+    .maxDelay(Duration.ofMinutes(2))
+    .jitter(0.5)
+    .multiplier(2.0)
+    .retryStatusCodes(Set.of(429, 500, 502, 503, 504))
+    .build();
+
+HxClient client = HxClient.newBuilder().config(config).build();
 ```
 
 ### Integration with Existing Retry Configuration
 
-```groovy
-// Use any existing Retryable.Config
-def retryConfig = Retryable.ofDefaults().config()
-def client = HxClient.create(retryConfig)
+```java
+// Use any existing Retryable.Config with HxClient builder
+Retryable.Config retryConfig = Retryable.ofDefaults().config();
+HxClient client = HxClient.newBuilder()
+    .retryConfig(retryConfig)
+    .bearerToken("your-jwt-token")
+    .build();
 
-// Or combine with HTTP-specific settings
-def config = HxConfig.builder()
-    .withRetryConfig(retryConfig)
-    .withJwtToken("your-jwt-token")
-    .withRetryStatusCodes([429, 503] as Set)
-    .build()
-def client = HxClient.create(config)
+// Or combine with HTTP-specific settings using HxConfig
+HxConfig config = HxConfig.newBuilder()
+    .retryConfig(retryConfig)
+    .bearerToken("your-jwt-token")
+    .retryStatusCodes(Set.of(429, 503))
+    .build();
+
+HxClient client = HxClient.newBuilder().config(config).build();
+```
+
+### New Cookie Policy Configuration (v2.1.0+)
+
+Configure cookie handling for JWT token refresh operations:
+
+```java
+// Configure cookie policy for token refresh operations
+HxClient client = HxClient.newBuilder()
+    .bearerToken("your-jwt-token")
+    .refreshToken("your-refresh-token") 
+    .refreshTokenUrl("https://api.example.com/oauth/token")
+    .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)  // Accept all cookies
+    // .refreshCookiePolicy(CookiePolicy.ACCEPT_NONE)  // Accept no cookies
+    // .refreshCookiePolicy(CookiePolicy.ACCEPT_ORIGINAL_SERVER)  // Accept only from original server
+    .build();
+```
+
+## Migration Guide (v2.0.0 → v2.1.0)
+
+Version 2.1.0 introduces new setter methods without the `with` prefix to align with HxClient.Builder patterns. The old `with` prefixed methods are deprecated but still work:
+
+```java
+// ❌ Deprecated (still works with warnings)
+HxConfig config = HxConfig.newBuilder()
+    .withBearerToken("token")
+    .withMaxAttempts(3)
+    .withRefreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+    .build();
+
+// ✅ Recommended (new in v2.1.0)
+HxConfig config = HxConfig.newBuilder()
+    .bearerToken("token")
+    .maxAttempts(3)
+    .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+    .build();
+
+// ✅ Best practice: Use HxClient.Builder directly
+HxClient client = HxClient.newBuilder()
+    .bearerToken("token")
+    .maxAttempts(3)
+    .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
+    .build();
 ```
 
 ## Configuration Options
@@ -171,6 +239,7 @@ def client = HxClient.create(config)
 | `refreshTokenUrl` | URL for token refresh requests | null |
 | `tokenRefreshTimeout` | Timeout for token refresh requests | 30s |
 | `basicAuthToken` | Token for HTTP Basic authentication (username:password format) | null |
+| `refreshCookiePolicy` | Cookie policy for JWT token refresh operations (ACCEPT_ALL, ACCEPT_NONE, ACCEPT_ORIGINAL_SERVER) | null |
 | `wwwAuthentication` | Enable WWW-Authenticate challenge handling | false |
 | `wwwAuthenticationCallback` | Callback for providing authentication credentials | null |
 
