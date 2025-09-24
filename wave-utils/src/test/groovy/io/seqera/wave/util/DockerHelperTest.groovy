@@ -523,14 +523,17 @@ class DockerHelperTest extends Specification {
     def 'should create singularity content from conda file' () {
         given:
         def CONDA_OPTS = new CondaOpts([basePackages: 'foo::bar=1.0'])
+        def unTarLayersCmd = ['cd / && tar -xzf /opt/layers/layer1.tar.gz && rm /opt/layers/layer1.tar.gz', 'cd / && tar -xzf /opt/layers/layer2.tar.gz && rm /opt/layers/layer2.tar.gz']
 
         expect:
-        DockerHelper.condaFileToSingularityFile(CONDA_OPTS)== '''\
+        DockerHelper.condaFileToSingularityFile(CONDA_OPTS, unTarLayersCmd)== '''\
                 BootStrap: docker
                 From: mambaorg/micromamba:1.5.10-noble
                 %files
                     {{wave_context_dir}}/conda.yml /scratch/conda.yml
                 %post
+                    cd / && tar -xzf /opt/layers/layer1.tar.gz && rm /opt/layers/layer1.tar.gz
+                    cd / && tar -xzf /opt/layers/layer2.tar.gz && rm /opt/layers/layer2.tar.gz
                     micromamba install -y -n base -f /scratch/conda.yml
                     micromamba install -y -n base foo::bar=1.0
                     micromamba env export --name base --explicit > environment.lock
@@ -546,7 +549,7 @@ class DockerHelperTest extends Specification {
     def 'should create singularity content from conda file and base packages' () {
 
         expect:
-        DockerHelper.condaFileToSingularityFile(new CondaOpts([:]))== '''\
+        DockerHelper.condaFileToSingularityFile(new CondaOpts([:]), null)== '''\
                 BootStrap: docker
                 From: mambaorg/micromamba:1.5.10-noble
                 %files
@@ -569,11 +572,15 @@ class DockerHelperTest extends Specification {
         given:
         def PACKAGES = 'bwa=0.7.15 salmon=1.1.1'
         def CHANNELS = ['conda-forge', 'defaults']
+        def unTarLayersCmd = ['cd / && tar -xzf /opt/layers/layer1.tar.gz && rm /opt/layers/layer1.tar.gz', 'cd / && tar -xzf /opt/layers/layer2.tar.gz && rm /opt/layers/layer2.tar.gz']
+
         expect:
-        DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
+        DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts([:]), unTarLayersCmd) == '''\
                 BootStrap: docker
                 From: mambaorg/micromamba:1.5.10-noble
                 %post
+                    cd / && tar -xzf /opt/layers/layer1.tar.gz && rm /opt/layers/layer1.tar.gz
+                    cd / && tar -xzf /opt/layers/layer2.tar.gz && rm /opt/layers/layer2.tar.gz
                     micromamba install -y -n base -c conda-forge -c defaults bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base conda-forge::procps-ng
                     micromamba env export --name base --explicit > environment.lock
@@ -593,7 +600,7 @@ class DockerHelperTest extends Specification {
         def PACKAGES = 'bwa=0.7.15 salmon=1.1.1'
 
         expect:
-        DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, CONDA_OPTS) == '''\
+        DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, CONDA_OPTS, null) == '''\
                 BootStrap: docker
                 From: mambaorg/micromamba:1.5.10-noble
                 %post
@@ -613,12 +620,16 @@ class DockerHelperTest extends Specification {
         given:
         def CHANNELS = 'foo,bar'.tokenize(',')
         def PACKAGES = 'bwa=0.7.15 salmon=1.1.1'
+        def unTarLayersCmd = ['cd / && tar -xzf /opt/layers/layer1.tar.gz && rm /opt/layers/layer1.tar.gz', 'cd / && tar -xzf /opt/layers/layer2.tar.gz && rm /opt/layers/layer2.tar.gz']
+
 
         expect:
-        DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts([:])) == '''\
+        DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts([:]), unTarLayersCmd) == '''\
                 BootStrap: docker
                 From: mambaorg/micromamba:1.5.10-noble
                 %post
+                    cd / && tar -xzf /opt/layers/layer1.tar.gz && rm /opt/layers/layer1.tar.gz
+                    cd / && tar -xzf /opt/layers/layer2.tar.gz && rm /opt/layers/layer2.tar.gz
                     micromamba install -y -n base -c foo -c bar bwa=0.7.15 salmon=1.1.1
                     micromamba install -y -n base conda-forge::procps-ng
                     micromamba env export --name base --explicit > environment.lock
@@ -638,7 +649,7 @@ class DockerHelperTest extends Specification {
         def PACKAGES = 'bwa=0.7.15 salmon=1.1.1'
 
         expect:
-        DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts(CONDA_OPTS)) == '''\
+        DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts(CONDA_OPTS), null) == '''\
                 BootStrap: docker
                 From: my-base:123
                 %post
@@ -663,12 +674,15 @@ class DockerHelperTest extends Specification {
         def CHANNELS = ['conda-forge', 'defaults']
         def OPTS = [mambaImage:'my-base:123', commands: ['apt-get update -y && apt-get install -y procps']]
         def PACKAGES = 'https://foo.com/some/conda-lock.yml'
+        def unTarLayersCmd = ['cd / && tar -xzf /opt/layers/layer1.tar.gz && rm /opt/layers/layer1.tar.gz', 'cd / && tar -xzf /opt/layers/layer2.tar.gz && rm /opt/layers/layer2.tar.gz']
 
         expect:
-        DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts(OPTS)) == '''\
+        DockerHelper.condaPackagesToSingularityFile(PACKAGES, CHANNELS, new CondaOpts(OPTS), unTarLayersCmd) == '''\
                 BootStrap: docker
                 From: my-base:123
                 %post
+                    cd / && tar -xzf /opt/layers/layer1.tar.gz && rm /opt/layers/layer1.tar.gz
+                    cd / && tar -xzf /opt/layers/layer2.tar.gz && rm /opt/layers/layer2.tar.gz
                     micromamba install -y -n base -c conda-forge -c defaults -f https://foo.com/some/conda-lock.yml
                     micromamba install -y -n base conda-forge::procps-ng
                     micromamba env export --name base --explicit > environment.lock

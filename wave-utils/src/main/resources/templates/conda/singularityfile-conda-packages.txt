@@ -1,6 +1,7 @@
 BootStrap: docker
 From: {{base_image}}
 %post
+    {{untar_layers_cmd}}
     micromamba install -y -n base {{channel_opts}} {{target}}
     {{base_packages}}
     micromamba env export --name base --explicit > environment.lock

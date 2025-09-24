@@ -3,6 +3,7 @@ From: {{base_image}}
 %files
     {{wave_context_dir}}/conda.yml /scratch/conda.yml
 %post
+    {{untar_layers_cmd}}
     micromamba install -y -n base -f /scratch/conda.yml
     {{base_packages}}
     micromamba env export --name base --explicit > environment.lock
