@@ -100,6 +100,9 @@ publishing {
     publications {
         maven(MavenPublication) {
             from(components.java)
+            // Suppress test fixtures capability warnings for Maven POM compatibility
+            suppressPomMetadataWarningsFor('testFixturesApiElements')
+            suppressPomMetadataWarningsFor('testFixturesRuntimeElements')
         }
     }
 }
