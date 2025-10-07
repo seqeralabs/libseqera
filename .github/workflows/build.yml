@@ -86,6 +86,9 @@ jobs:
           AWS_JAVA_V1_DISABLE_DEPRECATION_ANNOUNCEMENT: true
           AWS_DEFAULT_REGION: 'eu-west-1'
           PUBLISH_REPO_URL: "s3://maven.seqera.io/releases"
+          OCI_REGISTRY_USERNAME: "public-cr-admin"
+          OCI_REGISTRY_PASSWORD: "${{ secrets.SEQERA_PUBLIC_CR_PASSWORD }}"
+          OCI_REGISTRY_URL: "https://public.cr.seqera.io/maven/releases"
 
       - name: Publish tests report
         if: failure()

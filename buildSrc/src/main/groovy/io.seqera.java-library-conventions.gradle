@@ -23,13 +23,11 @@ plugins {
     // Apply the groovy Plugin to add support for Groovy.
     id 'java-library'
     id 'groovy'
-    id 'maven-publish'
+    id 'io.seqera.maven-oci-registry'
 }
 
 repositories {
     mavenCentral()
-    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/releases' }
-    maven { url = 'https://s3-eu-west-1.amazonaws.com/maven.seqera.io/snapshots' }
 }
 
 java {
@@ -86,6 +84,11 @@ tasks.withType(Test) {
     ])
 }
 
+// Publishing configuration
+ext.ociRegistryUsername = project.findProperty('ociRegistryUsername') ?: System.getenv('OCI_REGISTRY_USERNAME')
+ext.ociRegistryPassword = project.findProperty('ociRegistryPassword') ?: System.getenv('OCI_REGISTRY_PASSWORD')
+ext.ociRegistryUrl = project.findProperty('ociRegistryUrl') ?: System.getenv('OCI_REGISTRY_URL') ?: "https://public.cr.stage-seqera.io/maven/snapshots"
+
 publishing {
     repositories {
         maven {
@@ -95,6 +98,16 @@ publishing {
                 accessKey = project.findProperty('aws_access_key_id') ?: System.getenv('AWS_ACCESS_KEY_ID')
                 secretKey = project.findProperty('aws_secret_access_key') ?: System.getenv('AWS_SECRET_ACCESS_KEY')
             }
+        }
+
+        mavenOci {
+            name = 'SeqeraOci'
+            url = ociRegistryUrl
+            credentials {
+                username = ociRegistryUsername
+                password = ociRegistryPassword
+            }
+            overwritePolicy = 'skip'
         }
     }
     publications {

@@ -24,3 +24,7 @@ repositories {
     // Use the plugin portal to apply community plugins in convention plugins.
     gradlePluginPortal()
 }
+
+dependencies {
+    implementation 'io.seqera.maven-oci-registry:io.seqera.maven-oci-registry.gradle.plugin:0.2.1'
+}
