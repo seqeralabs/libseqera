@@ -1,0 +1,9 @@
+# lib-lang changelog
+
+1.1.0 - 19 Oct 2025
+- Refactor TypeHelper to pure Java, removing Groovy dependencies
+
+1.0.0 - Aug 2025
+- Initial release of lib-lang module with TypeHelper utility [5128886]
+- Implement getGenericType() for extracting type parameters at runtime [5128886]
+- Support reflection-based generic type inference for base classes [5128886]
