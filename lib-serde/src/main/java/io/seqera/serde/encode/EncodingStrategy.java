@@ -15,15 +15,15 @@
  *
  */
 
-package io.seqera.serde.encode
+package io.seqera.serde.encode;
 
 /**
  * A generic interface for encoding and decoding objects between two types.
- * 
+ *
  * <p>This interface defines the contract for serialization and deserialization strategies,
  * allowing for pluggable encoding implementations such as JSON, XML, binary formats, or
  * custom encodings. Implementations should be stateless and thread-safe.</p>
- * 
+ *
  * <p>Common use cases include:</p>
  * <ul>
  *   <li>Message serialization for queues and streams</li>
@@ -31,7 +31,7 @@ package io.seqera.serde.encode
  *   <li>Network communication protocols</li>
  *   <li>Configuration and data exchange formats</li>
  * </ul>
- * 
+ *
  * <p>Example implementation for JSON encoding:</p>
  * <pre>{@code
  * class JsonEncodingStrategy implements EncodingStrategy<Object, String> {
@@ -39,7 +39,7 @@ package io.seqera.serde.encode
  *     String encode(Object object) {
  *         return JsonOutput.toJson(object)
  *     }
- *     
+ *
  *     @Override
  *     Object decode(String encoded) {
  *         return new JsonSlurper().parseText(encoded)
@@ -53,11 +53,11 @@ package io.seqera.serde.encode
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  */
-interface EncodingStrategy<T,S> {
+public interface EncodingStrategy<T,S> {
 
     /**
      * Encodes an object of type {@code T} into its corresponding encoded representation of type {@code S}.
-     * 
+     *
      * <p>This method should be deterministic and produce the same encoded output for equivalent
      * input objects. Implementations must handle null inputs appropriately, either by returning
      * a null representation or throwing an appropriate exception.</p>
@@ -65,11 +65,11 @@ interface EncodingStrategy<T,S> {
      * @param object the object to encode; may be null depending on implementation
      * @return the encoded representation of the object
      */
-    S encode(T object)
+    S encode(T object);
 
     /**
      * Decodes an encoded representation of type {@code S} back into its original form of type {@code T}.
-     * 
+     *
      * <p>This method should be the inverse of {@link #encode(Object)}, such that for any object
      * {@code obj}, the expression {@code decode(encode(obj))} should yield an equivalent object.
      * Implementations must handle malformed or corrupted encoded data gracefully.</p>
@@ -77,6 +77,6 @@ interface EncodingStrategy<T,S> {
      * @param encoded the encoded representation to decode; may be null depending on implementation
      * @return the decoded object
      */
-    T decode(S encoded)
+    T decode(S encoded);
 
 }
