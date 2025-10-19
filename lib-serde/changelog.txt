@@ -1,0 +1,9 @@
+# lib-serde changelog
+
+1.1.0 - 19 Oct 2025
+- Refactor EncodingStrategy interface to pure Java [bd5303f9]
+
+1.0.0 - Aug 2025
+- Initial release of lib-serde module with core serialization interfaces [0c9e9cc]
+- Provide EncodingStrategy interface for bidirectional encoding/decoding [0c9e9cc]
+- Provide StringEncodingStrategy specialization for text-based formats [0c9e9cc]
