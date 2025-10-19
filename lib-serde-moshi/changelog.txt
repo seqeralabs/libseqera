@@ -1,0 +1,16 @@
+# lib-serde-moshi changelog
+
+1.0.0 - 19 Oct 2025
+- Initial release of lib-serde-moshi module extracted from Wave project
+- Refactor all classes from Groovy to pure Java
+- Convert MoshiEncodeStrategy to abstract base class with type inference
+- Add ByteArrayAdapter for Base64 encoding of byte arrays
+- Add DateTimeAdapter for ISO-8601 Instant and nanosecond Duration serialization
+- Add PathAdapter for java.nio.file.Path serialization
+- Add UriAdapter for java.net.URI serialization
+- Add MoshiSerializable marker interface for type documentation
+- Maintain backward compatibility with legacy Duration float format
+- Expose Moshi API dependencies for custom adapter creation
+- Add comprehensive Javadocs for all public APIs
+- Include Groovy/Spock test suite with full coverage
+- Change package from io.seqera.wave.encoder to io.seqera.serde.moshi
