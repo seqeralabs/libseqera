@@ -26,6 +26,7 @@ jobs:
           "lib-random",
           "lib-retry",
           "lib-serde",
+          "lib-serde-moshi",
           "lib-trace",
           "wave-api",
           "wave-utils"

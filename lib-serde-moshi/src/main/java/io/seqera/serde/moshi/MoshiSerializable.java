@@ -15,31 +15,16 @@
  *
  */
 
-pluginManagement {
-    repositories {
-        mavenCentral()
-        gradlePluginPortal()
-    }
+package io.seqera.serde.moshi;
+
+/**
+ * Marker interface for Moshi serializable objects.
+ *
+ * <p>This interface can be used to mark classes that are intended to be serialized
+ * and deserialized using the Moshi JSON library. It serves as a type marker and
+ * documentation aid but does not impose any behavioral requirements.</p>
+ *
+ * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
+ */
+public interface MoshiSerializable {
 }
-
-
-rootProject.name = 'libseqera'
-include('wave-api')
-include('wave-utils')
-include('lib-activator')
-include('lib-crypto')
-include('lib-commons-io')
-include('lib-data-queue-redis')
-include('lib-data-stream-redis')
-include('lib-fixtures-redis')
-include('lib-httpx')
-include('lib-mail')
-include('lib-pool')
-include('lib-retry')
-include('lib-random')
-include('lib-serde')
-include('lib-serde-moshi')
-include('lib-trace')
-include('lib-lang')
-include('jedis-lock')
-

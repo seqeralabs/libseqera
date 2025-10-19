@@ -75,6 +75,7 @@ jobs:
           bash publish.sh lib-random
           bash publish.sh lib-retry
           bash publish.sh lib-serde
+          bash publish.sh lib-serde-moshi
           bash publish.sh lib-trace
           bash publish.sh wave-api
           bash publish.sh wave-utils

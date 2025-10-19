@@ -22,6 +22,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-data-queue-redis](lib-data-queue-redis/)** - Message queue abstraction with Redis and local implementations
 - **[lib-data-stream-redis](lib-data-stream-redis/)** - Message streaming with Redis Streams and local implementations
 - **[lib-serde](lib-serde/)** - Serialization/deserialization utilities
+- **[lib-serde-moshi](lib-serde-moshi/)** - Moshi JSON serialization with custom adapters for common types
 - **[lib-random](lib-random/)** - Random key generation utilities
 
 ### Testing Support
