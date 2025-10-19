@@ -48,6 +48,3 @@ ret=$(aws s3api head-object --bucket $BUCKET --key $KEY 2>&1) && {
     exit 1
   fi 
 }
-
-## Publish to Seqera OCI public registry
-./gradlew $NAME:publishMavenPublicationToSeqeraOciRepository
