@@ -1,0 +1,21 @@
+# lib-cache-tiered-redis changelog
+
+1.0.0 - 19 Oct 2025
+- Initial release of lib-cache-tiered-redis extracted from Wave project
+- Refactor all classes from Groovy to pure Java
+- Implement TieredCache interface for two-tier caching strategy
+- Add AbstractTieredCache base class with Caffeine L1 and Redis L2 support
+- Add RedisL2TieredCache implementation using Jedis client
+- Support TieredKey interface for complex cache keys
+- Add per-key locking for thread-safe concurrent access
+- Support TTL-based expiration at both L1 and L2 levels
+- Add getOrCompute methods with loader functions
+- Provide automatic L1 cache hydration from L2 on miss
+- Change package from io.seqera.wave.store.cache to io.seqera.cache.tiered
+- Use RedisActivator marker interface for conditional bean loading
+- Replace assert statements with proper IllegalArgumentException for null validation
+- Replace custom Pair class with Java record for modern, immutable implementation
+- Add comprehensive Javadocs for all public APIs
+- Include detailed README with usage examples and best practices
+- Port test suite from Wave (AbstractTieredCacheTest, RedisL2TieredCacheTest)
+- Add validation tests for null key and value arguments

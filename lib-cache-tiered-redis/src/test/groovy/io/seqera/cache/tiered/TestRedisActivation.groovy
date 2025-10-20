@@ -15,32 +15,18 @@
  *
  */
 
-pluginManagement {
-    repositories {
-        mavenCentral()
-        gradlePluginPortal()
-    }
+package io.seqera.cache.tiered
+
+import io.micronaut.context.annotation.Requires
+import io.seqera.activator.redis.RedisActivator
+import jakarta.inject.Singleton
+
+/**
+ * Test Redis activator for conditional bean loading in tests.
+ *
+ * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
+ */
+@Singleton
+@Requires(env=['redis'])
+class TestRedisActivation implements RedisActivator {
 }
-
-
-rootProject.name = 'libseqera'
-include('wave-api')
-include('wave-utils')
-include('lib-activator')
-include('lib-crypto')
-include('lib-commons-io')
-include('lib-data-queue-redis')
-include('lib-data-stream-redis')
-include('lib-fixtures-redis')
-include('lib-httpx')
-include('lib-mail')
-include('lib-pool')
-include('lib-retry')
-include('lib-random')
-include('lib-cache-tiered-redis')
-include('lib-serde')
-include('lib-serde-moshi')
-include('lib-trace')
-include('lib-lang')
-include('jedis-lock')
-

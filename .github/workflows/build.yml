@@ -63,6 +63,7 @@ jobs:
         run: |
           bash publish.sh jedis-lock
           bash publish.sh lib-activator
+          bash publish.sh lib-cache-tiered-redis
           bash publish.sh lib-commons-io
           bash publish.sh lib-crypto
           bash publish.sh lib-data-queue-redis

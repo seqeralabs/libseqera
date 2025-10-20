@@ -8,6 +8,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[wave-api](wave-api/)** - API models and DTOs for Wave container service
 - **[wave-utils](wave-utils/)** - Utility classes for Wave (Docker helpers, file operations, template rendering)
 - **[lib-activator](lib-activator/)** - Conditional activation markers for enabling components based on infrastructure availability
+- **[lib-cache-tiered-redis](lib-cache-tiered-redis/)** - Two-tier caching with Caffeine (L1) and Redis (L2) for distributed caching
 - **[lib-crypto](lib-crypto/)** - Cryptographic utilities (asymmetric encryption, HMAC signatures, secure tokens)
 - **[lib-httpx](lib-httpx/)** - Enhanced HTTP client with automatic retry logic and JWT token refresh
 - **[lib-mail](lib-mail/)** - Email functionality with Micronaut integration
