@@ -1,0 +1,4 @@
+# lib-util-http changelog
+
+1.0.0 - 26 Oct 2025
+- Initial release of lib-util-http module with HTTP debugging utilities

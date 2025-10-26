@@ -29,6 +29,7 @@ jobs:
           "lib-serde",
           "lib-serde-moshi",
           "lib-trace",
+          "lib-util-http",
           "wave-api",
           "wave-utils"
         ]
