@@ -1,0 +1,9 @@
+# lib-fixtures-redis changelog
+
+1.1.0 - 4 Nov 2024
+- Add centralized TestRedisActivation class as Java test fixture
+
+1.0.0 - Initial release
+- Initial release of lib-fixtures-redis
+- Provide shared RedisActivator bean for all Redis library tests
+- Eliminate duplicate TestRedisActivation implementations across projects
