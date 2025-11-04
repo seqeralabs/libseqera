@@ -1,0 +1,24 @@
+# lib-data-queue-redis changelog
+
+1.1.1 - 4 Nov 2024
+- Remove duplicate TestRedisActivation class
+- Use centralized TestRedisActivation from lib-fixtures-redis test fixtures
+- Add testFixtures dependency on lib-fixtures-redis
+
+1.1.0 - 4 Aug 2024
+- Replace environment-based activation with RedisActivator bean pattern
+- Add lib-activator dependency with RedisActivator interface
+- Update LocalMessageQueue and RedisMessageQueue to use @Requires(bean = RedisActivator)
+- Improve conditional bean loading for Redis components
+
+1.0.0 - 26 Jul 2024
+- Initial release of lib-data-queue-redis extracted from Wave project
+- Implement MessageQueue interface for distributed message queuing
+- Add AbstractMessageQueue base class with sender management
+- Add LocalMessageQueue for in-memory message queuing
+- Add RedisMessageQueue implementation using Jedis client
+- Support MessageSender interface for message publishing
+- Add queue capacity management with configurable limits
+- Support message expiration with TTL
+- Use RedisActivator marker interface for conditional bean loading
+- Include comprehensive test suite with Redis testcontainers
