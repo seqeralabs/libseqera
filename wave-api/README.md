@@ -1,5 +1,10 @@
 # wave-api
 
+> [!WARNING]
+> **This library is deprecated.** This version is no longer maintained in libseqera.
+> Please use the version in the [Wave project](https://github.com/seqeralabs/wave) instead,
+> which is actively maintained as a sub-project of Wave.
+
 API models and DTOs for the Wave container service.
 
 ## Installation

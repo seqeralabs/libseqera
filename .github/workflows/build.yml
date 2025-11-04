@@ -68,7 +68,7 @@ jobs:
           bash publish.sh lib-crypto
           bash publish.sh lib-data-queue-redis
           bash publish.sh lib-data-stream-redis
-          bash publish.sh lib-fixtures-redis          
+          bash publish.sh lib-fixtures-redis
           bash publish.sh lib-lang
           bash publish.sh lib-httpx
           bash publish.sh lib-mail
@@ -79,8 +79,6 @@ jobs:
           bash publish.sh lib-serde
           bash publish.sh lib-serde-moshi
           bash publish.sh lib-trace
-          bash publish.sh wave-api
-          bash publish.sh wave-utils
 
         env:
           GRADLE_OPTS: '-Dorg.gradle.daemon=false'

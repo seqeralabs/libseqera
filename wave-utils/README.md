@@ -1,5 +1,10 @@
 # wave-utils
 
+> [!WARNING]
+> **This library is deprecated.** This version is no longer maintained in libseqera.
+> Please use the version in the [Wave project](https://github.com/seqeralabs/wave) instead,
+> which is actively maintained as a sub-project of Wave.
+
 Utility classes for Wave container operations, file handling, and template processing.
 
 ## Installation
