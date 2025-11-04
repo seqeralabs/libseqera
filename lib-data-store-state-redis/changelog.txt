@@ -1,0 +1,15 @@
+# lib-data-store-state-redis changelog
+
+1.0.0 - 4 Nov 2024
+- Initial release of lib-data-store-state-redis extracted from Wave project
+- Refactor package from io.seqera.wave.store.state to io.seqera.data.store.state
+- Implement StateStore interface for distributed state management
+- Add AbstractStateStore base class with serialization support
+- Add LocalStateProvider for in-memory state storage with Lua script support
+- Add RedisStateProvider implementation using Jedis client
+- Support atomic counter operations with CountParams and CountResult
+- Support RequestIdAware interface for request tracking
+- Add StateEntry data class for state management
+- Use RedisActivator marker interface for conditional bean loading
+- Use centralized TestRedisActivation from lib-fixtures-redis
+- Include comprehensive test suite with Redis testcontainers

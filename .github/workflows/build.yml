@@ -67,6 +67,8 @@ jobs:
           bash publish.sh lib-commons-io
           bash publish.sh lib-crypto
           bash publish.sh lib-data-queue-redis
+          bash publish.sh lib-data-store-future-redis
+          bash publish.sh lib-data-store-state-redis
           bash publish.sh lib-data-stream-redis
           bash publish.sh lib-fixtures-redis
           bash publish.sh lib-lang

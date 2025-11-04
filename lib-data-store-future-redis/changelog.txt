@@ -1,0 +1,15 @@
+# lib-data-store-future-redis changelog
+
+1.0.0 - 4 Nov 2024
+- Initial release of lib-data-store-future-redis extracted from Wave project
+- Refactor package from io.seqera.wave.service.data.future to io.seqera.data.store.future
+- Implement FutureStore interface for distributed CompletableFuture handling
+- Add AbstractFutureStore base class with timeout and polling support
+- Add FutureHash interface for future value storage
+- Add LocalFutureHash for in-memory future storage
+- Add RedisFutureHash implementation using Jedis client with atomic operations
+- Support distributed future completion across multiple service instances
+- Enable timeout-based future expiration with configurable poll intervals
+- Use RedisActivator marker interface for conditional bean loading
+- Use centralized TestRedisActivation from lib-fixtures-redis
+- Include comprehensive test suite with Redis testcontainers
