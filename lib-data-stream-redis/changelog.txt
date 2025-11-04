@@ -1,0 +1,29 @@
+# lib-data-stream-redis changelog
+
+1.1.2 - 4 Nov 2024
+- Remove duplicate TestRedisActivation class
+- Use centralized TestRedisActivation from lib-fixtures-redis test fixtures
+- Add testFixtures dependency on lib-fixtures-redis
+
+1.1.1 - 9 Sep 2024
+- Fix: Create consumer group if it does not exist when retrieving messages from Redis (COMP-428)
+- Improve error handling in RedisMessageStream
+
+1.1.0 - 31 Jul 2024
+- Add RedisStreamConfig interface for better configuration management
+- Extract hardcoded values from RedisMessageStream into configuration
+- Enhance JavaDoc documentation for LocalMessageStream and RedisMessageStream
+- Add TestConfig implementation for test environment
+- Improve code maintainability and configurability
+
+1.0.0 - 26 Jul 2024
+- Initial release of lib-data-stream-redis extracted from Wave project
+- Implement MessageStream interface for distributed message streaming
+- Add AbstractMessageStream base class with consumer management
+- Add LocalMessageStream for in-memory message streaming
+- Add RedisMessageStream implementation using Jedis client
+- Support MessageConsumer interface for message processing
+- Add consumer group management with automatic group creation
+- Support message acknowledgment and pending message handling
+- Use RedisActivator marker interface for conditional bean loading
+- Include comprehensive test suite with Redis testcontainers
