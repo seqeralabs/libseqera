@@ -1,5 +1,8 @@
 # lib-data-queue-redis changelog
 
+1.1.2 - 26 Nov 2024
+- Bump logback version to 1.5.19
+
 1.1.1 - 4 Nov 2024
 - Remove duplicate TestRedisActivation class
 - Use centralized TestRedisActivation from lib-fixtures-redis test fixtures

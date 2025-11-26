@@ -54,8 +54,8 @@ java {
 dependencies {
     implementation 'org.slf4j:slf4j-api:2.0.16'
 
-    testFixturesImplementation 'ch.qos.logback:logback-core:1.5.15'
-    testFixturesImplementation 'ch.qos.logback:logback-classic:1.5.15'
+    testFixturesImplementation 'ch.qos.logback:logback-core:1.5.19'
+    testFixturesImplementation 'ch.qos.logback:logback-classic:1.5.19'
     testFixturesImplementation "org.apache.groovy:groovy:4.0.24"
     testFixturesImplementation "org.apache.groovy:groovy-nio:4.0.24"
     testFixturesImplementation "org.apache.groovy:groovy-test:4.0.24"
