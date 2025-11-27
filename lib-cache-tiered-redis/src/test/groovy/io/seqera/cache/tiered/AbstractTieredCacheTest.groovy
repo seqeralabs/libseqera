@@ -25,6 +25,7 @@ import groovy.transform.Canonical
 import groovy.transform.Memoized
 import io.micronaut.context.ApplicationContext
 import io.seqera.fixtures.redis.RedisTestContainer
+import io.seqera.serde.Encodable
 import io.seqera.serde.moshi.MoshiEncodeStrategy
 import io.seqera.serde.moshi.MoshiSerializable
 import spock.lang.Shared
@@ -40,7 +41,7 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
 
     @Memoized
     static MoshiEncodeStrategy encoder() {
-        JsonAdapter.Factory factory = PolymorphicJsonAdapterFactory.of(MoshiSerializable.class, "@type")
+        JsonAdapter.Factory factory = PolymorphicJsonAdapterFactory.of(Encodable.class, "@type")
                 .withSubtype(AbstractTieredCache.Entry.class, AbstractTieredCache.Entry.name)
                 .withSubtype(MyBean.class, MyBean.name)
 

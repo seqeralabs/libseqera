@@ -40,6 +40,7 @@ dependencies {
     compileOnly 'org.jetbrains:annotations:24.0.1'
 
     // Test dependencies
+    testImplementation project(':lib-serde-moshi')
     testImplementation testFixtures(project(':lib-fixtures-redis'))
     testImplementation 'org.testcontainers:testcontainers:1.20.6'
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
