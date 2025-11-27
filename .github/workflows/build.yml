@@ -80,6 +80,7 @@ jobs:
           bash publish.sh lib-retry
           bash publish.sh lib-serde
           bash publish.sh lib-serde-moshi
+          bash publish.sh lib-serde-jackson
           bash publish.sh lib-trace
 
         env:

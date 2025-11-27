@@ -30,6 +30,7 @@ jobs:
           "lib-retry",
           "lib-serde",
           "lib-serde-moshi",
+          "lib-serde-jackson",
           "lib-trace",
           "lib-util-http",
           "wave-api",
