@@ -1,0 +1,9 @@
+# lib-serde-jackson changelog
+
+1.0.0 - 27 Nov 2025
+- Initial release of lib-serde-jackson module
+- Add JacksonEncodingStrategy implementing StringEncodingStrategy interface
+- Add JacksonSerializable marker interface extending Encodable
+- Include JavaTimeModule support for Java 8 date/time types
+- Support custom ObjectMapper configuration
+- Add comprehensive README with usage examples
