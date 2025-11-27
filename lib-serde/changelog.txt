@@ -1,5 +1,8 @@
 # lib-serde changelog
 
+1.2.0 - 27 Nov 2025
+- Add Encodable marker interface for serializable types
+
 1.1.0 - 19 Oct 2025
 - Refactor EncodingStrategy interface to pure Java [bd5303f9]
 
