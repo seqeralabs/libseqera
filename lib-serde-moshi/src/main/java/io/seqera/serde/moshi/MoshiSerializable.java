@@ -17,6 +17,8 @@
 
 package io.seqera.serde.moshi;
 
+import io.seqera.serde.Encodable;
+
 /**
  * Marker interface for Moshi serializable objects.
  *
@@ -24,7 +26,10 @@ package io.seqera.serde.moshi;
  * and deserialized using the Moshi JSON library. It serves as a type marker and
  * documentation aid but does not impose any behavioral requirements.</p>
  *
+ * <p>Extends {@link Encodable} to allow Moshi-serializable objects to be used
+ * in generic encoding contexts without coupling to the Moshi library.</p>
+ *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-public interface MoshiSerializable {
+public interface MoshiSerializable extends Encodable {
 }
