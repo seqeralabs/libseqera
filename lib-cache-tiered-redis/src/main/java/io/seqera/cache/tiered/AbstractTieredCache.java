@@ -28,9 +28,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
+import io.seqera.serde.Encodable;
 import io.seqera.serde.encode.StringEncodingStrategy;
-import io.seqera.serde.moshi.MoshiEncodeStrategy;
-import io.seqera.serde.moshi.MoshiSerializable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,29 +61,29 @@ import org.slf4j.LoggerFactory;
  *
  * @param <K> the type of keys maintained by this cache; must be either a subtype of
  *           {@link CharSequence} or an implementation of {@link TieredKey}
- * @param <V> the type of values maintained by this cache; must extend {@link MoshiSerializable}
+ * @param <V> the type of values maintained by this cache; must extend {@link Encodable}
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-public abstract class AbstractTieredCache<K, V extends MoshiSerializable> implements TieredCache<K, V> {
+public abstract class AbstractTieredCache<K, V extends Encodable> implements TieredCache<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractTieredCache.class);
 
     /**
      * Internal entry wrapper that stores the value along with its expiration timestamp.
      */
-    public static class Entry implements MoshiSerializable {
-        private MoshiSerializable value;
+    public static class Entry implements Encodable {
+        private Encodable value;
         private long expiresAt;
 
         public Entry() {
         }
 
-        public Entry(MoshiSerializable value, long expiresAt) {
+        public Entry(Encodable value, long expiresAt) {
             this.value = value;
             this.expiresAt = expiresAt;
         }
 
-        public MoshiSerializable getValue() {
+        public Encodable getValue() {
             return value;
         }
 
@@ -125,7 +124,7 @@ public abstract class AbstractTieredCache<K, V extends MoshiSerializable> implem
     private final L2TieredCache<String, String> l2;
     private final LoadingCache<String, Lock> locks;
 
-    protected AbstractTieredCache(L2TieredCache<String, String> l2, MoshiEncodeStrategy<Entry> encoder) {
+    protected AbstractTieredCache(L2TieredCache<String, String> l2, StringEncodingStrategy<Entry> encoder) {
         if (l2 == null) {
             log.warn("Missing L2 cache for tiered cache '{}'", getName());
         }

@@ -25,7 +25,7 @@ dependencies {
 - 🌐 **Distributed Consistency**: L2 cache enables cache sharing across instances
 - ⏱️ **TTL Support**: Automatic expiration at both cache levels
 - 🔒 **Thread-Safe**: Per-key locking ensures safe concurrent access
-- 📦 **MoshiSerializable**: Seamless JSON serialization for cache entries
+- 📦 **Flexible Serialization**: Seamless JSON serialization via StringEncodingStrategy
 - 🔧 **Configurable**: Customize cache sizes and prefixes per implementation
 
 ## Usage
@@ -207,7 +207,8 @@ The `RedisActivator` marker interface provides a clean way to conditionally enab
 - Caffeine 3.x (L1 cache)
 - Jedis 5.x (Redis client)
 - Micronaut Context (dependency injection)
-- lib-serde-moshi (JSON serialization)
+- lib-serde (serialization abstraction)
+- lib-serde-moshi (Moshi JSON implementation - optional)
 - lib-activator (conditional bean activation)
 
 ## License
