@@ -6,7 +6,7 @@ group = 'io.seqera'
 version = "${project.file('VERSION').text.trim()}"
 
 dependencies {
-    implementation project(':lib-retry')
+    api project(':lib-retry')
     implementation 'com.google.code.gson:gson:2.10.1'
     implementation 'dev.failsafe:failsafe:3.1.0'
     
