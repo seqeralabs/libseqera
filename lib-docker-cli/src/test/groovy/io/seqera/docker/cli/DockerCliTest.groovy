@@ -1,5 +1,5 @@
 /*
- * Copyright 2025, Seqera Labs
+ * Copyright 2013-2025, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,14 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.seqera.docker
+package io.seqera.docker.cli
 
+import io.seqera.docker.cli.ContainerConfig
+import io.seqera.docker.cli.ContainerState
+import io.seqera.docker.cli.DockerCli
 import spock.lang.Specification
 import spock.lang.Timeout
 import spock.lang.Shared
 
 /**
- * Integration tests for {@link DockerCli}.
+ * Integration tests for {@link io.seqera.docker.cli.DockerCli}.
  * Requires Docker daemon to be running.
  *
  * @author Paolo Di Tommaso

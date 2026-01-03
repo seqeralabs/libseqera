@@ -66,6 +66,7 @@ jobs:
           bash publish.sh lib-cache-tiered-redis
           bash publish.sh lib-commons-io
           bash publish.sh lib-crypto
+          bash publish.sh lib-docker-cli
           bash publish.sh lib-data-queue-redis
           bash publish.sh lib-data-store-future-redis
           bash publish.sh lib-data-store-state-redis
