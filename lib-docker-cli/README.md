@@ -89,30 +89,6 @@ if (DockerCli.isAvailable()) {
 }
 ```
 
-## Integration with Wave
-
-This library can be used as a drop-in replacement for `DockerJobOperation` in the Wave project:
-
-```groovy
-// Before: Using inline ProcessBuilder calls
-private static State getDockerContainerState(String containerName) {
-    // ... manual ProcessBuilder code ...
-}
-
-// After: Using lib-docker-cli
-@Inject DockerCli docker
-
-JobState status(JobSpec jobSpec) {
-    def state = docker.inspect(jobSpec.operationName)
-    if (state.isRunning()) return JobState.running()
-    if (state.isExited()) {
-        def logs = docker.logs(jobSpec.operationName)
-        return JobState.completed(state.exitCode(), logs)
-    }
-    // ...
-}
-```
-
 ## License
 
 Apache License 2.0
