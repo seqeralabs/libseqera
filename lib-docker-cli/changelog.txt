@@ -1,0 +1,9 @@
+# lib-docker-cli changelog
+
+1.0.0 - 3 Jan 2025
+- Initial release
+- DockerCli: run, inspect, logs, stop, rm operations via CLI
+- ContainerConfig: fluent builder for container configuration
+- ContainerState: container state parsing and helper methods
+- FUSE support for Fusion filesystem
+- Works reliably on macOS Docker Desktop
