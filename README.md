@@ -6,22 +6,27 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 
 ### Core Libraries
 - **[lib-activator](lib-activator/)** - Conditional activation markers for enabling components based on infrastructure availability
-- **[lib-crypto](lib-crypto/)** - Cryptographic utilities (asymmetric encryption, HMAC signatures, secure tokens)
-- **[lib-httpx](lib-httpx/)** - Enhanced HTTP client with automatic retry logic and JWT token refresh
-- **[lib-mail](lib-mail/)** - Email functionality with Micronaut integration
-- **[lib-retry](lib-retry/)** - Retry mechanisms with exponential backoff
-- **[lib-pool](lib-pool/)** - Simple object pooling utilities
-- **[lib-lang](lib-lang/)** - Language and type utilities
-- **[lib-trace](lib-trace/)** - Tracing and logging utilities
 - **[lib-commons-io](lib-commons-io/)** - Common I/O utilities for logging and streaming
+- **[lib-crypto](lib-crypto/)** - Cryptographic utilities (asymmetric encryption, HMAC signatures, secure tokens)
+- **[lib-docker-cli](lib-docker-cli/)** - Lightweight Docker CLI wrapper for Java applications
+- **[lib-httpx](lib-httpx/)** - Enhanced HTTP client with automatic retry logic and JWT token refresh
+- **[lib-lang](lib-lang/)** - Language and type utilities
+- **[lib-mail](lib-mail/)** - Email functionality with Micronaut integration
+- **[lib-pool](lib-pool/)** - Simple object pooling utilities
 - **[lib-random](lib-random/)** - Random key generation utilities
+- **[lib-retry](lib-retry/)** - Retry mechanisms with exponential backoff
+- **[lib-trace](lib-trace/)** - Tracing and logging utilities
+- **[lib-util-http](lib-util-http/)** - HTTP utilities for debugging, header dumping, and sensitive data masking
 - **[jedis-lock](jedis-lock/)** - Redis-based distributed locking using Jedis
 
 ### Messaging & Data Libraries
 - **[lib-cache-tiered-redis](lib-cache-tiered-redis/)** - Two-tier caching with Caffeine (L1) and Redis (L2) for distributed caching
 - **[lib-data-queue-redis](lib-data-queue-redis/)** - Message queue abstraction with Redis and local implementations
+- **[lib-data-store-future-redis](lib-data-store-future-redis/)** - Distributed CompletableFuture store for cross-service async operations
+- **[lib-data-store-state-redis](lib-data-store-state-redis/)** - Distributed state store with atomic operations and counters
 - **[lib-data-stream-redis](lib-data-stream-redis/)** - Message streaming with Redis Streams and local implementations
 - **[lib-serde](lib-serde/)** - Serialization/deserialization utilities
+- **[lib-serde-jackson](lib-serde-jackson/)** - Jackson JSON serialization implementing lib-serde interface
 - **[lib-serde-moshi](lib-serde-moshi/)** - Moshi JSON serialization with custom adapters for common types
 
 ### Testing Support
