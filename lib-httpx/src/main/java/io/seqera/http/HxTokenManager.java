@@ -215,25 +215,17 @@ class HxTokenManager {
      */
     public HttpRequest addAuthHeader(HttpRequest originalRequest) {
         // Priority 1: JWT Bearer token
-        final String jwtToken = getCurrentJwtToken();
-        if (jwtToken != null && !jwtToken.isEmpty()) {
-            final String headerValue = jwtToken.startsWith(BEARER_PREFIX) ? jwtToken : BEARER_PREFIX + jwtToken;
-            return HttpRequest.newBuilder(originalRequest, (name, value) -> true)
-                    .header("Authorization", headerValue)
-                    .build();
-        }
+        HttpRequest result = addAuthHeader(originalRequest, getDefaultAuth());
 
-        // Priority 2: Basic authentication
-        if (config.getBasicAuthToken() != null && !config.getBasicAuthToken().isEmpty()) {
+        // Priority 2: Basic authentication fallback (if no JWT auth was applied)
+        if (result == originalRequest && hasBasicAuth()) {
             final String encodedCredentials = Base64.getEncoder().encodeToString(config.getBasicAuthToken().getBytes());
-            final String headerValue = "Basic " + encodedCredentials;
             return HttpRequest.newBuilder(originalRequest, (name, value) -> true)
-                    .header("Authorization", headerValue)
+                    .header("Authorization", "Basic " + encodedCredentials)
                     .build();
         }
 
-        // No authentication configured
-        return originalRequest;
+        return result;
     }
 
     /**
@@ -242,8 +234,7 @@ class HxTokenManager {
      * @return true if both refresh token and refresh URL are configured, false otherwise
      */
     public boolean canRefreshToken() {
-        final HxAuth auth = tokenStore.get(DEFAULT_TOKEN);
-        return auth != null && auth.refreshToken() != null && config.getRefreshTokenUrl() != null;
+        return canRefreshToken(getDefaultAuth());
     }
 
     /**
@@ -263,13 +254,7 @@ class HxTokenManager {
      * @return true if token refresh was successful, false otherwise
      */
     public boolean refreshToken() {
-        if (!canRefreshToken()) {
-            final HxAuth auth = tokenStore.get(DEFAULT_TOKEN);
-            log.warn("Cannot refresh token: refreshToken={} refreshTokenUrl={}",
-                    (auth != null && auth.refreshToken() != null), config.getRefreshTokenUrl());
-            return false;
-        }
-        return doRefreshToken();
+        return refreshToken(getDefaultAuth()) != null;
     }
 
     /**
@@ -280,12 +265,7 @@ class HxTokenManager {
      * @return a CompletableFuture that completes with true if refresh was successful, false otherwise
      */
     public CompletableFuture<Boolean> getOrRefreshTokenAsync() {
-        final HxAuth auth = tokenStore.get(DEFAULT_TOKEN);
-        if (auth == null) {
-            log.warn("Cannot refresh token: no default auth configured");
-            return CompletableFuture.completedFuture(false);
-        }
-        return getOrRefreshTokenAsync(auth).thenApply(result -> result != null);
+        return getOrRefreshTokenAsync(getDefaultAuth()).thenApply(result -> result != null);
     }
 
     /**
@@ -337,13 +317,7 @@ class HxTokenManager {
      * @return a CompletableFuture that completes with true if refresh was successful, false otherwise
      */
     public CompletableFuture<Boolean> refreshTokenAsync() {
-        if (!canRefreshToken()) {
-            final HxAuth auth = tokenStore.get(DEFAULT_TOKEN);
-            log.warn("Cannot refresh token asynchronously: refreshToken={} refreshTokenUrl={}",
-                    (auth != null && auth.refreshToken() != null), config.getRefreshTokenUrl());
-            return CompletableFuture.completedFuture(false);
-        }
-        return CompletableFuture.supplyAsync(this::doRefreshToken);
+        return refreshTokenAsync(getDefaultAuth()).thenApply(result -> result != null);
     }
 
     /**
@@ -354,12 +328,8 @@ class HxTokenManager {
      * @return true if the token refresh was successful, false otherwise
      */
     protected boolean doRefreshToken() {
-        final HxAuth auth = tokenStore.get(DEFAULT_TOKEN);
-        if (auth == null) {
-            log.warn("No auth available for default key");
-            return false;
-        }
-        return doRefreshTokenInternal(DEFAULT_TOKEN, auth) != null;
+        final HxAuth auth = getDefaultAuth();
+        return auth != null && doRefreshToken(auth) != null;
     }
 
     /**
