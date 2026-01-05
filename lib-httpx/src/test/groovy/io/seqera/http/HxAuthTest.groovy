@@ -51,9 +51,16 @@ class HxAuthTest extends Specification {
         def auth3 = HxAuth.of('different.jwt.token', 'refresh1')
 
         expect:
-        auth1.key() == auth2.key()  // same token = same key
-        auth1.key() != auth3.key()  // different token = different key
-        auth1.key().length() == 64  // SHA-256 hex = 64 chars
+        HxAuth.key(auth1) == HxAuth.key(auth2)  // same token = same key
+        HxAuth.key(auth1) != HxAuth.key(auth3)  // different token = different key
+        HxAuth.key(auth1).length() == 64        // SHA-256 hex = 64 chars
+    }
+
+    def 'should return default key for null auth'() {
+        expect:
+        HxAuth.keyOrDefault(null, 'default') == 'default'
+        HxAuth.keyOrDefault(HxAuth.of('token'), 'default') != 'default'
+        HxAuth.keyOrDefault(null, 'custom') == 'custom'
     }
 
     def 'should implement equals and hashCode correctly'() {

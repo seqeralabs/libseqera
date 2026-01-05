@@ -27,9 +27,8 @@ import java.util.Objects;
  * Immutable container for JWT authentication credentials.
  *
  * <p>This class holds a JWT access token and an optional refresh token as a pair.
- * It provides a {@link #key()} method that computes a SHA-256 hash of the token,
- * which can be used as a unique identifier for storing and retrieving token pairs
- * in an {@link HxTokenStore}.
+ * The storage key can be computed using {@link #key(HxAuth)} which returns the
+ * SHA-256 hash of the access token.
  *
  * <p>Instances are created using the factory methods {@link #of(String)} or
  * {@link #of(String, String)}.
@@ -68,19 +67,37 @@ public final class HxAuth {
     }
 
     /**
-     * Computes the SHA-256 hash of the access token.
+     * Computes the storage key for the given authentication object.
      *
-     * @return the SHA-256 hash as a hexadecimal string
+     * <p>Returns the SHA-256 hash of the access token as a hexadecimal string.
+     *
+     * @param auth the authentication object (must not be null)
+     * @return the computed key as a 64-character hexadecimal string
+     * @throws IllegalArgumentException if auth is null
      */
-    public String key() {
+    public static String key(HxAuth auth) {
+        if (auth == null) {
+            throw new IllegalArgumentException("auth cannot be null");
+        }
         try {
             final MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            final byte[] hash = digest.digest(accessToken.getBytes(StandardCharsets.UTF_8));
+            final byte[] hash = digest.digest(auth.accessToken().getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         }
         catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 algorithm not available", e);
         }
+    }
+
+    /**
+     * Computes the storage key for the given authentication object, or returns a default value if null.
+     *
+     * @param auth the authentication object, may be null
+     * @param defaultValue the value to return if auth is null
+     * @return the computed key, or defaultValue if auth is null
+     */
+    public static String keyOrDefault(HxAuth auth, String defaultValue) {
+        return auth != null ? key(auth) : defaultValue;
     }
 
     /**

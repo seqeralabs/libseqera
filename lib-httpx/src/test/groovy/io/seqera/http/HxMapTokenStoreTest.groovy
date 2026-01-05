@@ -17,9 +17,6 @@
 
 package io.seqera.http
 
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-
 import spock.lang.Specification
 
 /**
@@ -56,4 +53,5 @@ class HxMapTokenStoreTest extends Specification {
         store.get('key1') == null
         store.remove('key1') == null
     }
+
 }

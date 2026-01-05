@@ -490,7 +490,7 @@ public class HxClient {
             // Try JWT token refresh
             final boolean canRefresh = (auth != null) ? tokenManager.canRefreshToken(auth) : tokenManager.canRefreshToken();
             if (canRefresh) {
-                final String debugKey = (auth != null) ? auth.key() : "default";
+                final String debugKey = HxAuth.keyOrDefault(auth, "-");
                 log.debug("Received 401 status for auth key {}, attempting token refresh", debugKey);
                 try {
                     final boolean refreshed = (auth != null)
@@ -505,7 +505,7 @@ public class HxClient {
                         return httpClient.send(refreshedRequest, responseBodyHandler);
                     }
                 } catch (Exception e) {
-                    log.warn("Token refresh failed for auth key {}: {}", (auth != null) ? auth.key() : "default", e.getMessage());
+                    log.warn("Token refresh failed for auth key {}: {}", debugKey, e.getMessage());
                 }
             }
 
@@ -576,7 +576,7 @@ public class HxClient {
                 // Try JWT token refresh
                 final boolean canRefresh = (auth != null) ? tokenManager.canRefreshToken(auth) : tokenManager.canRefreshToken();
                 if (canRefresh) {
-                    final String debugKey = (auth != null) ? auth.key() : "default";
+                    final String debugKey = HxAuth.keyOrDefault(auth, "-");
                     log.debug("Received 401 status in async call for auth key {}, attempting token refresh", debugKey);
                     try {
                         final boolean refreshed = (auth != null)
@@ -591,7 +591,7 @@ public class HxClient {
                             return httpClient.sendAsync(refreshedRequest, responseBodyHandler).get();
                         }
                     } catch (Exception e) {
-                        log.warn("Async token refresh failed for auth key {}: {}", (auth != null) ? auth.key() : "default", e.getMessage());
+                        log.warn("Async token refresh failed for auth key {}: {}", debugKey, e.getMessage());
                     }
                 }
 

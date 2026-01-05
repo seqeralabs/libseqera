@@ -350,7 +350,7 @@ class HxTokenManagerTest extends Specification {
         tokenManager.getAuth(auth)
 
         then:
-        customStore.get(auth.key()) == auth
+        customStore.get(HxAuth.key(auth)) == auth
         tokenManager.getTokenStore() == customStore
     }
 }

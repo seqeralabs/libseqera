@@ -310,7 +310,7 @@ class HxTokenManager {
             return CompletableFuture.completedFuture(null);
         }
 
-        final String key = auth.key();
+        final String key = HxAuth.key(auth);
 
         // Use computeIfAbsent for atomic coordination - only first caller creates the future
         return ongoingRefreshes.computeIfAbsent(key, k -> {
@@ -495,9 +495,10 @@ class HxTokenManager {
         if (auth == null) {
             return null;
         }
-        HxAuth stored = tokenStore.get(auth.key());
+        final String key = HxAuth.key(auth);
+        HxAuth stored = tokenStore.get(key);
         if (stored == null) {
-            tokenStore.put(auth.key(), auth);
+            tokenStore.put(key, auth);
             return auth;
         }
         return stored;
@@ -584,7 +585,7 @@ class HxTokenManager {
      */
     protected HxAuth doRefreshToken(HxAuth auth) {
         final HxAuth currentAuth = getAuth(auth);
-        return doRefreshTokenInternal(auth.key(), currentAuth);
+        return doRefreshTokenInternal(HxAuth.key(auth), currentAuth);
     }
 
     /**
