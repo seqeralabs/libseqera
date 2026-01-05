@@ -156,9 +156,15 @@ public class HxClient {
      *               If null, the default configuration will be used.
      */
     protected HxClient(HttpClient httpClient, HxConfig config) {
+        this(httpClient, config, null);
+    }
+
+    protected HxClient(HttpClient httpClient, HxConfig config, HxTokenStore tokenStore) {
         this.httpClient = httpClient;
         this.config = config;
-        this.tokenManager = new HxTokenManager(config);
+        this.tokenManager = tokenStore != null
+                ? new HxTokenManager(config, tokenStore)
+                : new HxTokenManager(config);
     }
 
     /**
@@ -275,6 +281,93 @@ public class HxClient {
         return sendWithRetry(request, HttpResponse.BodyHandlers.ofInputStream());
     }
 
+    // ========================================================================
+    // Multi-user authentication methods
+    // ========================================================================
+
+    /**
+     * Sends an HTTP request synchronously with automatic retry logic using the specified authentication.
+     *
+     * <p>This method allows per-request authentication for multi-user scenarios. The token
+     * is retrieved from the token store (and may have been refreshed since initial creation).
+     * If a 401 response is received, the token will be refreshed and the request retried.
+     *
+     * @param <T> the response body type
+     * @param request the HTTP request to send
+     * @param auth the authentication data for this request
+     * @param responseBodyHandler the response body handler
+     * @return the HTTP response
+     * @throws IOException if all retry attempts fail
+     * @throws InterruptedException if the operation is interrupted
+     */
+    public <T> HttpResponse<T> send(HttpRequest request, HxAuth auth, HttpResponse.BodyHandler<T> responseBodyHandler)
+            throws IOException, InterruptedException {
+        return sendWithRetry(request, auth, responseBodyHandler);
+    }
+
+    /**
+     * Sends an HTTP request synchronously as String using the specified authentication.
+     *
+     * @param request the HTTP request to send
+     * @param auth the authentication data for this request
+     * @return the HTTP response with String body
+     */
+    public HttpResponse<String> sendAsString(HttpRequest request, HxAuth auth) {
+        return sendWithRetry(request, auth, HttpResponse.BodyHandlers.ofString());
+    }
+
+    /**
+     * Sends an HTTP request synchronously as byte array using the specified authentication.
+     *
+     * @param request the HTTP request to send
+     * @param auth the authentication data for this request
+     * @return the HTTP response with byte array body
+     */
+    public HttpResponse<byte[]> sendAsBytes(HttpRequest request, HxAuth auth) {
+        return sendWithRetry(request, auth, HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    /**
+     * Sends an HTTP request synchronously as InputStream using the specified authentication.
+     *
+     * @param request the HTTP request to send
+     * @param auth the authentication data for this request
+     * @return the HTTP response with InputStream body
+     */
+    public HttpResponse<InputStream> sendAsStream(HttpRequest request, HxAuth auth) {
+        return sendWithRetry(request, auth, HttpResponse.BodyHandlers.ofInputStream());
+    }
+
+    /**
+     * Sends an HTTP request asynchronously using the specified authentication.
+     *
+     * @param <T> the response body type
+     * @param request the HTTP request to send
+     * @param auth the authentication data for this request
+     * @param responseBodyHandler the response body handler
+     * @return a CompletableFuture that will complete with the HTTP response
+     */
+    public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, HxAuth auth,
+            HttpResponse.BodyHandler<T> responseBodyHandler) {
+        Executor executor = httpClient.executor().orElse(java.util.concurrent.ForkJoinPool.commonPool());
+        return sendWithRetryAsync(request, auth, responseBodyHandler, executor);
+    }
+
+    /**
+     * Sends an HTTP request asynchronously using the specified authentication and executor.
+     *
+     * @param <T> the response body type
+     * @param request the HTTP request to send
+     * @param auth the authentication data for this request
+     * @param responseBodyHandler the response body handler
+     * @param executor the executor to use for async operations
+     * @return a CompletableFuture that will complete with the HTTP response
+     */
+    public <T> CompletableFuture<HttpResponse<T>> sendAsync(HttpRequest request, HxAuth auth,
+            HttpResponse.BodyHandler<T> responseBodyHandler, Executor executor) {
+        return sendWithRetryAsync(request, auth, responseBodyHandler, executor);
+    }
+
     /**
      * Sends an HTTP request asynchronously with automatic retry logic and JWT token refresh.
      * 
@@ -322,82 +415,23 @@ public class HxClient {
 
     /**
      * Internal method that implements the retry logic for synchronous requests.
-     * 
-     * <p>This method handles the core retry functionality including:
-     * <ul>
-     *   <li>Adding authentication headers</li>
-     *   <li>Executing retry policy for network errors and specific HTTP status codes</li>
-     *   <li>Attempting token refresh on 401 responses</li>
-     *   <li>Re-executing requests with refreshed tokens</li>
-     * </ul>
-     * 
+     *
+     * <p>Delegates to {@link #sendWithRetry(HttpRequest, HxAuth, HttpResponse.BodyHandler)} with default auth.
+     *
      * @param <T> the response body type
      * @param request the HTTP request to send
      * @param responseBodyHandler the response body handler
      * @return the HTTP response after successful execution or retry exhaustion
-     * @throws IOException if all retry attempts fail
-     * @throws InterruptedException if the operation is interrupted
      */
     protected <T> HttpResponse<T> sendWithRetry(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) {
-        final boolean[] tokenRefreshed = {false};
-        
-        final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
-                .retryCondition(config.getRetryCondition())
-                .retryIf(this::shouldRetryOnResponse)
-                .onRetry(event -> {
-                    String message = event.getFailure() != null ? event.getFailure().getMessage() 
-                            : String.valueOf(event.getResult().statusCode());
-                    log.debug("HTTP request retry attempt {}: {}", event.getAttempt(), message);
-                });
-
-        return retry.apply(() -> {
-            final HttpRequest actualRequest = tokenManager.addAuthHeader(request);
-            final HttpResponse<T> response = httpClient.send(actualRequest, responseBodyHandler);
-            
-            if (response.statusCode() != 401 || tokenRefreshed[0]) {
-                return response;
-            }
-            
-            // Try JWT token refresh first if available
-            if (tokenManager.canRefreshToken()) {
-                log.debug("Received 401 status, attempting coordinated token refresh");
-                try {
-                    if (tokenManager.getOrRefreshTokenAsync().get()) {
-                        tokenRefreshed[0] = true;
-                        final HttpRequest refreshedRequest = tokenManager.addAuthHeader(request);
-                        closeResponse(response);
-                        return httpClient.send(refreshedRequest, responseBodyHandler);
-                    }
-                } catch (Exception e) {
-                    log.warn("Token refresh failed: " + e.getMessage());
-                }
-            }
-            
-            // Try WWW-Authenticate challenge handling if enabled
-            if (config.isWwwAuthenticateEnabled()) {
-                HttpRequest authenticatedRequest = handleWwwAuthenticate(request, response);
-                if (authenticatedRequest != null) {
-                    log.debug("Retrying request with WWW-Authenticate challenge");
-                    closeResponse(response);
-                    return httpClient.send(authenticatedRequest, responseBodyHandler);
-                }
-            }
-            
-            return response;
-        });
+        return sendWithRetry(request, tokenManager.getDefaultAuth(), responseBodyHandler);
     }
 
     /**
      * Internal method that implements the retry logic for asynchronous requests.
-     * 
-     * <p>This method handles the core async retry functionality including:
-     * <ul>
-     *   <li>Adding authentication headers</li>
-     *   <li>Executing retry policy for network errors and specific HTTP status codes</li>
-     *   <li>Attempting token refresh on 401 responses</li>
-     *   <li>Re-executing requests with refreshed tokens</li>
-     * </ul>
-     * 
+     *
+     * <p>Delegates to {@link #sendWithRetryAsync(HttpRequest, HxAuth, HttpResponse.BodyHandler, Executor)} with default auth.
+     *
      * @param <T> the response body type
      * @param request the HTTP request to send
      * @param responseBodyHandler the response body handler
@@ -405,50 +439,164 @@ public class HxClient {
      * @return a CompletableFuture that completes with the HTTP response
      */
     protected <T> CompletableFuture<HttpResponse<T>> sendWithRetryAsync(
-            HttpRequest request, 
-            HttpResponse.BodyHandler<T> responseBodyHandler, 
+            HttpRequest request,
+            HttpResponse.BodyHandler<T> responseBodyHandler,
             Executor executor) {
-        
+        return sendWithRetryAsync(request, tokenManager.getDefaultAuth(), responseBodyHandler, executor);
+    }
+
+    /**
+     * Internal method that implements the retry logic for synchronous requests.
+     *
+     * <p>This method handles the core retry functionality including:
+     * <ul>
+     *   <li>Adding authentication headers</li>
+     *   <li>Executing retry policy for network errors and specific HTTP status codes</li>
+     *   <li>Attempting token refresh on 401 responses</li>
+     *   <li>Re-executing requests with refreshed tokens</li>
+     * </ul>
+     *
+     * <p>If auth is null, uses the default token from configuration. Otherwise uses
+     * the specific {@link HxAuth} for multi-user authentication scenarios.
+     *
+     * @param <T> the response body type
+     * @param request the HTTP request to send
+     * @param auth the authentication data for this request, or null to use default token
+     * @param responseBodyHandler the response body handler
+     * @return the HTTP response after successful execution or retry exhaustion
+     */
+    protected <T> HttpResponse<T> sendWithRetry(HttpRequest request, HxAuth auth, HttpResponse.BodyHandler<T> responseBodyHandler) {
         final boolean[] tokenRefreshed = {false};
-        
+
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
                 .retryCondition(config.getRetryCondition())
                 .retryIf(this::shouldRetryOnResponse)
                 .onRetry(event -> {
-                    String message = event.getFailure() != null ? event.getFailure().getMessage() 
+                    String message = event.getFailure() != null ? event.getFailure().getMessage()
+                            : String.valueOf(event.getResult().statusCode());
+                    log.debug("HTTP request retry attempt {}: {}", event.getAttempt(), message);
+                });
+
+        return retry.apply(() -> {
+            final HttpRequest actualRequest = (auth != null)
+                    ? tokenManager.addAuthHeader(request, auth)
+                    : tokenManager.addAuthHeader(request);
+            final HttpResponse<T> response = httpClient.send(actualRequest, responseBodyHandler);
+
+            if (response.statusCode() != 401 || tokenRefreshed[0]) {
+                return response;
+            }
+
+            // Try JWT token refresh
+            final boolean canRefresh = (auth != null) ? tokenManager.canRefreshToken(auth) : tokenManager.canRefreshToken();
+            if (canRefresh) {
+                final String debugKey = (auth != null) ? auth.key() : "default";
+                log.debug("Received 401 status for auth key {}, attempting token refresh", debugKey);
+                try {
+                    final boolean refreshed = (auth != null)
+                            ? tokenManager.getOrRefreshTokenAsync(auth).get() != null
+                            : tokenManager.getOrRefreshTokenAsync().get();
+                    if (refreshed) {
+                        tokenRefreshed[0] = true;
+                        final HttpRequest refreshedRequest = (auth != null)
+                                ? tokenManager.addAuthHeader(request, auth)
+                                : tokenManager.addAuthHeader(request);
+                        closeResponse(response);
+                        return httpClient.send(refreshedRequest, responseBodyHandler);
+                    }
+                } catch (Exception e) {
+                    log.warn("Token refresh failed for auth key {}: {}", (auth != null) ? auth.key() : "default", e.getMessage());
+                }
+            }
+
+            // Try WWW-Authenticate challenge handling if enabled (only for default auth)
+            if (auth == null && config.isWwwAuthenticateEnabled()) {
+                HttpRequest authenticatedRequest = handleWwwAuthenticate(request, response);
+                if (authenticatedRequest != null) {
+                    log.debug("Retrying request with WWW-Authenticate challenge");
+                    closeResponse(response);
+                    return httpClient.send(authenticatedRequest, responseBodyHandler);
+                }
+            }
+
+            return response;
+        });
+    }
+
+    /**
+     * Internal method that implements the retry logic for asynchronous requests.
+     *
+     * <p>This method handles the core async retry functionality including:
+     * <ul>
+     *   <li>Adding authentication headers</li>
+     *   <li>Executing retry policy for network errors and specific HTTP status codes</li>
+     *   <li>Attempting token refresh on 401 responses</li>
+     *   <li>Re-executing requests with refreshed tokens</li>
+     * </ul>
+     *
+     * <p>If auth is null, uses the default token from configuration. Otherwise uses
+     * the specific {@link HxAuth} for multi-user authentication scenarios.
+     *
+     * @param <T> the response body type
+     * @param request the HTTP request to send
+     * @param auth the authentication data for this request, or null to use default token
+     * @param responseBodyHandler the response body handler
+     * @param executor optional executor for async operations, may be null
+     * @return a CompletableFuture that completes with the HTTP response
+     */
+    protected <T> CompletableFuture<HttpResponse<T>> sendWithRetryAsync(
+            HttpRequest request,
+            HxAuth auth,
+            HttpResponse.BodyHandler<T> responseBodyHandler,
+            Executor executor) {
+
+        final boolean[] tokenRefreshed = {false};
+
+        final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
+                .retryCondition(config.getRetryCondition())
+                .retryIf(this::shouldRetryOnResponse)
+                .onRetry(event -> {
+                    String message = event.getFailure() != null ? event.getFailure().getMessage()
                             : String.valueOf(event.getResult().statusCode());
                     log.debug("HTTP async request retry attempt {}: {}", event.getAttempt(), message);
                 });
 
         return retry.applyAsync(() -> {
-            // Perform the HTTP request and coordinated JWT refresh within the retry
-            final HttpRequest actualRequest = tokenManager.addAuthHeader(request);
-            
+            final HttpRequest actualRequest = (auth != null)
+                    ? tokenManager.addAuthHeader(request, auth)
+                    : tokenManager.addAuthHeader(request);
+
             try {
                 final HttpResponse<T> response = httpClient.sendAsync(actualRequest, responseBodyHandler).get();
-                
+
                 if (response.statusCode() != 401 || tokenRefreshed[0]) {
                     return response;
                 }
-                
-                // Try JWT token refresh first if available
-                if (tokenManager.canRefreshToken()) {
-                    log.debug("Received 401 status in async call, attempting coordinated token refresh");
+
+                // Try JWT token refresh
+                final boolean canRefresh = (auth != null) ? tokenManager.canRefreshToken(auth) : tokenManager.canRefreshToken();
+                if (canRefresh) {
+                    final String debugKey = (auth != null) ? auth.key() : "default";
+                    log.debug("Received 401 status in async call for auth key {}, attempting token refresh", debugKey);
                     try {
-                        final boolean refreshed = tokenManager.getOrRefreshTokenAsync().get();
+                        final boolean refreshed = (auth != null)
+                                ? tokenManager.getOrRefreshTokenAsync(auth).get() != null
+                                : tokenManager.getOrRefreshTokenAsync().get();
                         if (refreshed) {
                             tokenRefreshed[0] = true;
-                            final HttpRequest refreshedRequest = tokenManager.addAuthHeader(request);
+                            final HttpRequest refreshedRequest = (auth != null)
+                                    ? tokenManager.addAuthHeader(request, auth)
+                                    : tokenManager.addAuthHeader(request);
                             closeResponse(response);
                             return httpClient.sendAsync(refreshedRequest, responseBodyHandler).get();
                         }
                     } catch (Exception e) {
-                        log.warn("Async token refresh failed: " + e.getMessage());
+                        log.warn("Async token refresh failed for auth key {}: {}", (auth != null) ? auth.key() : "default", e.getMessage());
                     }
                 }
-                
-                // Try WWW-Authenticate challenge handling if enabled
-                if (config.isWwwAuthenticateEnabled()) {
+
+                // Try WWW-Authenticate challenge handling if enabled (only for default auth)
+                if (auth == null && config.isWwwAuthenticateEnabled()) {
                     HttpRequest authenticatedRequest = handleWwwAuthenticate(request, response);
                     if (authenticatedRequest != null) {
                         log.debug("Retrying async request with WWW-Authenticate credentials");
@@ -456,10 +604,9 @@ public class HxClient {
                         return httpClient.sendAsync(authenticatedRequest, responseBodyHandler).get();
                     }
                 }
-                
+
                 return response;
             } catch (java.util.concurrent.ExecutionException e) {
-                // Unwrap ExecutionException to get the original cause for retry mechanism
                 if (e.getCause() instanceof IOException) {
                     throw (IOException) e.getCause();
                 } else if (e.getCause() instanceof InterruptedException) {
@@ -859,7 +1006,8 @@ public class HxClient {
         private HttpClient.Builder httpClientBuilder;
         private HttpClient httpClient;
         private HxConfig.Builder configBuilder;
-        
+        private HxTokenStore tokenStore;
+
         /**
          * Creates a new Builder with default settings.
          */
@@ -1145,7 +1293,33 @@ public class HxClient {
             this.configBuilder.refreshCookiePolicy(policy);
             return this;
         }
-        
+
+        /**
+         * Sets the token store for multi-session authentication.
+         *
+         * <p>The token store manages JWT token pairs for multiple authentication sessions.
+         * By default, an in-memory {@code ConcurrentHashMap}-based store is used. For distributed
+         * deployments, provide a custom implementation backed by Redis, a database, or other
+         * distributed cache.
+         *
+         * <p><strong>Usage Example:</strong>
+         * <pre>{@code
+         * HxTokenStore redisStore = new RedisTokenStore();
+         * HxClient client = HxClient.newBuilder()
+         *     .tokenStore(redisStore)
+         *     .refreshTokenUrl("https://api.example.com/oauth/token")
+         *     .build();
+         * }</pre>
+         *
+         * @param tokenStore the token store implementation
+         * @return this Builder instance
+         * @see HxTokenStore
+         */
+        public Builder tokenStore(HxTokenStore tokenStore) {
+            this.tokenStore = tokenStore;
+            return this;
+        }
+
         /**
          * Builds and returns a new HxClient instance.
          * 
@@ -1155,11 +1329,11 @@ public class HxClient {
          * @return a new HxClient instance
          */
         public HxClient build() {
-            final HttpClient actualHttpClient = (httpClient != null) 
-                    ? httpClient 
+            final HttpClient actualHttpClient = (httpClient != null)
+                    ? httpClient
                     : httpClientBuilder.build();
             final HxConfig actualConfig = configBuilder.build();
-            return new HxClient(actualHttpClient, actualConfig);
+            return new HxClient(actualHttpClient, actualConfig, tokenStore);
         }
     }
 }

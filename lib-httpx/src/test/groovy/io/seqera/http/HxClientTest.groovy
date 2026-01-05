@@ -384,4 +384,17 @@ class HxClientTest extends Specification {
                 .build()
         client3.config.refreshCookiePolicy == CookiePolicy.ACCEPT_ORIGINAL_SERVER
     }
+
+    def 'should configure custom token store via builder'() {
+        given:
+        def customStore = new HxMapTokenStore()
+
+        when:
+        def client = HxClient.newBuilder()
+                .tokenStore(customStore)
+                .build()
+
+        then:
+        client.tokenManager.getTokenStore() == customStore
+    }
 }

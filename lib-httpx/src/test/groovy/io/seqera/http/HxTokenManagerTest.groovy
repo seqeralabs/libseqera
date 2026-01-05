@@ -280,4 +280,77 @@ class HxTokenManagerTest extends Specification {
         tokenManager2.cookieManager != tokenManager3.cookieManager
         tokenManager1.cookieManager != tokenManager3.cookieManager
     }
+
+    // --- Multi-token support tests ---
+
+    def 'getAuth should store and return auth on first call'() {
+        given:
+        def config = HxConfig.newBuilder().build()
+        def tokenManager = new HxTokenManager(config)
+        def auth = HxAuth.of('my.jwt.token', 'refresh')
+
+        when:
+        def result = tokenManager.getAuth(auth)
+
+        then:
+        result == auth
+        tokenManager.getAuth(auth) == auth  // subsequent calls return same
+    }
+
+    def 'getAuth should return null for null input'() {
+        given:
+        def config = HxConfig.newBuilder().build()
+        def tokenManager = new HxTokenManager(config)
+
+        expect:
+        tokenManager.getAuth(null) == null
+    }
+
+    def 'addAuthHeader should work with HxAuth parameter'() {
+        given:
+        def config = HxConfig.newBuilder().build()
+        def tokenManager = new HxTokenManager(config)
+        def auth = HxAuth.of('custom.jwt.token', 'refresh')
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create('https://example.com/api'))
+                .GET()
+                .build()
+
+        when:
+        def result = tokenManager.addAuthHeader(request, auth)
+
+        then:
+        result.headers().firstValue('Authorization').orElse(null) == 'Bearer custom.jwt.token'
+    }
+
+    def 'canRefreshToken should check HxAuth configuration'() {
+        given:
+        def configWithUrl = HxConfig.newBuilder()
+                .bearerToken('default.jwt.token')
+                .refreshToken('default-refresh')
+                .refreshTokenUrl('https://example.com/oauth/token')
+                .build()
+        def configWithoutUrl = HxConfig.newBuilder().build()
+
+        expect:
+        new HxTokenManager(configWithUrl).canRefreshToken(HxAuth.of('a.b.c', 'refresh')) == true
+        new HxTokenManager(configWithUrl).canRefreshToken(HxAuth.of('a.b.c', null)) == false
+        new HxTokenManager(configWithUrl).canRefreshToken(null) == false
+        new HxTokenManager(configWithoutUrl).canRefreshToken(HxAuth.of('a.b.c', 'refresh')) == false
+    }
+
+    def 'should accept custom token store'() {
+        given:
+        def customStore = new HxMapTokenStore()
+        def config = HxConfig.newBuilder().build()
+        def tokenManager = new HxTokenManager(config, customStore)
+        def auth = HxAuth.of('my.jwt.token', 'refresh')
+
+        when:
+        tokenManager.getAuth(auth)
+
+        then:
+        customStore.get(auth.key()) == auth
+        tokenManager.getTokenStore() == customStore
+    }
 }
