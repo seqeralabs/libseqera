@@ -30,6 +30,7 @@ jobs:
           "lib-random",
           "lib-retry",
           "lib-serde",
+          "lib-serde-gson",
           "lib-serde-moshi",
           "lib-serde-jackson",
           "lib-trace",
