@@ -118,4 +118,18 @@ class JacksonEncodingStrategyTest extends Specification {
         def e = thrown(RuntimeException)
         e.message.contains('Failed to decode JSON')
     }
+
+    def 'should ignore unknown properties during deserialization'() {
+        given:
+        def encoder = new JacksonEncodingStrategy<SimpleBean>() {}
+        def jsonWithUnknownFields = '{"foo":"hello","bar":"world","unknownField":"ignored","anotherUnknown":123}'
+
+        when:
+        def decoded = encoder.decode(jsonWithUnknownFields)
+
+        then:
+        noExceptionThrown()
+        decoded.foo == 'hello'
+        decoded.bar == 'world'
+    }
 }
