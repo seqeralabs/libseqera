@@ -1,5 +1,8 @@
 # lib-serde-jackson changelog
 
+1.0.1 - 6 Jan 2026
+- Ignore unknown properties during JSON deserialization
+
 1.0.0 - 27 Nov 2025
 - Initial release of lib-serde-jackson module
 - Add JacksonEncodingStrategy implementing StringEncodingStrategy interface
