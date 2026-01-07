@@ -15,10 +15,11 @@
  *
  */
 
-package io.seqera.data.stream
+package io.seqera.data.stream;
+
 /**
  * Interface for a distributed message stream that supports real-time event processing.
- * 
+ *
  * <p>A message stream differs from a traditional message queue in several key ways:</p>
  * <ul>
  *   <li><strong>Persistent Log:</strong> Messages are stored as an append-only log that can be replayed</li>
@@ -27,7 +28,7 @@ package io.seqera.data.stream
  *   <li><strong>Consumer Groups:</strong> Consumers can be grouped for load balancing and fault tolerance</li>
  *   <li><strong>Stream Replay:</strong> Consumers can start reading from any point in the stream history</li>
  * </ul>
- * 
+ *
  * <p>Message streams are ideal for:</p>
  * <ul>
  *   <li>Event sourcing and audit logging</li>
@@ -36,20 +37,20 @@ package io.seqera.data.stream
  *   <li>Activity feeds and notification systems</li>
  *   <li>Change data capture (CDC) systems</li>
  * </ul>
- * 
+ *
  * <p>Usage pattern:</p>
  * <pre>{@code
  * // Initialize and offer messages
  * MessageStream<Event> stream = ...;
  * stream.init("user-events");
  * stream.offer("user-events", new UserLoginEvent(userId, timestamp));
- * 
+ *
  * // Consume messages asynchronously
  * MessageConsumer<Event> consumer = event -> {
  *     processEvent(event);
  *     return true; // Acknowledge successful processing
  * };
- * 
+ *
  * while (hasMoreMessages) {
  *     boolean processed = stream.consume("user-events", consumer);
  *     if (!processed) {
@@ -58,7 +59,7 @@ package io.seqera.data.stream
  *     }
  * }
  * }</pre>
- * 
+ *
  * <p>Implementations may provide additional features such as:</p>
  * <ul>
  *   <li>Message partitioning for scalability</li>
@@ -68,21 +69,21 @@ package io.seqera.data.stream
  * </ul>
  *
  * @param <M> the type of messages that can be sent through the stream
- * 
+ *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  * @see MessageConsumer
  * @see AbstractMessageStream
  */
-interface MessageStream<M> {
+public interface MessageStream<M> {
 
     /**
      * Initializes the stream with the specified unique identifier.
-     * 
+     *
      * <p>This method prepares the stream for message production and consumption.
      * It should be called before any messages are offered to the stream or consumers
      * are registered. Multiple calls with the same stream ID should be idempotent.</p>
-     * 
+     *
      * <p>Initialization may involve:</p>
      * <ul>
      *   <li>Creating the underlying stream data structure</li>
@@ -94,18 +95,18 @@ interface MessageStream<M> {
      * @param streamId the unique identifier for the stream; must not be null or empty
      * @throws IllegalArgumentException if streamId is null or empty
      */
-    void init(String streamId)
+    void init(String streamId);
 
     /**
      * Adds a message to the specified stream.
-     * 
+     *
      * <p>Messages are appended to the stream in the order they are offered, creating
      * an immutable, ordered log of events. Once added, messages typically cannot be
      * modified or deleted, ensuring data integrity and enabling stream replay.</p>
-     * 
+     *
      * <p>This operation is generally atomic and thread-safe, allowing multiple
      * producers to safely add messages concurrently to the same stream.</p>
-     * 
+     *
      * <p>Message properties:</p>
      * <ul>
      *   <li><strong>Ordering:</strong> Messages maintain their insertion order</li>
@@ -118,16 +119,16 @@ interface MessageStream<M> {
      * @param message the message to be added to the stream; may be null depending on implementation
      * @throws IllegalArgumentException if streamId is null or empty
      */
-    void offer(String streamId, M message)
+    void offer(String streamId, M message);
 
     /**
      * Attempts to consume a single message from the stream using the provided consumer.
-     * 
+     *
      * <p>This method attempts to read one message from the stream and pass it to the
      * consumer for processing. The method returns {@code true} if a message was
      * successfully processed, or {@code false} if no message was available or the
      * consumer rejected the message.</p>
-     * 
+     *
      * <p>Message consumption behavior:</p>
      * <ul>
      *   <li><strong>Non-blocking:</strong> Returns immediately if no messages are available</li>
@@ -135,7 +136,7 @@ interface MessageStream<M> {
      *   <li><strong>At-least-once:</strong> Messages may be delivered multiple times in failure scenarios</li>
      *   <li><strong>Consumer Control:</strong> Consumer return value determines acknowledgment</li>
      * </ul>
-     * 
+     *
      * <p>Consumer acknowledgment:</p>
      * <ul>
      *   <li>Return {@code true} to acknowledge successful processing</li>
@@ -149,15 +150,15 @@ interface MessageStream<M> {
      *         {@code false} if no message was available or processing failed
      * @see MessageConsumer#accept(Object)
      */
-    boolean consume(String streamId, MessageConsumer<M> consumer)
+    boolean consume(String streamId, MessageConsumer<M> consumer);
 
     /**
      * Returns the approximate number of messages currently in the specified stream.
-     * 
+     *
      * <p>This method provides a snapshot of the stream length at the time of the call.
      * In a distributed environment with concurrent producers and consumers, the actual
      * number of messages may change immediately after this method returns.</p>
-     * 
+     *
      * <p>Common use cases include:</p>
      * <ul>
      *   <li>Monitoring stream backlog and processing rates</li>
@@ -166,7 +167,7 @@ interface MessageStream<M> {
      *   <li>Load balancing decisions across consumer instances</li>
      *   <li>Testing and debugging stream behavior</li>
      * </ul>
-     * 
+     *
      * <p>Note: This operation may be expensive for large streams or distributed
      * implementations, so it should not be called excessively in performance-critical paths.</p>
      *
@@ -174,6 +175,6 @@ interface MessageStream<M> {
      * @return the approximate number of messages in the stream; never negative
      * @throws IllegalArgumentException if streamId is null or empty
      */
-    int length(String streamId)
+    int length(String streamId);
 
 }

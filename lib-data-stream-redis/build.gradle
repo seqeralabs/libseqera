@@ -17,7 +17,7 @@
 
 plugins {
     id 'io.seqera.java-library-conventions'
-    id 'io.seqera.groovy-library-conventions'
+    id 'groovy'
     // Micronaut minimal lib
     // https://micronaut-projects.github.io/micronaut-gradle-plugin/latest/
     id "io.micronaut.minimal.library" version '4.5.3'
@@ -34,16 +34,16 @@ dependencies {
     implementation project(':lib-activator')
     implementation 'redis.clients:jedis:5.1.4'
 
-    compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     implementation "ch.qos.logback:logback-classic:1.5.19"
-    implementation "org.apache.groovy:groovy:4.0.24"
-    implementation "org.apache.groovy:groovy-nio:4.0.24"
-    implementation "org.apache.groovy:groovy-templates:4.0.24"
-    testImplementation "org.apache.groovy:groovy-json:4.0.24"
     implementation "io.micronaut:micronaut-runtime:${micronautCoreVersion}"
     implementation "io.micronaut:micronaut-websocket:${micronautCoreVersion}"
     implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
 
+    // Groovy dependencies only for tests
+    testImplementation "org.apache.groovy:groovy:4.0.24"
+    testImplementation "org.apache.groovy:groovy-nio:4.0.24"
+    testImplementation "org.apache.groovy:groovy-templates:4.0.24"
+    testImplementation "org.apache.groovy:groovy-json:4.0.24"
     testImplementation project(':lib-lang')
     testImplementation testFixtures(project(':lib-fixtures-redis'))
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
