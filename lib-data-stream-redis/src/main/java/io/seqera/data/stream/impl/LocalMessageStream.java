@@ -15,27 +15,28 @@
  *
  */
 
-package io.seqera.data.stream.impl
+package io.seqera.data.stream.impl;
 
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 
-import groovy.transform.CompileStatic
-import groovy.util.logging.Slf4j
-import io.micronaut.context.annotation.Requires
-import io.seqera.activator.redis.RedisActivator
-import io.seqera.data.stream.MessageConsumer
-import io.seqera.data.stream.MessageStream
-import jakarta.inject.Singleton
+import io.micronaut.context.annotation.Requires;
+import io.seqera.activator.redis.RedisActivator;
+import io.seqera.data.stream.MessageConsumer;
+import io.seqera.data.stream.MessageStream;
+import jakarta.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * In-memory implementation of {@link MessageStream} using Java {@link LinkedBlockingQueue}
  * as the underlying storage mechanism. This implementation is designed exclusively for
  * development, testing, and local environments.
- * 
+ *
  * <p><strong>Important:</strong> This implementation should <b>never</b> be used in production
  * environments as it provides no persistence, durability, or distribution capabilities.
  * Messages are stored only in local JVM memory and will be lost on application restart.
- * 
+ *
  * <p>Key characteristics:
  * <ul>
  *   <li><b>Local Only:</b> Messages exist only within the current JVM instance</li>
@@ -44,7 +45,7 @@ import jakarta.inject.Singleton
  *   <li><b>Simple Queuing:</b> Messages are processed in FIFO order using blocking queues</li>
  *   <li><b>Retry Logic:</b> Failed messages are re-queued after a 1-second delay</li>
  * </ul>
- * 
+ *
  * <p>This implementation automatically activates when the 'redis' environment is <b>not</b>
  * active, making it ideal for:
  * <ul>
@@ -52,74 +53,78 @@ import jakarta.inject.Singleton
  *   <li>Unit testing scenarios</li>
  *   <li>Quick prototyping and experimentation</li>
  * </ul>
- * 
+ *
  * <p>Each stream is backed by its own {@link ConcurrentHashMap} entry containing
  * a {@link LinkedBlockingQueue} for thread-safe message handling.
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  */
-@Slf4j
-@Requires(missingBeans = RedisActivator)
+@Requires(missingBeans = RedisActivator.class)
 @Singleton
-@CompileStatic
-class LocalMessageStream implements MessageStream<String> {
+public class LocalMessageStream implements MessageStream<String> {
 
-    private ConcurrentHashMap<String, LinkedBlockingQueue<String>> delegate = new ConcurrentHashMap<>()
+    private static final Logger log = LoggerFactory.getLogger(LocalMessageStream.class);
+
+    private final ConcurrentHashMap<String, LinkedBlockingQueue<String>> delegate = new ConcurrentHashMap<>();
 
     /**
      * {@inheritDoc}
      */
     @Override
-    void init(String streamId) {
-        delegate.put(streamId, new LinkedBlockingQueue<>())
+    public void init(String streamId) {
+        delegate.put(streamId, new LinkedBlockingQueue<>());
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    void offer(String streamId, String message) {
+    public void offer(String streamId, String message) {
         delegate
                 .get(streamId)
-                .offer(message)
+                .offer(message);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    boolean consume(String streamId, MessageConsumer<String> consumer) {
-        final message = delegate
+    public boolean consume(String streamId, MessageConsumer<String> consumer) {
+        String message = delegate
                 .get(streamId)
-                .poll()
-        if( message==null ) {
-            return false
+                .poll();
+        if (message == null) {
+            return false;
         }
 
-        def result = false
+        boolean result = false;
         try {
-            result = consumer.accept(message)
+            result = consumer.accept(message);
         }
         catch (Throwable e) {
-            result = false
-            throw e
+            result = false;
+            // exception is caught but not rethrown - message will be re-queued
         }
         finally {
-            if( !result ) {
+            if (!result) {
                 // add again message not consumed to mimic the behavior or redis stream
-                sleep(1_000)
-                offer(streamId,message)
+                try {
+                    Thread.sleep(1_000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+                offer(streamId, message);
             }
-            return result
         }
+        return result;
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    int length(String streamId) {
-        return delegate.get(streamId).size()
+    public int length(String streamId) {
+        return delegate.get(streamId).size();
     }
 }
