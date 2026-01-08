@@ -37,6 +37,9 @@ import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -54,6 +57,8 @@ import java.util.function.Supplier;
 @EachBean(RedisCacheConfiguration.class)
 @Requires(classes = SyncCache.class)
 public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
+
+    private static final Logger log = LoggerFactory.getLogger(RedisCache.class);
 
     private final JedisPool jedisPool;
     private final ObjectSerializer keySerializer;
@@ -133,6 +138,7 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
     @NonNull
     @Override
     public <T> Optional<T> get(@NonNull Object key, @NonNull Argument<T> requiredType) {
+        log.trace("Cache '{}' GET key={}", getName(), key);
         byte[] serializedKey = serializeKey(key);
         try (Jedis jedis = jedisPool.getResource()) {
             byte[] data = jedis.get(serializedKey);
@@ -140,8 +146,10 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                 jedis.pexpire(serializedKey, expireAfterAccess);
             }
             if (data != null) {
+                log.trace("Cache '{}' HIT key={}", getName(), key);
                 return valueSerializer.deserialize(data, requiredType);
             }
+            log.trace("Cache '{}' MISS key={}", getName(), key);
             return Optional.empty();
         }
     }
@@ -149,6 +157,7 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
     @NonNull
     @Override
     public <T> T get(@NonNull Object key, @NonNull Argument<T> requiredType, @NonNull Supplier<T> supplier) {
+        log.trace("Cache '{}' GET-WITH-SUPPLIER key={}", getName(), key);
         byte[] serializedKey = serializeKey(key);
         try (Jedis jedis = jedisPool.getResource()) {
             byte[] data = jedis.get(serializedKey);
@@ -158,11 +167,13 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                     if (expireAfterAccess != null) {
                         jedis.pexpire(serializedKey, expireAfterAccess);
                     }
+                    log.trace("Cache '{}' HIT key={}", getName(), key);
                     return deserialized.get();
                 }
             }
         }
 
+        log.trace("Cache '{}' MISS key={}, invoking supplier", getName(), key);
         T value = supplier.get();
         putValue(serializedKey, value);
         return value;
@@ -172,12 +183,15 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
     @Override
     @SuppressWarnings("unchecked")
     public <T> Optional<T> putIfAbsent(@NonNull Object key, @NonNull T value) {
+        log.trace("Cache '{}' PUT-IF-ABSENT key={}", getName(), key);
         byte[] serializedKey = serializeKey(key);
         try (Jedis jedis = jedisPool.getResource()) {
             byte[] existingData = jedis.get(serializedKey);
             if (existingData != null) {
+                log.trace("Cache '{}' PUT-IF-ABSENT key={} already exists, returning existing value", getName(), key);
                 return valueSerializer.deserialize(existingData, Argument.of((Class<T>) value.getClass()));
             }
+            log.trace("Cache '{}' PUT-IF-ABSENT key={} storing new value", getName(), key);
             putValue(serializedKey, value);
             return Optional.empty();
         }
@@ -185,12 +199,14 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
 
     @Override
     public void put(@NonNull Object key, @NonNull Object value) {
+        log.trace("Cache '{}' PUT key={}", getName(), key);
         byte[] serializedKey = serializeKey(key);
         putValue(serializedKey, value);
     }
 
     @Override
     public void invalidate(@NonNull Object key) {
+        log.trace("Cache '{}' INVALIDATE key={}", getName(), key);
         byte[] serializedKey = serializeKey(key);
         try (Jedis jedis = jedisPool.getResource()) {
             jedis.del(serializedKey);
@@ -199,20 +215,25 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
 
     @Override
     public void invalidateAll() {
+        log.trace("Cache '{}' INVALIDATE-ALL pattern={}", getName(), getKeysPattern());
         String pattern = getKeysPattern();
         try (Jedis jedis = jedisPool.getResource()) {
             ScanParams params = new ScanParams()
                     .match(pattern)
                     .count(invalidateScanCount.intValue());
             String cursor = ScanParams.SCAN_POINTER_START;
+            int totalDeleted = 0;
             do {
                 ScanResult<byte[]> scanResult = jedis.scan(cursor.getBytes(redisCacheConfiguration.getCharset()), params);
                 List<byte[]> keys = scanResult.getResult();
                 if (!keys.isEmpty()) {
                     jedis.del(keys.toArray(new byte[0][]));
+                    totalDeleted += keys.size();
+                    log.trace("Cache '{}' INVALIDATE-ALL deleted {} keys in this batch", getName(), keys.size());
                 }
                 cursor = scanResult.getCursor();
             } while (!ScanParams.SCAN_POINTER_START.equals(cursor));
+            log.trace("Cache '{}' INVALIDATE-ALL completed, total keys deleted: {}", getName(), totalDeleted);
         }
     }
 
@@ -263,11 +284,14 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                 byte[] bytes = serialized.get();
                 if (expireAfterWritePolicy != null) {
                     long ttl = expireAfterWritePolicy.getExpirationAfterWrite(value);
+                    log.trace("Cache '{}' storing value with TTL={}ms, size={} bytes", getName(), ttl, bytes.length);
                     jedis.psetex(serializedKey, ttl, bytes);
                 } else {
+                    log.trace("Cache '{}' storing value without TTL, size={} bytes", getName(), bytes.length);
                     jedis.set(serializedKey, bytes);
                 }
             } else {
+                log.trace("Cache '{}' value serialization returned empty, deleting key", getName());
                 jedis.del(serializedKey);
             }
         }

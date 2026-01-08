@@ -34,7 +34,7 @@ jobs:
           "lib-serde-jackson",
           "lib-trace",
           "lib-util-http",
-          "micronaut-redis",
+          "micronaut-cache-redis",
           "wave-api",
           "wave-utils"
         ]

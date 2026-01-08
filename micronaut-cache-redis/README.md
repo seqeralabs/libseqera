@@ -17,7 +17,7 @@ Add the dependency to your `build.gradle`:
 
 ```groovy
 dependencies {
-    implementation 'io.seqera:micronaut-redis:1.0.0'
+    implementation 'io.seqera:micronaut-cache-redis:1.0.0'
 }
 ```
 
@@ -137,6 +137,67 @@ public class CacheService {
             .thenAccept(opt -> opt.ifPresent(System.out::println));
     }
 }
+```
+
+### Custom Value Serializer
+
+The default serializer uses JDK serialization, which requires cached objects to implement `Serializable`. For objects that don't implement `Serializable` (e.g., generated DTOs), you can use a JSON-based serializer.
+
+Create a Jackson serializer:
+
+```java
+@Singleton
+public class JacksonObjectSerializer implements ObjectSerializer {
+
+    @Inject
+    private ObjectMapper objectMapper;
+
+    @Override
+    public Optional<byte[]> serialize(Object object) {
+        if (object == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(objectMapper.writeValueAsBytes(object));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to serialize object", e);
+        }
+    }
+
+    @Override
+    public <T> Optional<T> deserialize(byte[] bytes, Class<T> requiredType) {
+        if (bytes == null || bytes.length == 0) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.ofNullable(objectMapper.readValue(bytes, requiredType));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to deserialize object", e);
+        }
+    }
+
+    @Override
+    public <T> Optional<T> deserialize(byte[] bytes, Argument<T> requiredType) {
+        if (bytes == null || bytes.length == 0) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.ofNullable(objectMapper.readValue(bytes,
+                    objectMapper.constructType(requiredType.asType())));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to deserialize object", e);
+        }
+    }
+}
+```
+
+Configure it:
+
+```yaml
+redis:
+  caches:
+    my-cache:
+      value-serializer: com.example.JacksonObjectSerializer
 ```
 
 ### Custom Expiration Policy
