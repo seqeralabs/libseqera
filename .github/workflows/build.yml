@@ -84,6 +84,7 @@ jobs:
           bash publish.sh lib-serde-moshi
           bash publish.sh lib-serde-jackson
           bash publish.sh lib-trace
+          bash publish.sh micronaut-cache-redis
 
         env:
           GRADLE_OPTS: '-Dorg.gradle.daemon=false'
