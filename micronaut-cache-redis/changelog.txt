@@ -1,6 +1,6 @@
 # micronaut-cache-redis changelog
 
-1.0.0 - 8 Jan 2026
+0.1.0 - 8 Jan 2026
 - Initial release of micronaut-cache-redis
 - Micronaut cache implementation using Jedis Redis driver
 - Drop-in compatibility with official Micronaut Redis (Lettuce) cache module
