@@ -75,4 +75,67 @@ public class TypeHelper {
         final ParameterizedType params = (ParameterizedType) (object.getClass().getGenericSuperclass());
         return params.getActualTypeArguments()[index];
     }
+
+    /**
+     * Retrieves the generic type arguments for a target interface from a concrete class.
+     *
+     * <p>This method searches through the class hierarchy to find where the target interface
+     * is implemented with concrete type arguments. It handles directly implemented interfaces,
+     * parameterized superclasses, and recursively searches up the class hierarchy.</p>
+     *
+     * <p>Example usage:</p>
+     * <pre>{@code
+     * interface Handler<P, R> { }
+     * class MyHandler implements Handler<String, Integer> { }
+     *
+     * Type[] types = TypeHelper.getInterfaceTypeArguments(MyHandler.class, Handler.class);
+     * // types[0] = String.class, types[1] = Integer.class
+     * }</pre>
+     *
+     * @param clazz the concrete class to inspect
+     * @param targetInterface the interface whose type arguments should be extracted
+     * @return array of Type arguments, or null if the interface is not found
+     */
+    public static Type[] getInterfaceTypeArguments(Class<?> clazz, Class<?> targetInterface) {
+        // Check directly implemented interfaces
+        for (Type type : clazz.getGenericInterfaces()) {
+            if (type instanceof ParameterizedType pt) {
+                if (pt.getRawType().equals(targetInterface)) {
+                    return pt.getActualTypeArguments();
+                }
+            }
+        }
+
+        // Check superclass
+        Type superclass = clazz.getGenericSuperclass();
+        if (superclass instanceof ParameterizedType pt) {
+            if (pt.getRawType().equals(targetInterface)) {
+                return pt.getActualTypeArguments();
+            }
+        }
+
+        // Recurse up the class hierarchy
+        if (clazz.getSuperclass() != null && clazz.getSuperclass() != Object.class) {
+            return getInterfaceTypeArguments(clazz.getSuperclass(), targetInterface);
+        }
+
+        return null;
+    }
+
+    /**
+     * Gets the raw Class from a Type, handling both Class and ParameterizedType.
+     *
+     * @param type the Type to extract the raw class from
+     * @return the raw Class
+     * @throws IllegalArgumentException if the type cannot be converted to a raw class
+     */
+    public static Class<?> getRawType(Type type) {
+        if (type instanceof Class<?> c) {
+            return c;
+        }
+        if (type instanceof ParameterizedType pt) {
+            return (Class<?>) pt.getRawType();
+        }
+        throw new IllegalArgumentException("Cannot get raw type from: " + type);
+    }
 }

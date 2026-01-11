@@ -1,5 +1,9 @@
 # lib-lang changelog
 
+1.2.0 - 11 Jan 2025
+- Add getInterfaceTypeArguments() to retrieve generic type arguments from implemented interfaces
+- Add getRawType() to extract raw Class from Type (Class or ParameterizedType)
+
 1.1.0 - 19 Oct 2025
 - Refactor TypeHelper to pure Java, removing Groovy dependencies
 

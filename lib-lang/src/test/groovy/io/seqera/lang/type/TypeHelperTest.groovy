@@ -81,12 +81,136 @@ class TypeHelperTest extends Specification {
     def 'should throw exception for invalid index'() {
         given:
         def stringContainer = new StringContainer()
-        
+
         when:
         TypeHelper.getGenericType(stringContainer, 1)
-        
+
         then:
         thrown(ArrayIndexOutOfBoundsException)
     }
+
+    // Test fixtures for interface type arguments
+
+    interface Handler<P, R> {}
+
+    interface SingleTypeHandler<T> {}
+
+    static class StringIntegerHandler implements Handler<String, Integer> {}
+
+    static class BooleanHandler implements SingleTypeHandler<Boolean> {}
+
+    static abstract class AbstractHandler<P, R> implements Handler<P, R> {}
+
+    static class ConcreteAbstractHandler extends AbstractHandler<Long, Double> implements Handler<Long, Double> {}
+
+    static class MultiInterfaceHandler implements Handler<String, Integer>, SingleTypeHandler<Boolean> {}
+
+    static class RawHandler implements Handler {}
+
+    // Tests for getInterfaceTypeArguments
+
+    def 'should get interface type arguments for directly implemented interface'() {
+        when:
+        def types = TypeHelper.getInterfaceTypeArguments(StringIntegerHandler, Handler)
+
+        then:
+        types.length == 2
+        types[0] == String
+        types[1] == Integer
+    }
+
+    def 'should get interface type arguments for single type parameter'() {
+        when:
+        def types = TypeHelper.getInterfaceTypeArguments(BooleanHandler, SingleTypeHandler)
+
+        then:
+        types.length == 1
+        types[0] == Boolean
+    }
+
+    def 'should get interface type arguments when extending abstract class'() {
+        when:
+        def types = TypeHelper.getInterfaceTypeArguments(ConcreteAbstractHandler, Handler)
+
+        then:
+        types.length == 2
+        types[0] == Long
+        types[1] == Double
+    }
+
+    def 'should get correct interface when class implements multiple interfaces'() {
+        when:
+        def handlerTypes = TypeHelper.getInterfaceTypeArguments(MultiInterfaceHandler, Handler)
+        def singleTypes = TypeHelper.getInterfaceTypeArguments(MultiInterfaceHandler, SingleTypeHandler)
+
+        then:
+        handlerTypes.length == 2
+        handlerTypes[0] == String
+        handlerTypes[1] == Integer
+
+        and:
+        singleTypes.length == 1
+        singleTypes[0] == Boolean
+    }
+
+    def 'should return null for interface not implemented by class'() {
+        when:
+        def types = TypeHelper.getInterfaceTypeArguments(StringContainer, Handler)
+
+        then:
+        types == null
+    }
+
+    def 'should return null for raw type implementation'() {
+        when:
+        def types = TypeHelper.getInterfaceTypeArguments(RawHandler, Handler)
+
+        then:
+        types == null
+    }
+
+    // Tests for getRawType
+
+    def 'should get raw type from Class'() {
+        expect:
+        TypeHelper.getRawType(String) == String
+        TypeHelper.getRawType(Integer) == Integer
+        TypeHelper.getRawType(List) == List
+    }
+
+    def 'should get raw type from ParameterizedType'() {
+        given:
+        def types = TypeHelper.getInterfaceTypeArguments(StringIntegerHandler, Handler)
+
+        expect:
+        TypeHelper.getRawType(types[0]) == String
+        TypeHelper.getRawType(types[1]) == Integer
+    }
+
+    def 'should get raw type from nested ParameterizedType'() {
+        given:
+        // Create a class that uses List<String> as a type argument
+        def types = TypeHelper.getInterfaceTypeArguments(ListHandler, SingleTypeHandler)
+
+        when:
+        def rawType = TypeHelper.getRawType(types[0])
+
+        then:
+        rawType == List
+    }
+
+    def 'should throw exception for unsupported type'() {
+        given:
+        // TypeVariable is not supported
+        def typeVar = Handler.getTypeParameters()[0]
+
+        when:
+        TypeHelper.getRawType(typeVar)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    static class ListHandler implements SingleTypeHandler<List<String>> {}
 
 }
