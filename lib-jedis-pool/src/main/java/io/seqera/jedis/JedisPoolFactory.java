@@ -65,6 +65,9 @@ public class JedisPoolFactory {
             @Nullable @Value("${redis.password}") String password
     ) {
         final URI uri = URI.create(connection);
+        if (!JedisURIHelper.isValid(uri)) {
+            throw new InvalidURIException("Invalid Redis connection URI: " + uri);
+        }
         final int database = JedisURIHelper.getDBIndex(uri);
 
         log.info("Creating Redis pool - uri={}; database={}; minIdle={}; maxIdle={}; maxTotal={}; timeout={}",
