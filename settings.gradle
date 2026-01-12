@@ -49,6 +49,6 @@ include('lib-serde-gson')
 include('lib-trace')
 include('lib-lang')
 include('lib-docker-cli')
-include('jedis-lock')
+include('lib-jedis-lock')
 include('lib-jedis-pool')
 

@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         components: [
-          "jedis-lock",
+          "lib-jedis-lock",
           "lib-activator",
           "lib-cache-tiered-redis",
           "lib-commons-io",

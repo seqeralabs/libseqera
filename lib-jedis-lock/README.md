@@ -1,4 +1,4 @@
-# jedis-lock
+# lib-jedis-lock
 
 Redis-based distributed locking with automatic expiration and lock coordination.
 
@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:jedis-lock:1.0.0'
+    implementation 'io.seqera:lib-jedis-lock:1.0.0'
 }
 ```
 
@@ -35,5 +35,5 @@ try (def lock = new JedisLock(jedisPool, "my-resource-lock")) {
 ## Testing
 
 ```bash
-./gradlew :jedis-lock:test
+./gradlew :lib-jedis-lock:test
 ```

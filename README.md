@@ -17,7 +17,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-retry](lib-retry/)** - Retry mechanisms with exponential backoff
 - **[lib-trace](lib-trace/)** - Tracing and logging utilities
 - **[lib-util-http](lib-util-http/)** - HTTP utilities for debugging, header dumping, and sensitive data masking
-- **[jedis-lock](jedis-lock/)** - Redis-based distributed locking using Jedis
+- **[lib-jedis-lock](lib-jedis-lock/)** - Redis-based distributed locking using Jedis
 
 ### Messaging & Data Libraries
 - **[lib-cache-tiered-redis](lib-cache-tiered-redis/)** - Two-tier caching with Caffeine (L1) and Redis (L2) for distributed caching
