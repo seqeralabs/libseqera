@@ -18,6 +18,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-trace](lib-trace/)** - Tracing and logging utilities
 - **[lib-util-http](lib-util-http/)** - HTTP utilities for debugging, header dumping, and sensitive data masking
 - **[lib-jedis-lock](lib-jedis-lock/)** - Redis-based distributed locking using Jedis
+- **[lib-jedis-pool](lib-jedis-pool/)** - JedisPool factory with Micrometer metrics integration
 
 ### Messaging & Data Libraries
 - **[lib-cache-tiered-redis](lib-cache-tiered-redis/)** - Two-tier caching with Caffeine (L1) and Redis (L2) for distributed caching
@@ -28,9 +29,17 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-serde](lib-serde/)** - Serialization/deserialization utilities
 - **[lib-serde-jackson](lib-serde-jackson/)** - Jackson JSON serialization implementing lib-serde interface
 - **[lib-serde-moshi](lib-serde-moshi/)** - Moshi JSON serialization with custom adapters for common types
+- **[lib-serde-gson](lib-serde-gson/)** - Gson JSON serialization implementing lib-serde interface
+
+### Micronaut Libraries
+- **[micronaut-cache-redis](micronaut-cache-redis/)** - Micronaut cache implementation using Redis
 
 ### Testing Support
 - **[lib-fixtures-redis](lib-fixtures-redis/)** - Test fixtures and containers for Redis-based testing
+
+### Deprecated
+- **[wave-api](wave-api/)** - *(deprecated)* API models and DTOs for Wave container service
+- **[wave-utils](wave-utils/)** - *(deprecated)* Utility classes for Wave
 
 ## Technology Stack
 
