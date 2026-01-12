@@ -35,6 +35,7 @@ jobs:
           "lib-serde-jackson",
           "lib-trace",
           "lib-util-http",
+          "lib-jedis-pool",
           "micronaut-cache-redis",
           "wave-api",
           "wave-utils"
