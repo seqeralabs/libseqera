@@ -19,6 +19,7 @@ package io.seqera.serde.moshi;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 
 import com.squareup.moshi.FromJson;
@@ -28,8 +29,9 @@ import com.squareup.moshi.ToJson;
  * Date time adapter for Moshi JSON serialization.
  *
  * <p>This adapter handles the serialization and deserialization of Java 8 date/time types
- * ({@link Instant} and {@link Duration}) in JSON format. It uses ISO-8601 format for
- * Instant values and nanosecond precision for Duration values.</p>
+ * ({@link Instant}, {@link Duration}, and {@link OffsetDateTime}) in JSON format.
+ * It uses ISO-8601 format for Instant and OffsetDateTime values, and nanosecond precision
+ * for Duration values.</p>
  *
  * <p>For backward compatibility, the Duration deserializer supports both the legacy
  * floating-point format (seconds as a decimal) and the current long format (nanoseconds).</p>
@@ -94,5 +96,27 @@ public class DateTimeAdapter {
             ? Math.round(Double.parseDouble(value) * 1_000_000_000)
             : Long.parseLong(value);
         return Duration.ofNanos(val0);
+    }
+
+    /**
+     * Serializes an OffsetDateTime to an ISO-8601 formatted string.
+     *
+     * @param value the OffsetDateTime to serialize
+     * @return the ISO-8601 formatted string, or null if value is null
+     */
+    @ToJson
+    public String serializeOffsetDateTime(OffsetDateTime value) {
+        return value != null ? DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(value) : null;
+    }
+
+    /**
+     * Deserializes an ISO-8601 formatted string to an OffsetDateTime.
+     *
+     * @param value the ISO-8601 formatted string to deserialize
+     * @return the deserialized OffsetDateTime, or null if value is null
+     */
+    @FromJson
+    public OffsetDateTime deserializeOffsetDateTime(String value) {
+        return value != null ? OffsetDateTime.parse(value, DateTimeFormatter.ISO_OFFSET_DATE_TIME) : null;
     }
 }

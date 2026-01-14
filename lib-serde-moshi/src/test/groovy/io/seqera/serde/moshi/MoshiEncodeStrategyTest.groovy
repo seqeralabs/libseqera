@@ -22,6 +22,8 @@ import spock.lang.Specification
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 
 /**
  * Tests for MoshiEncodeStrategy and adapters
@@ -58,6 +60,7 @@ class MoshiEncodeStrategyTest extends Specification {
         Path filePath
         URI location
         byte[] data
+        OffsetDateTime offsetDateTime
 
         boolean equals(o) {
             if (this.is(o)) return true
@@ -69,6 +72,7 @@ class MoshiEncodeStrategyTest extends Specification {
             if (filePath != that.filePath) return false
             if (location != that.location) return false
             if (!Arrays.equals(data, that.data)) return false
+            if (offsetDateTime != that.offsetDateTime) return false
             return true
         }
 
@@ -80,6 +84,7 @@ class MoshiEncodeStrategyTest extends Specification {
             result = 31 * result + (filePath != null ? filePath.hashCode() : 0)
             result = 31 * result + (location != null ? location.hashCode() : 0)
             result = 31 * result + Arrays.hashCode(data)
+            result = 31 * result + (offsetDateTime != null ? offsetDateTime.hashCode() : 0)
             return result
         }
     }
@@ -129,7 +134,8 @@ class MoshiEncodeStrategyTest extends Specification {
             duration: null,
             filePath: null,
             location: null,
-            data: null
+            data: null,
+            offsetDateTime: null
         )
 
         when:
@@ -154,7 +160,8 @@ class MoshiEncodeStrategyTest extends Specification {
             duration: duration,
             filePath: null,
             location: null,
-            data: null
+            data: null,
+            offsetDateTime: null
         )
 
         when:
@@ -190,7 +197,8 @@ class MoshiEncodeStrategyTest extends Specification {
             duration: null,
             filePath: path,
             location: null,
-            data: null
+            data: null,
+            offsetDateTime: null
         )
 
         when:
@@ -213,7 +221,8 @@ class MoshiEncodeStrategyTest extends Specification {
             duration: null,
             filePath: null,
             location: uri,
-            data: null
+            data: null,
+            offsetDateTime: null
         )
 
         when:
@@ -236,7 +245,8 @@ class MoshiEncodeStrategyTest extends Specification {
             duration: null,
             filePath: null,
             location: null,
-            data: bytes
+            data: bytes,
+            offsetDateTime: null
         )
 
         when:
@@ -251,6 +261,32 @@ class MoshiEncodeStrategyTest extends Specification {
         json.contains('"data":"')
     }
 
+    def 'should encode and decode offset date time'() {
+        given:
+        def encoder = new MoshiEncodeStrategy<ComplexData>() {}
+        and:
+        def odt = OffsetDateTime.of(2024, 10, 7, 20, 41, 0, 804699000, ZoneOffset.UTC)
+        def data = new ComplexData(
+            id: '12345',
+            timestamp: null,
+            duration: null,
+            filePath: null,
+            location: null,
+            data: null,
+            offsetDateTime: odt
+        )
+
+        when:
+        def json = encoder.encode(data)
+        and:
+        def copy = encoder.decode(json)
+
+        then:
+        copy.offsetDateTime == odt
+        and:
+        json.contains('"offsetDateTime":"2024-10-07T20:41:00.804699Z"')
+    }
+
     def 'should encode and decode all complex types together'() {
         given:
         def encoder = new MoshiEncodeStrategy<ComplexData>() {}
@@ -261,7 +297,8 @@ class MoshiEncodeStrategyTest extends Specification {
             duration: Duration.ofMinutes(1),
             filePath: Path.of('/some/path'),
             location: URI.create('http://example.com'),
-            data: 'test data'.bytes
+            data: 'test data'.bytes,
+            offsetDateTime: OffsetDateTime.of(2024, 10, 7, 20, 41, 0, 0, ZoneOffset.ofHours(2))
         )
 
         when:
