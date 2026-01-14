@@ -23,6 +23,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 ### Messaging & Data Libraries
 - **[lib-cache-tiered-redis](lib-cache-tiered-redis/)** - Two-tier caching with Caffeine (L1) and Redis (L2) for distributed caching
 - **[lib-data-queue-redis](lib-data-queue-redis/)** - Message queue abstraction with Redis and local implementations
+- **[lib-data-range-redis](lib-data-range-redis/)** - Range set storage similar to Redis ZRANGE with local and Redis implementations
 - **[lib-data-store-future-redis](lib-data-store-future-redis/)** - Distributed CompletableFuture store for cross-service async operations
 - **[lib-data-store-state-redis](lib-data-store-state-redis/)** - Distributed state store with atomic operations and counters
 - **[lib-data-stream-redis](lib-data-stream-redis/)** - Message streaming with Redis Streams and local implementations
