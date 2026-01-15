@@ -1,0 +1,19 @@
+# Test configuration for lib-data-command-queue
+
+micronaut:
+  application:
+    name: lib-data-command-queue-test
+
+# Command queue configuration
+command:
+  poll-interval: 100ms
+  execute-timeout: 1s
+  state:
+    ttl: 1h
+
+command-queue:
+  poll-interval: 100ms
+  stream-name: "command-queue-test/v1"
+  checker:
+    enabled: true
+    interval: 500ms

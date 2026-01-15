@@ -86,6 +86,7 @@ jobs:
           bash publish.sh lib-serde-jackson
           bash publish.sh lib-trace
           bash publish.sh lib-jedis-pool
+          bash publish.sh lib-cmd-queue-redis
           bash publish.sh micronaut-cache-redis
 
         env:

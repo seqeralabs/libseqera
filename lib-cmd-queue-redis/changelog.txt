@@ -1,0 +1,12 @@
+# lib-cmd-queue-redis changelog
+
+0.1.0 - 15 Jan 2026
+- Initial release
+- Asynchronous command queue with persistent state tracking
+- Fire-and-forget command submission
+- Typed parameters and results with JSON serialization
+- Status transitions: SUBMITTED → RUNNING → SUCCEEDED/FAILED/CANCELLED
+- Automatic timeout handling for long-running commands
+- Periodic status checking via checkStatus() for async commands
+- Command cancellation support
+- Redis-backed persistent storage with TTL expiration

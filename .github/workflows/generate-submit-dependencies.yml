@@ -37,6 +37,7 @@ jobs:
           "lib-trace",
           "lib-util-http",
           "lib-jedis-pool",
+          "lib-cmd-queue-redis",
           "micronaut-cache-redis",
           "wave-api",
           "wave-utils"
