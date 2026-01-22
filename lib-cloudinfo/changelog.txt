@@ -1,0 +1,9 @@
+# lib-cloudinfo changelog
+
+1.0.0 - 22 Jan 2026
+- Initial release of lib-cloudinfo module
+- Add CloudInfoClient for fetching cloud provider data from Cloudinfo API
+- Add model classes: CloudRegion, CloudProduct, CloudPrice, CloudResponse, ProductAttributes
+- Support for AWS (amazon), GCP (google), and Azure (azure) providers
+- Built on lib-httpx for HTTP requests with automatic retry
+- Use lib-serde-jackson for type-safe JSON deserialization

@@ -38,6 +38,7 @@ jobs:
           "lib-util-http",
           "lib-jedis-pool",
           "lib-cmd-queue-redis",
+          "lib-cloudinfo",
           "micronaut-cache-redis",
           "wave-api",
           "wave-utils"
