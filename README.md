@@ -6,6 +6,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 
 ### Core Libraries
 - **[lib-activator](lib-activator/)** - Conditional activation markers for enabling components based on infrastructure availability
+- **[lib-cloudinfo](lib-cloudinfo/)** - Client library for fetching cloud provider data (regions, products, pricing) from Cloudinfo API
 - **[lib-commons-io](lib-commons-io/)** - Common I/O utilities for logging and streaming
 - **[lib-crypto](lib-crypto/)** - Cryptographic utilities (asymmetric encryption, HMAC signatures, secure tokens)
 - **[lib-docker-cli](lib-docker-cli/)** - Lightweight Docker CLI wrapper for Java applications

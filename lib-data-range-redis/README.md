@@ -103,6 +103,25 @@ redis:
 
 The library automatically selects `RedisRangeProvider` when `redis.uri` is configured, otherwise falls back to `LocalRangeProvider` for development/testing.
 
+## Replica Safety
+
+The Redis implementation is **replica-safe** and supports multiple service instances accessing the store concurrently. The `getRange` method uses a Lua script that atomically fetches and removes entries:
+
+```lua
+local elements = redis.call('ZRANGEBYSCORE', KEYS[1], ARGV[1], ARGV[2], 'LIMIT', ARGV[3], ARGV[4])
+if #elements > 0 then
+    redis.call('ZREM', KEYS[1], unpack(elements))
+end
+return elements
+```
+
+This ensures:
+- **Atomic fetch-and-remove**: No other Redis commands can interleave between fetching and removing entries
+- **No duplicate processing**: Each entry is returned to exactly one replica
+- **Exactly-once semantics**: When replica A retrieves entries, they are immediately removed, preventing replica B from getting the same entries
+
+This makes the library suitable for distributed cron-like services where multiple replicas poll for expired entries without coordination.
+
 ## Testing
 
 ```bash
