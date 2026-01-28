@@ -25,7 +25,7 @@ plugins {
 
 dependencies {
     compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
-    implementation "ch.qos.logback:logback-classic:1.5.19"
+    implementation "ch.qos.logback:logback-classic:1.5.25"
     implementation "org.apache.groovy:groovy:4.0.24"
     implementation "org.apache.groovy:groovy-nio:4.0.24"
     implementation "org.apache.groovy:groovy-templates:4.0.24"

@@ -30,7 +30,7 @@ dependencies {
     implementation 'redis.clients:jedis:5.1.4'
 
     compileOnly "io.micronaut:micronaut-inject:${micronautCoreVersion}"
-    implementation "ch.qos.logback:logback-classic:1.5.19"
+    implementation "ch.qos.logback:logback-classic:1.5.25"
     implementation "io.micronaut:micronaut-runtime:${micronautCoreVersion}"
 
     testImplementation testFixtures(project(':lib-fixtures-redis'))
