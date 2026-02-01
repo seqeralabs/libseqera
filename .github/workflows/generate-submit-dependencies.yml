@@ -25,6 +25,8 @@ jobs:
           "lib-data-stream-redis",
           "lib-fixtures-redis",
           "lib-lang",
+          "lib-lock",
+          "lib-lock-redis",
           "lib-httpx",
           "lib-mail",
           "lib-pool",

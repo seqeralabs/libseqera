@@ -18,8 +18,9 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-retry](lib-retry/)** - Retry mechanisms with exponential backoff
 - **[lib-trace](lib-trace/)** - Tracing and logging utilities
 - **[lib-util-http](lib-util-http/)** - HTTP utilities for debugging, header dumping, and sensitive data masking
-- **[lib-jedis-lock](lib-jedis-lock/)** - Redis-based distributed locking using Jedis
 - **[lib-jedis-pool](lib-jedis-pool/)** - JedisPool factory with Micrometer metrics integration
+- **[lib-lock](lib-lock/)** - Distributed lock interface abstraction
+- **[lib-lock-redis](lib-lock-redis/)** - Redis-based distributed locking with Micronaut integration
 
 ### Messaging & Data Libraries
 - **[lib-cache-tiered-redis](lib-cache-tiered-redis/)** - Two-tier caching with Caffeine (L1) and Redis (L2) for distributed caching
@@ -40,6 +41,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-fixtures-redis](lib-fixtures-redis/)** - Test fixtures and containers for Redis-based testing
 
 ### Deprecated
+- **[lib-jedis-lock](lib-jedis-lock/)** - *(deprecated, use lib-lock-redis)* Redis-based distributed locking using Jedis
 - **[wave-api](wave-api/)** - *(deprecated)* API models and DTOs for Wave container service
 - **[wave-utils](wave-utils/)** - *(deprecated)* Utility classes for Wave
 

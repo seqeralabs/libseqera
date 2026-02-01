@@ -1,0 +1,6 @@
+# lib-lock changelog
+
+1.0.0
+- Initial release of lib-lock module with Lock and LockManager interfaces
+- Define Lock interface extending AutoCloseable for distributed locks
+- Define LockManager interface for lock acquisition with tryAcquire and acquire methods
