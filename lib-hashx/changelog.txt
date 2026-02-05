@@ -1,0 +1,7 @@
+# lib-hashx changelog
+
+1.0.0
+- Initial release of lib-hashx module with Hasher interface and implementations
+- Define Hasher interface for computing hashes with method chaining support
+- Add Sha256Hasher implementation using SHA-256 algorithm
+- Add Sip24Hasher implementation using SipHash 2-4 algorithm

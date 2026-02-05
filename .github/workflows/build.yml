@@ -73,6 +73,7 @@ jobs:
           bash publish.sh lib-data-store-state-redis
           bash publish.sh lib-data-stream-redis
           bash publish.sh lib-fixtures-redis
+          bash publish.sh lib-hashx
           bash publish.sh lib-lang
           bash publish.sh lib-lock
           bash publish.sh lib-lock-redis

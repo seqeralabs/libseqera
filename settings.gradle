@@ -56,4 +56,5 @@ include('lib-jedis-lock')
 include('lib-jedis-pool')
 include('lib-cmd-queue-redis')
 include('lib-cloudinfo')
+include('lib-hashx')
 
