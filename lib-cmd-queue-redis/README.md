@@ -97,8 +97,12 @@ public class AsyncProcessingHandler implements CommandHandler<ProcessingParams, 
 @Inject
 private CommandService commandService;
 
-// Register handler at startup
+// Register handlers before starting the service
 commandService.registerHandler(new ProcessingHandler());
+
+// Start consuming commands from the queue
+// Must be called AFTER all handlers are registered
+commandService.start();
 
 // Submit a command
 var command = new ProcessingCommand("cmd-123", params);
@@ -109,6 +113,9 @@ Optional<CommandState> state = commandService.getState(commandId);
 
 // Get result when complete
 ProcessingResult result = commandService.getResult(commandId, ProcessingResult.class).orElseThrow();
+
+// Stop consuming commands (e.g. during shutdown)
+commandService.stop();
 ```
 
 ## Command Status Flow

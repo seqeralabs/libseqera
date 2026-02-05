@@ -21,6 +21,7 @@ import io.micronaut.test.support.TestPropertyProvider
 import io.seqera.data.command.store.CommandStateStore
 import jakarta.inject.Inject
 import org.junit.jupiter.api.TestInstance
+import spock.lang.Shared
 import spock.lang.Specification
 
 import java.time.Duration
@@ -34,6 +35,7 @@ import java.time.Instant
 class CommandServiceTest extends Specification implements TestPropertyProvider {
 
     @Inject
+    @Shared
     CommandService commandService
 
     @Inject
@@ -50,7 +52,16 @@ class CommandServiceTest extends Specification implements TestPropertyProvider {
     def setup() {
         // Clear store and register test handler
         store.clear()
+    }
+
+    def setupSpec() {
         commandService.registerHandler(new TestCommandHandler())
+        // Start consuming after handlers are registered
+        commandService.start()
+    }
+    
+    def cleanupSpec() {
+        commandService.stop()
     }
 
     def 'should submit command and transition through statuses'() {

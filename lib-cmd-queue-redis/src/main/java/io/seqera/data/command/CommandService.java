@@ -85,4 +85,17 @@ public interface CommandService {
      * @return The command object with typed params
      */
     <P> Command<P> toCommand(CommandState state, CommandRegistration<P, ?> registration);
+
+    /**
+     * Start consuming commands from the queue.
+     * Must be called AFTER all handlers are registered to avoid race conditions
+     * where messages are processed before handlers are available.
+     */
+    void start();
+
+    /**
+     * Stop consuming commands from the queue.
+     * Called during shutdown to gracefully stop processing.
+     */
+    void stop();
 }

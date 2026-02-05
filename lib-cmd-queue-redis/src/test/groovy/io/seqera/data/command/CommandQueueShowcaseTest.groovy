@@ -16,11 +16,7 @@
 package io.seqera.data.command
 
 import com.github.f4b6a3.tsid.TsidCreator
-import io.micronaut.test.extensions.spock.annotation.MicronautTest
-import io.micronaut.test.support.TestPropertyProvider
-import io.seqera.data.command.store.CommandStateStore
-import jakarta.inject.Inject
-import org.junit.jupiter.api.TestInstance
+import io.micronaut.context.ApplicationContext
 import spock.lang.Specification
 
 import java.time.Duration
@@ -38,25 +34,13 @@ import java.util.concurrent.ConcurrentHashMap
  * - How to retrieve typed results after completion
  * - How to handle failures and cancellations
  */
-@MicronautTest(packages = ["io.seqera.data.stream"], transactional = false)
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class CommandQueueShowcaseTest extends Specification implements TestPropertyProvider {
+class CommandQueueShowcaseTest extends Specification {
 
-    @Inject
-    CommandService commandService
-
-    @Inject
-    CommandStateStore store
-
-    @Override
-    Map<String, String> getProperties() {
-        return [
-            'command-queue.checker.interval': '500ms'
-        ]
-    }
-
-    def setup() {
-        store.clear()
+    private ApplicationContext createContext() {
+        ApplicationContext.run(
+            ['command-queue.checker.interval': '500ms'],
+            'test'
+        )
     }
 
     // =========================================================================
@@ -68,8 +52,11 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
      * Use this pattern for quick operations that don't need async processing.
      */
     def 'showcase: simple computation command'() {
-        given: 'register a handler for computation commands'
+        given: 'create a new application context and command service'
+        def app = createContext()
+        def commandService = app.getBean(CommandService)
         commandService.registerHandler(new ComputationHandler())
+        commandService.start()
 
         and: 'create a command to compute factorial'
         def params = new ComputationParams(operation: 'factorial', value: 5)
@@ -93,6 +80,10 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
         def result = commandService.getResult(commandId, ComputationResult).orElseThrow()
         result.value == 120  // 5! = 120
         result.operation == 'factorial'
+
+        cleanup:
+        commandService.stop()
+        app.close()
     }
 
     // =========================================================================
@@ -111,9 +102,11 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
      * - Any operation that may take seconds to minutes
      */
     def 'showcase: long-running async command with status polling'() {
-        given: 'register a handler for data processing'
-        def handler = new DataProcessingHandler()
-        commandService.registerHandler(handler)
+        given: 'create a new application context and command service'
+        def app = createContext()
+        def commandService = app.getBean(CommandService)
+        commandService.registerHandler(new DataProcessingHandler())
+        commandService.start()
 
         and: 'create a command to process data'
         def params = new DataProcessingParams(
@@ -149,6 +142,10 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
         result.datasetId == 'dataset-123'
         result.recordsProcessed > 0
         result.completedSteps == ['validate', 'transform', 'aggregate']
+
+        cleanup:
+        commandService.stop()
+        app.close()
     }
 
     // =========================================================================
@@ -160,8 +157,11 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
      * Failed commands have their error message stored for retrieval.
      */
     def 'showcase: command failure with error reporting'() {
-        given: 'register a handler'
+        given: 'create a new application context and command service'
+        def app = createContext()
+        def commandService = app.getBean(CommandService)
         commandService.registerHandler(new ComputationHandler())
+        commandService.start()
 
         and: 'create a command that will fail (division by zero)'
         def params = new ComputationParams(operation: 'divide', value: 0)
@@ -184,6 +184,10 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
 
         and: 'no result is available'
         !commandService.getResult(commandId, ComputationResult).isPresent()
+
+        cleanup:
+        commandService.stop()
+        app.close()
     }
 
     // =========================================================================
@@ -195,9 +199,11 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
      * Useful for user-initiated cancellations or timeout scenarios.
      */
     def 'showcase: cancel pending command'() {
-        given: 'register a slow handler'
-        def handler = new DataProcessingHandler()
-        commandService.registerHandler(handler)
+        given: 'create a new application context and command service'
+        def app = createContext()
+        def commandService = app.getBean(CommandService)
+        commandService.registerHandler(new DataProcessingHandler())
+        commandService.start()
 
         and: 'create a command'
         def params = new DataProcessingParams(
@@ -221,6 +227,10 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
         and: 'command state shows cancelled'
         def state = commandService.getState(commandId).orElseThrow()
         state.status() == CommandStatus.CANCELLED
+
+        cleanup:
+        commandService.stop()
+        app.close()
     }
 
     // =========================================================================
@@ -232,9 +242,12 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
      * Each handler processes its specific command type independently.
      */
     def 'showcase: multiple command types processed concurrently'() {
-        given: 'register handlers for different command types'
+        given: 'create a new application context and command service'
+        def app = createContext()
+        def commandService = app.getBean(CommandService)
         commandService.registerHandler(new ComputationHandler())
         commandService.registerHandler(new NotificationHandler())
+        commandService.start()
 
         and: 'create commands of different types'
         def computeCmd = new ComputationCommand(
@@ -273,6 +286,10 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
         def notifyResult = commandService.getResult(notifyId, NotificationResult).orElseThrow()
         notifyResult.delivered
         notifyResult.recipient == 'user@example.com'
+
+        cleanup:
+        commandService.stop()
+        app.close()
     }
 
     // =========================================================================
@@ -284,8 +301,11 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
      * Useful for batch processing scenarios.
      */
     def 'showcase: batch command submission and tracking'() {
-        given: 'register handler'
+        given: 'create a new application context and command service'
+        def app = createContext()
+        def commandService = app.getBean(CommandService)
         commandService.registerHandler(new ComputationHandler())
+        commandService.start()
 
         and: 'create batch of commands'
         def commands = (1..5).collect { n ->
@@ -309,6 +329,10 @@ class CommandQueueShowcaseTest extends Specification implements TestPropertyProv
             commandService.getResult(id, ComputationResult).orElseThrow()
         }
         results.collect { it.value } == [1, 4, 9, 16, 25]  // 1^2, 2^2, 3^2, 4^2, 5^2
+
+        cleanup:
+        commandService.stop()
+        app.close()
     }
 }
 
@@ -379,7 +403,7 @@ class ComputationHandler implements CommandHandler<ComputationParams, Computatio
                 case 'square' -> (long) params.value * params.value
                 case 'divide' -> {
                     if (params.value == 0) throw new ArithmeticException('Division by zero')
-                    yield 100L / params.value
+                    yield ((long)100) / params.value
                 }
                 default -> throw new IllegalArgumentException("Unknown operation: ${params.operation}")
             }

@@ -25,7 +25,6 @@ import java.util.concurrent.TimeoutException;
 
 import io.micronaut.scheduling.TaskExecutors;
 import io.seqera.data.command.store.CommandStateStore;
-import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import jakarta.inject.Singleton;
@@ -69,10 +68,27 @@ public class CommandServiceImpl implements CommandService {
 
     private final Map<String, CommandRegistration<?, ?>> handlers = new ConcurrentHashMap<>();
 
-    @PostConstruct
-    void init() {
+    private volatile boolean started = false;
+
+    @Override
+    public void start() {
+        if (started) {
+            log.debug("Command service already started");
+            return;
+        }
+        started = true;
         queue.addConsumer(this::processCommand);
-        log.info("Command service initialized");
+        log.info("Command service started - consuming commands");
+    }
+
+    @Override
+    public void stop() {
+        if (!started) {
+            return;
+        }
+        started = false;
+        queue.close();
+        log.info("Command service stopped");
     }
 
     @Override
