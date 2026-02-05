@@ -10,6 +10,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-commons-io](lib-commons-io/)** - Common I/O utilities for logging and streaming
 - **[lib-crypto](lib-crypto/)** - Cryptographic utilities (asymmetric encryption, HMAC signatures, secure tokens)
 - **[lib-docker-cli](lib-docker-cli/)** - Lightweight Docker CLI wrapper for Java applications
+- **[lib-hashx](lib-hashx/)** - Hashing utilities for computing deterministic hash values from various input types
 - **[lib-httpx](lib-httpx/)** - Enhanced HTTP client with automatic retry logic and JWT token refresh
 - **[lib-lang](lib-lang/)** - Language and type utilities
 - **[lib-mail](lib-mail/)** - Email functionality with Micronaut integration
@@ -24,6 +25,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 
 ### Messaging & Data Libraries
 - **[lib-cache-tiered-redis](lib-cache-tiered-redis/)** - Two-tier caching with Caffeine (L1) and Redis (L2) for distributed caching
+- **[lib-cmd-queue-redis](lib-cmd-queue-redis/)** - Asynchronous command queue for executing long-running tasks with persistent state tracking
 - **[lib-data-queue-redis](lib-data-queue-redis/)** - Message queue abstraction with Redis and local implementations
 - **[lib-data-range-redis](lib-data-range-redis/)** - Range set storage similar to Redis ZRANGE with local and Redis implementations
 - **[lib-data-store-future-redis](lib-data-store-future-redis/)** - Distributed CompletableFuture store for cross-service async operations
