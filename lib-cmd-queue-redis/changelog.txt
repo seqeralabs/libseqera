@@ -1,5 +1,10 @@
 # lib-cmd-queue-redis changelog
 
+0.2.0 - 5 Feb 2026
+- Add explicit start()/stop() lifecycle to CommandService
+- Replace @PostConstruct auto-start with caller-controlled queue consumption
+- Handlers must be registered before calling start()
+
 0.1.0 - 15 Jan 2026
 - Initial release
 - Asynchronous command queue with persistent state tracking
