@@ -1,0 +1,5 @@
+1.0.0 - 6 Jan 2026
+  Initial release with Gson-based serialization
+  GsonEncodingStrategy with fluent configuration API
+  Type adapters for Java 8 date/time types (Instant, Duration, OffsetDateTime, LocalDateTime, LocalDate, LocalTime)
+  RuntimeTypeAdapterFactory for polymorphic type handling

@@ -1,5 +1,8 @@
 # lib-serde-moshi changelog
 
+1.2.0 - 14 Jan 2026
+- Add OffsetDateTime support to DateTimeAdapter for ISO-8601 serialization/deserialization
+
 1.1.0 - 27 Nov 2025
 - Extend MoshiSerializable from Encodable interface
 

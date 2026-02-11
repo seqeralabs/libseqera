@@ -1,0 +1,12 @@
+# lib-data-range-redis changelog
+
+1.0.0 - 14 Jan 2025
+- Initial release of lib-data-range-redis extracted from Wave project
+- Implement RangeStore interface for time-based range storage
+- Add AbstractRangeStore base class for concrete store implementations
+- Add RangeProvider interface for storage backend abstraction
+- Add LocalRangeProvider for in-memory range storage
+- Add RedisRangeProvider implementation using Redis sorted sets
+- Support scheduling entries with timestamp scores for cron-like services
+- Use @Requires(property = 'redis.uri') for conditional bean loading
+- Include comprehensive test suite with Redis testcontainers

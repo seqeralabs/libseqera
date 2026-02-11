@@ -1,0 +1,8 @@
+# lib-lock-redis changelog
+
+1.0.0
+- Initial release of lib-lock-redis module
+- Implement RedisLockManager using JedisPool for distributed locking
+- Implement RedisLock with Lua script for atomic release
+- Use Redis SET NX PX for atomic lock acquisition
+- Support configurable auto-expire duration and acquire retry interval
