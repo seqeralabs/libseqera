@@ -33,7 +33,7 @@ dependencies {
     implementation "io.micronaut:micronaut-runtime:${micronautCoreVersion}"
 
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
-    testImplementation 'org.testcontainers:testcontainers:1.20.6'
+    testImplementation 'org.testcontainers:testcontainers:1.21.4'
 }
 
 test {
