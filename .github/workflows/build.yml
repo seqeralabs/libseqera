@@ -48,14 +48,14 @@ jobs:
         run: |
           ./gradlew compileJava
         env:
-          GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false'
+          GRADLE_OPTS: '-Dorg.gradle.daemon=false'
 
       - name: Tests
         if: "!contains(github.event.head_commit.message, '[skip test]')"
         run: |
           ./gradlew check
         env:
-          GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.parallel=false'
+          GRADLE_OPTS: '-Dorg.gradle.daemon=false'
           GITHUB_TOKEN: ${{ secrets.GH_SEQERA_TOKEN }}
 
       - name: Release
