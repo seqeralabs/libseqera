@@ -38,7 +38,7 @@ dependencies {
     testImplementation "org.apache.groovy:groovy:4.0.24"
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
-    testImplementation 'org.testcontainers:testcontainers:1.20.6'
+    testImplementation 'org.testcontainers:testcontainers:1.21.4'
     testRuntimeOnly 'org.yaml:snakeyaml:2.2'
 }
 

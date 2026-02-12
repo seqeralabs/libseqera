@@ -31,7 +31,7 @@ public enum CommandStatus {
     SUCCEEDED,
     /** Completed with error */
     FAILED,
-    /** Cancelled by user */
+    /** Canceled by user */
     CANCELLED;
 
     /**
