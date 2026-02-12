@@ -39,11 +39,11 @@ import java.time.Duration
  * 
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
+@Timeout(45)
 class HxClientWwwAuthIntegrationTest extends Specification {
 
     private static final String TEST_URL = "https://public.cr.seqera.io/v2/nextflow/plugin/nf-amazon/blobs/sha256:bbc79350c844eba39e08a908056ce238a534b04cde7628767059d874bf725d72"
 
-    @Timeout(30)
     def "should automatically handle WWW-Authenticate challenge when enabled"() {
         given: "HxClient configured for WWW-Authenticate handling"
         def config = HxConfig.newBuilder()
@@ -73,7 +73,6 @@ class HxClientWwwAuthIntegrationTest extends Specification {
         response.headers().firstValue('Location').get() == "https://public-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/bb/bbc79350c844eba39e08a908056ce238a534b04cde7628767059d874bf725d72/data"
     }
 
-    @Timeout(30)
     def "should handle WWW-Authenticate challenge with callback providing credentials"() {
         given: "Authentication callback that provides test credentials"
         def callback = { scheme, realm ->
@@ -116,7 +115,6 @@ class HxClientWwwAuthIntegrationTest extends Specification {
         println "Response headers: ${response?.headers()?.map()}"
     }
 
-    @Timeout(30)
     def "should not handle WWW-Authenticate when feature is disabled"() {
         given: "HxClient with WWW-Authenticate handling disabled"
         def config = HxConfig.newBuilder()
