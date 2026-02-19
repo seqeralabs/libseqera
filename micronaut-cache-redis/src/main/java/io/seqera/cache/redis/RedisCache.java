@@ -46,6 +46,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 
 /**
@@ -67,6 +68,8 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
     private final ExpirationAfterWritePolicy expireAfterWritePolicy;
     private final Long expireAfterAccess;
     private final Long invalidateScanCount;
+    private final Long earlyRevalidationWindowMs;
+    private final double revalidationSteepness;
     private final ExecutorService asyncExecutor;
     private final RedisAsyncCache asyncCache;
 
@@ -121,6 +124,15 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
 
         this.invalidateScanCount = redisCacheConfiguration.getInvalidateScanCount().orElse(100L);
 
+        this.earlyRevalidationWindowMs = redisCacheConfiguration
+                .getEarlyRevalidationWindow()
+                .map(Duration::toMillis)
+                .orElse(null);
+        // λ = 1 / windowSeconds — gives ~63% revalidation probability at 1 second remaining
+        this.revalidationSteepness = earlyRevalidationWindowMs != null
+                ? 1.0 / (earlyRevalidationWindowMs / 1000.0)
+                : 0.0;
+
         this.asyncExecutor = Executors.newCachedThreadPool();
         this.asyncCache = new RedisAsyncCache();
     }
@@ -161,22 +173,32 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
         byte[] serializedKey = serializeKey(key);
         try (Jedis jedis = jedisPool.getResource()) {
             byte[] data = jedis.get(serializedKey);
-            if (data != null) {
-                Optional<T> deserialized = valueSerializer.deserialize(data, requiredType);
-                if (deserialized.isPresent()) {
-                    if (expireAfterAccess != null) {
-                        jedis.pexpire(serializedKey, expireAfterAccess);
-                    }
-                    log.trace("Cache '{}' HIT key={}", getName(), key);
-                    return deserialized.get();
+            if (data == null) {
+                log.trace("Cache '{}' MISS key={}, invoking supplier", getName(), key);
+                T value = supplier.get();
+                putValue(serializedKey, value);
+                return value;
+            }
+            Optional<T> deserialized = valueSerializer.deserialize(data, requiredType);
+            if (deserialized.isEmpty()) {
+                log.trace("Cache '{}' MISS key={}, invoking supplier", getName(), key);
+                T value = supplier.get();
+                putValue(serializedKey, value);
+                return value;
+            }
+            if (expireAfterAccess != null) {
+                jedis.pexpire(serializedKey, expireAfterAccess);
+            }
+            // Probabilistic early revalidation — refresh before expiry to prevent stampedes
+            if (earlyRevalidationWindowMs != null) {
+                long remainingTtl = jedis.pttl(serializedKey);
+                if (shouldRevalidate(remainingTtl)) {
+                    triggerAsyncRevalidation(serializedKey, key, supplier);
                 }
             }
+            log.trace("Cache '{}' HIT key={}", getName(), key);
+            return deserialized.get();
         }
-
-        log.trace("Cache '{}' MISS key={}, invoking supplier", getName(), key);
-        T value = supplier.get();
-        putValue(serializedKey, value);
-        return value;
     }
 
     @NonNull
@@ -295,6 +317,37 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                 jedis.del(serializedKey);
             }
         }
+    }
+
+    /**
+     * Determines whether a cached entry should be revalidated based on its remaining TTL.
+     * Uses an exponential probability function: p = e^(-λ * remainingSeconds)
+     *
+     * @param remainingTtlMs remaining TTL in milliseconds (-1 = no expiry, -2 = key missing)
+     * @return true if revalidation should be triggered
+     */
+    boolean shouldRevalidate(long remainingTtlMs) {
+        if (earlyRevalidationWindowMs == null) return false;
+        if (remainingTtlMs < 0) return false;  // no expiry or key gone
+        if (remainingTtlMs == 0) return true;   // already expired
+        if (remainingTtlMs > earlyRevalidationWindowMs) return false;
+        double remainingSec = remainingTtlMs / 1000.0;
+        return ThreadLocalRandom.current().nextDouble() < Math.exp(-revalidationSteepness * remainingSec);
+    }
+
+    /**
+     * Triggers an async revalidation for a key in the background.
+     */
+    private <T> void triggerAsyncRevalidation(byte[] serializedKey, Object key, Supplier<T> supplier) {
+        log.trace("Cache '{}' EARLY-REVALIDATE key={}", getName(), key);
+        asyncExecutor.submit(() -> {
+            try {
+                T fresh = supplier.get();
+                putValue(serializedKey, fresh);
+            } catch (Exception e) {
+                log.warn("Cache '{}' early revalidation failed for key={}", getName(), key, e);
+            }
+        });
     }
 
     private ExpirationAfterWritePolicy configureExpirationAfterWritePolicy(

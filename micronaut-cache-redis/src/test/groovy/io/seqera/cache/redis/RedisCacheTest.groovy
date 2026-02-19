@@ -24,6 +24,10 @@ import redis.clients.jedis.JedisPool
 import spock.lang.Shared
 import spock.lang.Specification
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+
 /**
  * Tests for {@link RedisCache}
  *
@@ -261,6 +265,162 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
         expect:
         asyncCache.getName() == cache.getName()
         asyncCache.getNativeCache() == cache.getNativeCache()
+    }
+
+    // --- Early revalidation tests ---
+
+    def 'should not revalidate when early-revalidation-window is not configured'() {
+        given:
+        def cache = context.getBean(RedisCache, Qualifiers.byName("test-cache"))
+        def supplierCallCount = new AtomicInteger(0)
+        cache.put("no-revalidate-key", new TestObject(name: "original"))
+
+        when: 'get with supplier on existing key'
+        def result = cache.get("no-revalidate-key", Argument.of(TestObject), {
+            supplierCallCount.incrementAndGet()
+            return new TestObject(name: "refreshed")
+        })
+
+        then: 'supplier should not be called (no early revalidation configured)'
+        result.name == "original"
+        supplierCallCount.get() == 0
+    }
+
+    def 'shouldRevalidate returns false when not configured: #SCENARIO'() {
+        given:
+        def cache = context.getBean(RedisCache, Qualifiers.byName("test-cache"))
+
+        expect:
+        !cache.shouldRevalidate(REMAINING_TTL_MS)
+
+        where:
+        REMAINING_TTL_MS | SCENARIO
+        0                | 'expired'
+        1000             | 'mid TTL'
+        -1               | 'no expiry set'
+        -2               | 'key does not exist'
+    }
+
+    def 'shouldRevalidate deterministic result when configured: #SCENARIO'() {
+        given: 'a cache with 5min TTL and 5min revalidation window (full coverage)'
+        def ctx = ApplicationContext.run([
+                'redis.caches.reval-unit-cache.expire-after-write': '300s',
+                'redis.caches.reval-unit-cache.early-revalidation-window': '300s',
+        ], 'test')
+        def cache = ctx.getBean(RedisCache, Qualifiers.byName("reval-unit-cache"))
+
+        expect:
+        cache.shouldRevalidate(REMAINING_TTL_MS) == EXPECTED
+
+        cleanup:
+        ctx.stop()
+
+        where:
+        REMAINING_TTL_MS | EXPECTED | SCENARIO
+        0                | true     | 'TTL=0, always revalidate'
+        -1               | false    | 'no expiry on key (pttl=-1)'
+        -2               | false    | 'key missing (pttl=-2)'
+        400_000          | false    | 'outside window'
+    }
+
+    def 'shouldRevalidate probability increases as expiry approaches: #SCENARIO'() {
+        given: 'a cache with 5min TTL and 5min revalidation window (λ = 1/300)'
+        def ctx = ApplicationContext.run([
+                'redis.caches.reval-prob-cache.expire-after-write': '300s',
+                'redis.caches.reval-prob-cache.early-revalidation-window': '300s',
+        ], 'test')
+        def cache = ctx.getBean(RedisCache, Qualifiers.byName("reval-prob-cache"))
+
+        when: 'run many trials to measure empirical probability'
+        int hits = 0
+        int trials = 5000
+        for (int i = 0; i < trials; i++) {
+            if (cache.shouldRevalidate(REMAINING_TTL_MS)) hits++
+        }
+        double observed = hits / (double) trials
+
+        then: 'observed rate should be within tolerance of expected p = e^(-λ * remainingSeconds)'
+        // Blog formula: p(t) = e^(-λ * remainingSeconds), λ = 1/windowSeconds
+        observed >= EXPECTED_MIN
+        observed <= EXPECTED_MAX
+
+        cleanup:
+        ctx.stop()
+
+        where:
+        // λ = 1/300, p = e^(-(1/300) * remainingSec)
+        REMAINING_TTL_MS | EXPECTED_MIN | EXPECTED_MAX | SCENARIO
+        1_000            | 0.98         | 1.00         | '1s left, p≈0.997'
+        60_000           | 0.75         | 0.89         | '60s left, p≈0.82'
+        150_000          | 0.54         | 0.68         | '150s left (half window), p≈0.61'
+        270_000          | 0.34         | 0.48         | '270s left, p≈0.41'
+    }
+
+    def 'should trigger early revalidation for cache with revalidation window'() {
+        given: 'a cache configured with TTL and early revalidation window'
+        def ctx = ApplicationContext.run([
+                'redis.caches.revalidate-cache.expire-after-write': '10s',
+                'redis.caches.revalidate-cache.early-revalidation-window': '9s',
+        ], 'test')
+        def cache = ctx.getBean(RedisCache, Qualifiers.byName("revalidate-cache"))
+        def supplierCallCount = new AtomicInteger(0)
+        def latch = new CountDownLatch(1)
+
+        and: 'put a value in the cache'
+        cache.put("revalidate-key", new TestObject(name: "original"))
+
+        when: 'wait until within the revalidation window with low remaining TTL'
+        sleep(8000) // 8s elapsed of 10s TTL → ~2s remaining, p = e^(-0.11*2) ≈ 0.80
+
+        and: 'make multiple get calls — high probability triggers revalidation'
+        def result = null
+        for (int i = 0; i < 50; i++) {
+            result = cache.get("revalidate-key", Argument.of(TestObject), {
+                supplierCallCount.incrementAndGet()
+                latch.countDown()
+                return new TestObject(name: "refreshed")
+            })
+            if (result.name == "refreshed") break
+        }
+
+        then: 'supplier should have been called (either via async revalidation or sync on miss)'
+        latch.await(5, TimeUnit.SECONDS)
+        supplierCallCount.get() >= 1
+
+        and: 'cache should eventually have the refreshed value'
+        sleep(500)
+        cache.get("revalidate-key", TestObject).get().name == "refreshed"
+
+        cleanup:
+        ctx.stop()
+    }
+
+    def 'should not trigger early revalidation when TTL is outside window'() {
+        given: 'a cache with 30s TTL and 2s revalidation window'
+        def ctx = ApplicationContext.run([
+                'redis.caches.no-revalidate-cache.expire-after-write': '30s',
+                'redis.caches.no-revalidate-cache.early-revalidation-window': '2s',
+        ], 'test')
+        def cache = ctx.getBean(RedisCache, Qualifiers.byName("no-revalidate-cache"))
+        def supplierCallCount = new AtomicInteger(0)
+
+        and: 'put a value — TTL is ~30s, well outside 2s window'
+        cache.put("fresh-key", new TestObject(name: "original"))
+
+        when: 'get immediately (remaining TTL ~30s, outside 2s window)'
+        for (int i = 0; i < 20; i++) {
+            cache.get("fresh-key", Argument.of(TestObject), {
+                supplierCallCount.incrementAndGet()
+                return new TestObject(name: "refreshed")
+            })
+        }
+        sleep(200) // give any async task time to run
+
+        then: 'supplier should never be called'
+        supplierCallCount.get() == 0
+
+        cleanup:
+        ctx.stop()
     }
 
     static class TestObject implements Serializable {
