@@ -63,11 +63,11 @@ import org.slf4j.LoggerFactory;
  * </ol>
  * 
  * <p><strong>Thread Safety:</strong><br>
- * All public methods are thread-safe using a {@link ReentrantReadWriteLock}:
+ * All public methods are thread-safe:
  * <ul>
- *   <li>Token reads use shared read locks for high concurrency</li>
- *   <li>Token updates use exclusive write locks for consistency</li>
- *   <li>Token refresh operations are synchronized to prevent duplicate refreshes</li>
+ *   <li>Token storage is managed through {@link HxTokenStore} (default: {@link HxMapTokenStore} backed by ConcurrentHashMap)</li>
+ *   <li>Token updates use {@code synchronized} to ensure atomic read-modify-write</li>
+ *   <li>Concurrent token refresh operations are coordinated per-key using {@link ConcurrentHashMap#computeIfAbsent}</li>
  * </ul>
  * 
  * <p><strong>Usage Example:</strong>
@@ -102,8 +102,6 @@ class HxTokenManager {
     private static final String DEFAULT_TOKEN = "default-token";
 
     private final HxConfig config;
-    private final HttpClient refreshHttpClient;
-    private final CookieManager cookieManager;
     private final HxTokenStore tokenStore;
 
     // Coordination for concurrent token refresh operations per key
@@ -126,17 +124,6 @@ class HxTokenManager {
 
         // Validate JWT token refresh configuration
         validateTokenRefreshConfig();
-
-        // Create CookieManager with custom policy if provided
-        this.cookieManager = (config.getRefreshCookiePolicy() != null)
-                ? new CookieManager(null, config.getRefreshCookiePolicy())
-                : new CookieManager();
-        this.refreshHttpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .cookieHandler(cookieManager)
-                .connectTimeout(config.getTokenRefreshTimeout())
-                .build();
     }
 
     /**
@@ -333,16 +320,14 @@ class HxTokenManager {
     }
 
     /**
-     * Extracts a cookie from the cookie store by name (same approach as TowerXAuth).
-     * 
-     * <p>This method searches through the cookie store for a cookie with the
-     * specified name and returns the HttpCookie object if found.
-     * 
+     * Extracts a cookie from the given cookie manager by name.
+     *
+     * @param cookies the cookie manager to search
      * @param cookieName the name of the cookie to extract (e.g., "JWT", "JWT_REFRESH_TOKEN")
      * @return the HttpCookie if found, null otherwise
      */
-    protected HttpCookie getCookie(String cookieName) {
-        for (HttpCookie cookie : cookieManager.getCookieStore().getCookies()) {
+    protected HttpCookie getCookie(CookieManager cookies, String cookieName) {
+        for (HttpCookie cookie : cookies.getCookieStore().getCookies()) {
             if (cookieName.equals(cookie.getName())) {
                 return cookie;
             }
@@ -429,7 +414,7 @@ class HxTokenManager {
      * @param jwtToken the new JWT token to set, may be null
      * @param refreshToken the new refresh token to set, may be null
      */
-    public void updateTokens(String jwtToken, String refreshToken) {
+    synchronized void updateTokens(String jwtToken, String refreshToken) {
         final HxAuth currentAuth = tokenStore.get(DEFAULT_TOKEN);
         String newToken = (currentAuth != null) ? currentAuth.accessToken() : null;
         String newRefresh = (currentAuth != null) ? currentAuth.refreshToken() : null;
@@ -466,12 +451,7 @@ class HxTokenManager {
             return null;
         }
         final String key = HxAuth.key(auth);
-        HxAuth stored = tokenStore.get(key);
-        if (stored == null) {
-            tokenStore.put(key, auth);
-            return auth;
-        }
-        return stored;
+        return tokenStore.putIfAbsent(key, auth);
     }
 
     /**
@@ -570,6 +550,17 @@ class HxTokenManager {
             final var refreshUrl = URI.create(config.getRefreshTokenUrl());
             log.trace("Attempting to refresh JWT token for key {} at URL: {}", key, refreshUrl);
 
+            // Create per-refresh CookieManager and HttpClient to avoid cross-user cookie leaking
+            final CookieManager cookieManager = (config.getRefreshCookiePolicy() != null)
+                    ? new CookieManager(null, config.getRefreshCookiePolicy())
+                    : new CookieManager();
+            final HttpClient refreshHttpClient = HttpClient.newBuilder()
+                    .version(HttpClient.Version.HTTP_1_1)
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .cookieHandler(cookieManager)
+                    .connectTimeout(config.getTokenRefreshTimeout())
+                    .build();
+
             final String body = "grant_type=refresh_token&refresh_token=" +
                     URLEncoder.encode(auth.refreshToken(), StandardCharsets.UTF_8);
 
@@ -584,7 +575,7 @@ class HxTokenManager {
             log.trace("Token refresh response for key {}: [{}]", key, response.statusCode());
 
             if (response.statusCode() == 200) {
-                final HxAuth newAuth = extractAuthFromResponse(response, auth);
+                final HxAuth newAuth = extractAuthFromResponse(response, cookieManager, auth);
                 if (newAuth != null) {
                     log.debug("JWT token refresh completed for key {}", key);
                     tokenStore.put(key, newAuth);
@@ -605,14 +596,15 @@ class HxTokenManager {
      * Extracts tokens from the HTTP response and creates a new {@link HxAuth}.
      *
      * @param response the HTTP response from the token refresh request
+     * @param cookieManager the cookie manager used for the refresh request
      * @param originalAuth the original authentication data (used to preserve refresh token if not returned)
      * @return a new {@link HxAuth} with updated tokens, or null if extraction failed
      */
-    protected HxAuth extractAuthFromResponse(HttpResponse<String> response, HxAuth originalAuth) {
+    protected HxAuth extractAuthFromResponse(HttpResponse<String> response, CookieManager cookieManager, HxAuth originalAuth) {
         try {
             // First try to extract tokens from cookie store
-            final HttpCookie authCookie = getCookie("JWT");
-            final HttpCookie refreshCookie = getCookie("JWT_REFRESH_TOKEN");
+            final HttpCookie authCookie = getCookie(cookieManager, "JWT");
+            final HttpCookie refreshCookie = getCookie(cookieManager, "JWT_REFRESH_TOKEN");
 
             if (authCookie != null && authCookie.getValue() != null) {
                 log.trace("Successfully extracted JWT token from cookies");

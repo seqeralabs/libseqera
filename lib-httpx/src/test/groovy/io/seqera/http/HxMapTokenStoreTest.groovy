@@ -54,4 +54,32 @@ class HxMapTokenStoreTest extends Specification {
         store.remove('key1') == null
     }
 
+    def 'putIfAbsent should store and return auth when key is absent'() {
+        given:
+        def store = new HxMapTokenStore()
+        def auth = HxAuth.of('my.jwt.token', 'refresh')
+
+        when:
+        def result = store.putIfAbsent('key1', auth)
+
+        then:
+        result == auth
+        store.get('key1') == auth
+    }
+
+    def 'putIfAbsent should return existing auth when key is present'() {
+        given:
+        def store = new HxMapTokenStore()
+        def existing = HxAuth.of('existing.jwt.token', 'refresh1')
+        def newAuth = HxAuth.of('new.jwt.token', 'refresh2')
+        store.put('key1', existing)
+
+        when:
+        def result = store.putIfAbsent('key1', newAuth)
+
+        then:
+        result == existing
+        store.get('key1') == existing
+    }
+
 }

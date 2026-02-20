@@ -63,6 +63,32 @@ class HxAuthTest extends Specification {
         HxAuth.keyOrDefault(null, 'custom') == 'custom'
     }
 
+    def 'should reject null access token'() {
+        when:
+        HxAuth.of(null)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def 'should reject null access token with refresh'() {
+        when:
+        HxAuth.of(null, 'refresh')
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def 'should mask tokens in toString'() {
+        when:
+        def auth = HxAuth.of('eyJhbGciOiJIUzI1NiJ9.payload.signature', 'my-refresh-token-value')
+
+        then:
+        !auth.toString().contains('eyJhbGciOiJIUzI1NiJ9.payload.signature')
+        !auth.toString().contains('my-refresh-token-value')
+        auth.toString().startsWith('HxAuth[')
+    }
+
     def 'should implement equals and hashCode correctly'() {
         expect:
         HxAuth.of(token1, refresh1) == HxAuth.of(token2, refresh2) == expected

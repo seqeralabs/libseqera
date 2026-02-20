@@ -44,6 +44,12 @@ class HxMapTokenStore implements HxTokenStore {
     }
 
     @Override
+    public HxAuth putIfAbsent(String key, HxAuth auth) {
+        final HxAuth existing = store.putIfAbsent(key, auth);
+        return existing != null ? existing : auth;
+    }
+
+    @Override
     public HxAuth remove(String key) {
         return store.remove(key);
     }

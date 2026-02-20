@@ -349,22 +349,20 @@ class HxClientTest extends Specification {
         client.config.jwtToken == 'test-token'
         client.httpClient != null
         client.tokenManager != null
-        client.tokenManager.cookieManager != null
     }
-    
+
     def 'should handle null refreshCookiePolicy via builder'() {
         when:
         def client = HxClient.newBuilder()
                 .refreshCookiePolicy(null)
                 .bearerToken('test-token')
                 .build()
-        
+
         then:
         client.config.refreshCookiePolicy == null
         client.config.jwtToken == 'test-token'
         client.httpClient != null
         client.tokenManager != null
-        client.tokenManager.cookieManager != null
     }
     
     def 'should configure different cookie policies via builder'() {

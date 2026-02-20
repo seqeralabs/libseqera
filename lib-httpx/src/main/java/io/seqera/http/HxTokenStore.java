@@ -48,6 +48,22 @@ public interface HxTokenStore {
     void put(String key, HxAuth auth);
 
     /**
+     * Stores the authentication data for the given key if no value is already associated with it.
+     *
+     * <p>This method provides atomic check-and-set semantics. If the key already has a value,
+     * the existing value is returned and no update is performed. If the key has no value,
+     * the provided auth is stored and returned.
+     *
+     * <p>Implementations should ensure this operation is atomic to prevent race conditions
+     * in concurrent environments.
+     *
+     * @param key the unique key identifying the token pair
+     * @param auth the {@link HxAuth} to store if no value exists for the key
+     * @return the existing {@link HxAuth} if present, otherwise the newly stored auth
+     */
+    HxAuth putIfAbsent(String key, HxAuth auth);
+
+    /**
      * Removes the authentication data for the given key.
      *
      * @param key the unique key identifying the token pair to remove

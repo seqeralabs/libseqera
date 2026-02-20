@@ -41,6 +41,9 @@ public final class HxAuth {
     private final String refreshToken;
 
     private HxAuth(String accessToken, String refreshToken) {
+        if (accessToken == null) {
+            throw new IllegalArgumentException("accessToken cannot be null");
+        }
         this.accessToken = accessToken;
         this.refreshToken = refreshToken;
     }
@@ -135,8 +138,14 @@ public final class HxAuth {
     @Override
     public String toString() {
         return "HxAuth[" +
-                "accessToken=" + accessToken +
-                ", refreshToken=" + refreshToken +
+                "accessToken=" + mask(accessToken) +
+                ", refreshToken=" + mask(refreshToken) +
                 ']';
+    }
+
+    private static String mask(String value) {
+        if (value == null) return "null";
+        if (value.length() <= 8) return "***";
+        return value.substring(0, 4) + "***" + value.substring(value.length() - 4);
     }
 }

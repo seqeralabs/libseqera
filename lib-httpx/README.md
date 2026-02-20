@@ -188,12 +188,13 @@ public class RedisTokenStore implements HxTokenStore {
     public void put(String key, HxAuth auth) { /* Redis SET */ }
 
     @Override
-    public HxAuth remove(String key) { /* Redis DEL */ }
+    public HxAuth putIfAbsent(String key, HxAuth auth) {
+        // Use Redis SETNX for atomic check-and-set
+        // Return existing value if present, otherwise store and return auth
+    }
 
     @Override
-    public HxAuth putIfAbsent(HxAuth auth) {
-        // Use Redis SETNX for atomic operation
-    }
+    public HxAuth remove(String key) { /* Redis DEL */ }
 }
 
 // Use custom store
