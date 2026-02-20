@@ -28,44 +28,48 @@ class HxAuthTest extends Specification {
 
     def 'should create auth with token only'() {
         when:
-        def auth = HxAuth.of('my.jwt.token')
+        def auth = new DefaultHxAuth('my.jwt.token', null)
 
         then:
         auth.accessToken() == 'my.jwt.token'
         auth.refreshToken() == null
+        auth.refreshUrl() == null
     }
 
     def 'should create auth with token and refresh'() {
         when:
-        def auth = HxAuth.of('my.jwt.token', 'my-refresh-token')
+        def auth = new DefaultHxAuth('my.jwt.token', 'my-refresh-token')
 
         then:
         auth.accessToken() == 'my.jwt.token'
         auth.refreshToken() == 'my-refresh-token'
+        auth.refreshUrl() == null
     }
 
-    def 'should compute consistent key from token'() {
+    def 'should create auth with token, refresh, and refreshUrl'() {
+        when:
+        def auth = new DefaultHxAuth('my.jwt.token', 'my-refresh-token', 'https://example.com/oauth/token')
+
+        then:
+        auth.accessToken() == 'my.jwt.token'
+        auth.refreshToken() == 'my-refresh-token'
+        auth.refreshUrl() == 'https://example.com/oauth/token'
+    }
+
+    def 'should assign unique stable key'() {
         given:
-        def auth1 = HxAuth.of('my.jwt.token', 'refresh1')
-        def auth2 = HxAuth.of('my.jwt.token', 'refresh2')
-        def auth3 = HxAuth.of('different.jwt.token', 'refresh1')
+        def auth1 = new DefaultHxAuth('my.jwt.token', 'refresh1')
+        def auth2 = new DefaultHxAuth('my.jwt.token', 'refresh2')
 
         expect:
-        HxAuth.key(auth1) == HxAuth.key(auth2)  // same token = same key
-        HxAuth.key(auth1) != HxAuth.key(auth3)  // different token = different key
-        HxAuth.key(auth1).length() == 64        // SHA-256 hex = 64 chars
-    }
-
-    def 'should return default key for null auth'() {
-        expect:
-        HxAuth.keyOrDefault(null, 'default') == 'default'
-        HxAuth.keyOrDefault(HxAuth.of('token'), 'default') != 'default'
-        HxAuth.keyOrDefault(null, 'custom') == 'custom'
+        auth1.id() != auth2.id()  // each instance gets a unique key
+        auth1.id() == auth1.withToken('new.jwt.token').id()  // key is stable across withToken
+        auth1.id() == auth1.withRefresh('new-refresh').id()  // key is stable across withRefresh
     }
 
     def 'should reject null access token'() {
         when:
-        HxAuth.of(null)
+        new DefaultHxAuth(null, null)
 
         then:
         thrown(IllegalArgumentException)
@@ -73,7 +77,7 @@ class HxAuthTest extends Specification {
 
     def 'should reject null access token with refresh'() {
         when:
-        HxAuth.of(null, 'refresh')
+        new DefaultHxAuth(null, 'refresh')
 
         then:
         thrown(IllegalArgumentException)
@@ -81,7 +85,7 @@ class HxAuthTest extends Specification {
 
     def 'should mask tokens in toString'() {
         when:
-        def auth = HxAuth.of('eyJhbGciOiJIUzI1NiJ9.payload.signature', 'my-refresh-token-value')
+        def auth = new DefaultHxAuth('eyJhbGciOiJIUzI1NiJ9.payload.signature', 'my-refresh-token-value')
 
         then:
         !auth.toString().contains('eyJhbGciOiJIUzI1NiJ9.payload.signature')
@@ -89,16 +93,14 @@ class HxAuthTest extends Specification {
         auth.toString().startsWith('HxAuth[')
     }
 
-    def 'should implement equals and hashCode correctly'() {
-        expect:
-        HxAuth.of(token1, refresh1) == HxAuth.of(token2, refresh2) == expected
-        (HxAuth.of(token1, refresh1).hashCode() == HxAuth.of(token2, refresh2).hashCode()) == expected
+    def 'each instance should have unique identity'() {
+        given:
+        def auth1 = new DefaultHxAuth('a.b.c', 'r1')
+        def auth2 = new DefaultHxAuth('a.b.c', 'r1')
 
-        where:
-        token1          | refresh1   | token2          | refresh2   | expected
-        'a.b.c'         | 'r1'       | 'a.b.c'         | 'r1'       | true
-        'a.b.c'         | null       | 'a.b.c'         | null       | true
-        'a.b.c'         | 'r1'       | 'a.b.c'         | 'r2'       | false
-        'a.b.c'         | 'r1'       | 'x.y.z'         | 'r1'       | false
+        expect:
+        auth1.id() != auth2.id()  // different instances have different keys
+        auth1.id() == auth1.withToken('x.y.z').id()  // key preserved after withToken
+        auth1.id() == auth1.withRefresh('r2').id()    // key preserved after withRefresh
     }
 }

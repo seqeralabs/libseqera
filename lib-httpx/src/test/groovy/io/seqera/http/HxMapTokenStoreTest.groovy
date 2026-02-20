@@ -29,7 +29,7 @@ class HxMapTokenStoreTest extends Specification {
     def 'should store and retrieve auth by key'() {
         given:
         def store = new HxMapTokenStore()
-        def auth = HxAuth.of('my.jwt.token', 'refresh')
+        def auth = new DefaultHxAuth('my.jwt.token', 'refresh')
 
         when:
         store.put('key1', auth)
@@ -42,7 +42,7 @@ class HxMapTokenStoreTest extends Specification {
     def 'should remove auth'() {
         given:
         def store = new HxMapTokenStore()
-        def auth = HxAuth.of('my.jwt.token', 'refresh')
+        def auth = new DefaultHxAuth('my.jwt.token', 'refresh')
         store.put('key1', auth)
 
         when:
@@ -57,7 +57,7 @@ class HxMapTokenStoreTest extends Specification {
     def 'putIfAbsent should store and return auth when key is absent'() {
         given:
         def store = new HxMapTokenStore()
-        def auth = HxAuth.of('my.jwt.token', 'refresh')
+        def auth = new DefaultHxAuth('my.jwt.token', 'refresh')
 
         when:
         def result = store.putIfAbsent('key1', auth)
@@ -70,8 +70,8 @@ class HxMapTokenStoreTest extends Specification {
     def 'putIfAbsent should return existing auth when key is present'() {
         given:
         def store = new HxMapTokenStore()
-        def existing = HxAuth.of('existing.jwt.token', 'refresh1')
-        def newAuth = HxAuth.of('new.jwt.token', 'refresh2')
+        def existing = new DefaultHxAuth('existing.jwt.token', 'refresh1')
+        def newAuth = new DefaultHxAuth('new.jwt.token', 'refresh2')
         store.put('key1', existing)
 
         when:

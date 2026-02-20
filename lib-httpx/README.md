@@ -21,7 +21,7 @@ dependencies {
 - **Retry Logic**: Automatic retry for configurable HTTP status codes (default: 429, 500, 502, 503, 504)
 - **Authentication Support**: Built-in support for JWT Bearer tokens and HTTP Basic authentication
 - **JWT Token Refresh**: Automatic JWT token refresh when receiving 401 Unauthorized responses with configurable cookie policies
-- **Multi-Session Auth**: Support for multiple concurrent authentication sessions with per-request token management
+- **Multi-Session Auth**: Support for multiple concurrent authentication sessions via the `HxAuth` interface
 - **Custom Token Storage**: Pluggable token store interface for distributed deployments (Redis, database, etc.)
 - **WWW-Authenticate Support**: Automatic handling of HTTP authentication challenges (Basic and Bearer schemes)
 - **Anonymous Authentication**: Fallback to anonymous authentication when credentials aren't provided
@@ -63,13 +63,12 @@ HxClient client = HxClient.newBuilder()
     .bearerToken("your-jwt-token")
     .refreshToken("your-refresh-token")
     .refreshTokenUrl("https://api.example.com/oauth/token")
-    .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL) // New: Configure cookie handling for token refresh
+    .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
     .build();
 
-// Using HxConfig directly (deprecated methods shown for compatibility)
+// Using HxConfig directly
 HxConfig config = HxConfig.newBuilder()
-    .bearerToken("your-jwt-token")  // Recommended
-    // .withBearerToken("your-jwt-token")  // Deprecated but still works
+    .bearerToken("your-jwt-token")
     .refreshToken("your-refresh-token")
     .refreshTokenUrl("https://api.example.com/oauth/token")
     .build();
@@ -99,7 +98,7 @@ HxClient client = HxClient.newBuilder().config(config).build();
 ```
 
 **Authentication Constraints:**
-- Cannot configure both JWT and Basic authentication simultaneously 
+- Cannot configure both JWT and Basic authentication simultaneously
 - Choose one authentication method - the configuration builder will reject conflicting setups
 - Use JWT tokens for modern APIs, Basic auth for legacy systems
 
@@ -120,10 +119,8 @@ HxConfig config = HxConfig.newBuilder()
     .wwwAuthentication(true)
     .wwwAuthenticationCallback((scheme, realm) -> {
         if (scheme == AuthenticationScheme.BASIC) {
-            // Return base64-encoded credentials for Basic auth
             return Base64.getEncoder().encodeToString("user:pass".getBytes());
         } else if (scheme == AuthenticationScheme.BEARER) {
-            // Return bearer token
             return "your-bearer-token";
         }
         return null; // Fall back to anonymous auth
@@ -143,17 +140,32 @@ HxClient client = HxClient.newBuilder().config(config).build();
 
 ### Multi-Session Authentication
 
-For applications managing multiple users or authentication contexts, use `HxAuth` to handle per-request authentication with automatic token refresh:
+For applications managing multiple users or authentication contexts, use the `HxAuth` interface for per-request authentication with automatic token refresh.
+
+#### The `HxAuth` Interface
+
+`HxAuth` represents an authentication session. The `id()` uniquely identifies the session and **must remain the same for the entire lifecycle** of the auth — even as the access token and refresh token change over time due to token refresh operations. This allows the client to track and coordinate refreshes for the same logical session.
+
+| Method | Description |
+|--------|-------------|
+| `id()` | Stable identifier, constant for the auth lifecycle |
+| `accessToken()` | The current JWT access token |
+| `refreshToken()` | The refresh token (nullable) |
+| `refreshUrl()` | Per-auth refresh URL override (nullable, falls back to global config) |
+| `withToken(token)` | Returns an `HxAuth` with the updated access token (same `id`) |
+| `withRefresh(refresh)` | Returns an `HxAuth` with the updated refresh token (same `id`) |
+
+The default implementation `DefaultHxAuth` is an immutable record that auto-generates a UUID as `id()`. The `withToken` and `withRefresh` methods return new instances preserving the same `id`.
+
+#### Basic Multi-Session Usage
 
 ```java
-// Create a shared client with refresh URL configured
-HxClient client = HxClient.newBuilder()
-    .refreshTokenUrl("https://api.example.com/oauth/token")
-    .build();
+// Create a shared client
+HxClient client = HxClient.newBuilder().build();
 
-// Create auth for each user session
-HxAuth user1Auth = HxAuth.of("user1.jwt.token", "user1-refresh-token");
-HxAuth user2Auth = HxAuth.of("user2.jwt.token", "user2-refresh-token");
+// Create auth for each user session (each gets a unique id)
+HxAuth user1Auth = new DefaultHxAuth("user1.jwt.token", "user1-refresh-token", "https://api.example.com/oauth/token");
+HxAuth user2Auth = new DefaultHxAuth("user2.jwt.token", "user2-refresh-token", "https://api.example.com/oauth/token");
 
 // Make requests with per-user authentication
 HttpRequest request = HttpRequest.newBuilder()
@@ -168,11 +180,48 @@ HttpResponse<String> response2 = client.send(request, user2Auth, HttpResponse.Bo
 CompletableFuture<HttpResponse<String>> future = client.sendAsync(request, user1Auth, HttpResponse.BodyHandlers.ofString());
 ```
 
-**Features:**
-- Each `HxAuth` maintains its own token pair (access + refresh)
-- Automatic token refresh on 401 responses, scoped to each auth session
-- Thread-safe concurrent refresh coordination per auth key
-- Tokens are identified by SHA-256 hash of the access token
+#### Per-Auth Refresh URL
+
+Each `HxAuth` can carry its own `refreshUrl`, allowing different auth sessions to refresh against different endpoints. If `refreshUrl()` returns null, the global `refreshTokenUrl` from `HxConfig` is used as fallback.
+
+```java
+// Different users refresh against different endpoints
+HxAuth user1 = new DefaultHxAuth("user1.jwt.token", "user1-refresh", "https://region1.example.com/oauth/token");
+HxAuth user2 = new DefaultHxAuth("user2.jwt.token", "user2-refresh", "https://region2.example.com/oauth/token");
+```
+
+#### Custom `HxAuth` Implementation
+
+Implement `HxAuth` to customise the identity strategy (e.g., key by user ID or tenant):
+
+```java
+public class TenantAuth implements HxAuth {
+    private final String tenantId;
+    private final String accessToken;
+    private final String refreshToken;
+
+    public TenantAuth(String tenantId, String accessToken, String refreshToken) {
+        this.tenantId = tenantId;
+        this.accessToken = accessToken;
+        this.refreshToken = refreshToken;
+    }
+
+    @Override public String id() { return tenantId; }  // stable across refreshes
+    @Override public String accessToken() { return accessToken; }
+    @Override public String refreshToken() { return refreshToken; }
+    @Override public String refreshUrl() { return null; }  // use global config
+
+    @Override
+    public HxAuth withToken(String token) {
+        return new TenantAuth(tenantId, token, refreshToken);
+    }
+
+    @Override
+    public HxAuth withRefresh(String refresh) {
+        return new TenantAuth(tenantId, accessToken, refresh);
+    }
+}
+```
 
 #### Custom Token Store
 
@@ -201,7 +250,6 @@ public class RedisTokenStore implements HxTokenStore {
 HxTokenStore customStore = new RedisTokenStore();
 HxClient client = HxClient.newBuilder()
     .tokenStore(customStore)
-    .refreshTokenUrl("https://api.example.com/oauth/token")
     .build();
 ```
 
@@ -247,45 +295,15 @@ HxConfig config = HxConfig.newBuilder()
 HxClient client = HxClient.newBuilder().config(config).build();
 ```
 
-### New Cookie Policy Configuration (v2.1.0+)
+### Cookie Policy Configuration
 
 Configure cookie handling for JWT token refresh operations:
 
 ```java
-// Configure cookie policy for token refresh operations
 HxClient client = HxClient.newBuilder()
     .bearerToken("your-jwt-token")
-    .refreshToken("your-refresh-token") 
+    .refreshToken("your-refresh-token")
     .refreshTokenUrl("https://api.example.com/oauth/token")
-    .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)  // Accept all cookies
-    // .refreshCookiePolicy(CookiePolicy.ACCEPT_NONE)  // Accept no cookies
-    // .refreshCookiePolicy(CookiePolicy.ACCEPT_ORIGINAL_SERVER)  // Accept only from original server
-    .build();
-```
-
-## Migration Guide (v2.0.0 → v2.1.0)
-
-Version 2.1.0 introduces new setter methods without the `with` prefix to align with HxClient.Builder patterns. The old `with` prefixed methods are deprecated but still work:
-
-```java
-// ❌ Deprecated (still works with warnings)
-HxConfig config = HxConfig.newBuilder()
-    .withBearerToken("token")
-    .withMaxAttempts(3)
-    .withRefreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
-    .build();
-
-// ✅ Recommended (new in v2.1.0)
-HxConfig config = HxConfig.newBuilder()
-    .bearerToken("token")
-    .maxAttempts(3)
-    .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
-    .build();
-
-// ✅ Best practice: Use HxClient.Builder directly
-HxClient client = HxClient.newBuilder()
-    .bearerToken("token")
-    .maxAttempts(3)
     .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
     .build();
 ```
@@ -306,25 +324,16 @@ HxClient client = HxClient.newBuilder()
 | `tokenRefreshTimeout` | Timeout for token refresh requests | 30s |
 | `tokenStore` | Custom token store for multi-session authentication | HxMapTokenStore |
 | `basicAuthToken` | Token for HTTP Basic authentication (username:password format) | null |
-| `refreshCookiePolicy` | Cookie policy for JWT token refresh operations (ACCEPT_ALL, ACCEPT_NONE, ACCEPT_ORIGINAL_SERVER) | null |
+| `refreshCookiePolicy` | Cookie policy for JWT token refresh operations | null |
 | `wwwAuthentication` | Enable WWW-Authenticate challenge handling | false |
 | `wwwAuthenticationCallback` | Callback for providing authentication credentials | null |
 
-## API Documentation
+## Key Classes
 
-All classes and methods include comprehensive Javadoc documentation covering:
-
-- **Class-level documentation**: Complete overview of functionality and usage patterns
-- **Method documentation**: Detailed parameter descriptions, return values, and behavior
-- **Usage examples**: Code samples showing common use cases
-- **Thread safety notes**: Concurrency guarantees and synchronization details
-- **Error handling**: Exception types and retry behavior
-
-### Key Classes
-
-- **`HxClient`** (Http eXtended Client): Main client class with retry, JWT, and WWW-Authenticate functionality
-- **`HxConfig`**: Configuration builder with all available options including Retryable.Config integration
-- **`HxAuth`**: Immutable container for JWT access token and refresh token pairs
+- **`HxClient`**: Main HTTP client with retry, JWT, and WWW-Authenticate functionality
+- **`HxConfig`**: Configuration builder with all available options
+- **`HxAuth`**: Interface for authentication credentials with stable identity across refreshes
+- **`DefaultHxAuth`**: Immutable record implementation of `HxAuth` with UUID-based identity
 - **`HxTokenStore`**: Interface for pluggable token storage (default: in-memory ConcurrentHashMap)
 - **`HxTokenManager`**: Thread-safe JWT token lifecycle management with multi-session support
 - **`AuthenticationChallenge`**: Represents a parsed WWW-Authenticate challenge

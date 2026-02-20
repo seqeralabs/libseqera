@@ -254,7 +254,7 @@ class HxTokenManagerTest extends Specification {
         given:
         def config = HxConfig.newBuilder().build()
         def tokenManager = new HxTokenManager(config)
-        def auth = HxAuth.of('my.jwt.token', 'refresh')
+        def auth = new DefaultHxAuth('my.jwt.token', 'refresh')
 
         when:
         def result = tokenManager.getAuth(auth)
@@ -277,7 +277,7 @@ class HxTokenManagerTest extends Specification {
         given:
         def config = HxConfig.newBuilder().build()
         def tokenManager = new HxTokenManager(config)
-        def auth = HxAuth.of('custom.jwt.token', 'refresh')
+        def auth = new DefaultHxAuth('custom.jwt.token', 'refresh')
         def request = HttpRequest.newBuilder()
                 .uri(URI.create('https://example.com/api'))
                 .GET()
@@ -300,10 +300,16 @@ class HxTokenManagerTest extends Specification {
         def configWithoutUrl = HxConfig.newBuilder().build()
 
         expect:
-        new HxTokenManager(configWithUrl).canRefreshToken(HxAuth.of('a.b.c', 'refresh')) == true
-        new HxTokenManager(configWithUrl).canRefreshToken(HxAuth.of('a.b.c', null)) == false
+        // config has refreshUrl → can refresh if auth has refresh token
+        new HxTokenManager(configWithUrl).canRefreshToken(new DefaultHxAuth('a.b.c', 'refresh')) == true
+        new HxTokenManager(configWithUrl).canRefreshToken(new DefaultHxAuth('a.b.c', null)) == false
         new HxTokenManager(configWithUrl).canRefreshToken(null) == false
-        new HxTokenManager(configWithoutUrl).canRefreshToken(HxAuth.of('a.b.c', 'refresh')) == false
+        // config has no refreshUrl, auth has no refreshUrl → cannot refresh
+        new HxTokenManager(configWithoutUrl).canRefreshToken(new DefaultHxAuth('a.b.c', 'refresh')) == false
+        // config has no refreshUrl, but auth carries its own refreshUrl → can refresh
+        new HxTokenManager(configWithoutUrl).canRefreshToken(new DefaultHxAuth('a.b.c', 'refresh', 'https://other.com/oauth/token')) == true
+        // auth has refreshUrl but no refresh token → cannot refresh
+        new HxTokenManager(configWithoutUrl).canRefreshToken(new DefaultHxAuth('a.b.c', null, 'https://other.com/oauth/token')) == false
     }
 
     def 'should accept custom token store'() {
@@ -311,13 +317,13 @@ class HxTokenManagerTest extends Specification {
         def customStore = new HxMapTokenStore()
         def config = HxConfig.newBuilder().build()
         def tokenManager = new HxTokenManager(config, customStore)
-        def auth = HxAuth.of('my.jwt.token', 'refresh')
+        def auth = new DefaultHxAuth('my.jwt.token', 'refresh')
 
         when:
         tokenManager.getAuth(auth)
 
         then:
-        customStore.get(HxAuth.key(auth)) == auth
+        customStore.get(auth.id()) == auth
         tokenManager.getTokenStore() == customStore
     }
 }

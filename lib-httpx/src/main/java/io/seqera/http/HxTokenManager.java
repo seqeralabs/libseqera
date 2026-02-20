@@ -119,7 +119,7 @@ class HxTokenManager {
         final String jwtToken = config.getJwtToken();
         final String refreshToken = config.getRefreshToken();
         if (jwtToken != null && !jwtToken.isEmpty()) {
-            tokenStore.put(DEFAULT_TOKEN, HxAuth.of(jwtToken, refreshToken));
+            tokenStore.put(DEFAULT_TOKEN, new DefaultHxAuth(jwtToken, refreshToken, config.getRefreshTokenUrl()));
         }
 
         // Validate JWT token refresh configuration
@@ -277,7 +277,7 @@ class HxTokenManager {
             return CompletableFuture.completedFuture(null);
         }
 
-        final String key = HxAuth.key(auth);
+        final String key = auth.id();
 
         // Use computeIfAbsent for atomic coordination - only first caller creates the future
         return ongoingRefreshes.computeIfAbsent(key, k -> {
@@ -429,7 +429,7 @@ class HxTokenManager {
         }
 
         if (newToken != null) {
-            tokenStore.put(DEFAULT_TOKEN, HxAuth.of(newToken, newRefresh));
+            tokenStore.put(DEFAULT_TOKEN, new DefaultHxAuth(newToken, newRefresh, config.getRefreshTokenUrl()));
         }
     }
 
@@ -450,7 +450,7 @@ class HxTokenManager {
         if (auth == null) {
             return null;
         }
-        final String key = HxAuth.key(auth);
+        final String key = auth.id();
         return tokenStore.putIfAbsent(key, auth);
     }
 
@@ -489,7 +489,20 @@ class HxTokenManager {
             return false;
         }
         final HxAuth currentAuth = getAuth(auth);
-        return currentAuth.refreshToken() != null && config.getRefreshTokenUrl() != null;
+        return currentAuth.refreshToken() != null && resolveRefreshUrl(currentAuth) != null;
+    }
+
+    /**
+     * Resolves the refresh URL for the given auth, falling back to the global config.
+     *
+     * @param auth the authentication data
+     * @return the refresh URL, or null if none is configured
+     */
+    private String resolveRefreshUrl(HxAuth auth) {
+        if (auth != null && auth.refreshUrl() != null) {
+            return auth.refreshUrl();
+        }
+        return config.getRefreshTokenUrl();
     }
 
     /**
@@ -535,7 +548,7 @@ class HxTokenManager {
      */
     protected HxAuth doRefreshToken(HxAuth auth) {
         final HxAuth currentAuth = getAuth(auth);
-        return doRefreshTokenInternal(HxAuth.key(auth), currentAuth);
+        return doRefreshTokenInternal(auth.id(), currentAuth);
     }
 
     /**
@@ -547,7 +560,7 @@ class HxTokenManager {
      */
     protected HxAuth doRefreshTokenInternal(String key, HxAuth auth) {
         try {
-            final var refreshUrl = URI.create(config.getRefreshTokenUrl());
+            final var refreshUrl = URI.create(resolveRefreshUrl(auth));
             log.trace("Attempting to refresh JWT token for key {} at URL: {}", key, refreshUrl);
 
             // Create per-refresh CookieManager and HttpClient to avoid cross-user cookie leaking
@@ -597,45 +610,52 @@ class HxTokenManager {
      *
      * @param response the HTTP response from the token refresh request
      * @param cookieManager the cookie manager used for the refresh request
-     * @param originalAuth the original authentication data (used to preserve refresh token if not returned)
+     * @param auth the original authentication data (used to preserve refresh token if not returned)
      * @return a new {@link HxAuth} with updated tokens, or null if extraction failed
      */
-    protected HxAuth extractAuthFromResponse(HttpResponse<String> response, CookieManager cookieManager, HxAuth originalAuth) {
+    protected HxAuth extractAuthFromResponse(HttpResponse<String> response, CookieManager cookieManager, HxAuth auth) {
+        // Try cookies first
+        final String newToken = extractTokenFromCookies(cookieManager);
+        if (newToken != null) {
+            final String newRefresh = extractRefreshFromCookies(cookieManager);
+            HxAuth result = auth.withToken(newToken);
+            if (newRefresh != null) {
+                result = result.withRefresh(newRefresh);
+            }
+            return result;
+        }
+
+        // Fall back to JSON response
+        return extractAuthFromJson(response, auth);
+    }
+
+    private String extractTokenFromCookies(CookieManager cookieManager) {
+        final HttpCookie cookie = getCookie(cookieManager, "JWT");
+        return (cookie != null) ? cookie.getValue() : null;
+    }
+
+    private String extractRefreshFromCookies(CookieManager cookieManager) {
+        final HttpCookie cookie = getCookie(cookieManager, "JWT_REFRESH_TOKEN");
+        return (cookie != null) ? cookie.getValue() : null;
+    }
+
+    private HxAuth extractAuthFromJson(HttpResponse<String> response, HxAuth auth) {
         try {
-            // First try to extract tokens from cookie store
-            final HttpCookie authCookie = getCookie(cookieManager, "JWT");
-            final HttpCookie refreshCookie = getCookie(cookieManager, "JWT_REFRESH_TOKEN");
-
-            if (authCookie != null && authCookie.getValue() != null) {
-                log.trace("Successfully extracted JWT token from cookies");
-                final String newToken = authCookie.getValue();
-                final String newRefresh = (refreshCookie != null && refreshCookie.getValue() != null)
-                        ? refreshCookie.getValue()
-                        : originalAuth.refreshToken();
-                return HxAuth.of(newToken, newRefresh);
-            } else {
-                log.trace("No JWT token found in cookies, trying JSON response");
-
-                try {
-                    final JsonObject jsonResponse = JsonParser.parseString(response.body()).getAsJsonObject();
-                    if (jsonResponse.has("access_token")) {
-                        final String accessToken = jsonResponse.get("access_token").getAsString();
-                        if (isValidJwtToken(accessToken)) {
-                            log.trace("Successfully extracted JWT token from JSON");
-                            final String newRefresh = jsonResponse.has("refresh_token")
-                                    ? jsonResponse.get("refresh_token").getAsString()
-                                    : originalAuth.refreshToken();
-                            return HxAuth.of(accessToken, newRefresh);
-                        }
-                    }
-                } catch (Exception e) {
-                    log.trace("Response is not valid JSON");
-                }
-
+            final JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
+            if (!json.has("access_token")) {
                 return null;
             }
+            final String accessToken = json.get("access_token").getAsString();
+            if (!isValidJwtToken(accessToken)) {
+                return null;
+            }
+            HxAuth result = auth.withToken(accessToken);
+            if (json.has("refresh_token")) {
+                result = result.withRefresh(json.get("refresh_token").getAsString());
+            }
+            return result;
         } catch (Exception e) {
-            log.error("Error extracting tokens from response: {}", e.getMessage(), e);
+            log.trace("Response is not valid JSON");
             return null;
         }
     }

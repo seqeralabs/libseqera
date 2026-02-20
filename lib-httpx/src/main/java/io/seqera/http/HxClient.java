@@ -494,7 +494,7 @@ public class HxClient {
 
             // Try JWT token refresh
             if (canRefreshToken(auth)) {
-                final String debugKey = HxAuth.keyOrDefault(auth, "-");
+                final String debugKey = auth.id();
                 log.debug("Received 401 status for auth key {}, attempting token refresh", debugKey);
                 try {
                     if (refreshToken(auth)) {
@@ -567,7 +567,7 @@ public class HxClient {
 
                 // Try JWT token refresh
                 if (canRefreshToken(auth)) {
-                    final String debugKey = HxAuth.keyOrDefault(auth, "-");
+                    final String debugKey = auth.id();
                     log.debug("Received 401 status in async call for auth key {}, attempting token refresh", debugKey);
                     try {
                         if (refreshToken(auth)) {
