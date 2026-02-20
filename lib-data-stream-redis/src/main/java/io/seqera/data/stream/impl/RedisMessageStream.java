@@ -20,6 +20,7 @@ package io.seqera.data.stream.impl;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.micronaut.context.annotation.Requires;
 import io.seqera.activator.redis.RedisActivator;
@@ -92,6 +93,13 @@ public class RedisMessageStream implements MessageStream<String> {
     private RedisStreamConfig config;
 
     private String consumerName;
+
+    /**
+     * Tracks the last claimed message position per stream for round-robin claiming.
+     * This ensures fair processing of all pending messages instead of always starting
+     * from the beginning of the stream, which would cause message starvation.
+     */
+    private final Map<String, StreamEntryID> lastClaimCursor = new ConcurrentHashMap<>();
 
     @PostConstruct
     private void create() {
@@ -196,6 +204,26 @@ public class RedisMessageStream implements MessageStream<String> {
         XAutoClaimParams params = new XAutoClaimParams()
                 // claim one entry at time
                 .count(1);
+
+        /* Use the last claim cursor position for round-robin claiming.
+
+        Without this, xautoclaim always starts from "0-0", causing message starvation:
+        - Messages 1-10 become claimable in staggered sequence (each ~60s after processing)
+        - Scanning from "0-0" always finds the first claimable one among 1-10
+        - There's always at least one of 1-10 claimable, so messages 11+ are never reached
+
+        Example starvation pattern:
+          Poll at T=60s: xautoclaim(start="0-0") → msg-1 idle=60s ✓ MATCH → claim msg-1
+          Poll at T=61s: xautoclaim(start="0-0") → msg-1 idle=1s ✗, msg-2 idle=61s ✓ MATCH
+          Poll at T=62s: xautoclaim(start="0-0") → msg-1 ✗, msg-2 ✗, msg-3 idle=62s ✓ MATCH
+          ... messages 1-10 rotate, messages 11+ never claimed
+
+        The fix: continue from where we left off (cursor advances even when claiming):
+          Poll 1: start=0-0    → claim msg-1  → cursor=msg-2
+          Poll 2: start=msg-2  → claim msg-2  → cursor=msg-3
+          ...
+          Poll 11: start=msg-11 → claim msg-11 → finally reached! */
+        StreamEntryID startId = lastClaimCursor.getOrDefault(streamId, STREAM_ENTRY_ZERO);
         Map.Entry<StreamEntryID, List<StreamEntry>> messages;
         try {
             messages = jedis.xautoclaim(
@@ -203,7 +231,7 @@ public class RedisMessageStream implements MessageStream<String> {
                     config.getDefaultConsumerGroupName(),
                     consumerName,
                     config.getClaimTimeoutMillis(),
-                    STREAM_ENTRY_ZERO,
+                    startId,
                     params
             );
         } catch (JedisDataException e) {
@@ -214,6 +242,10 @@ public class RedisMessageStream implements MessageStream<String> {
             }
             throw e;
         }
+        if (messages != null) {
+            updateClaimCursor(streamId, messages.getKey());
+        }
+
         StreamEntry entry = null;
         if (messages != null && messages.getValue() != null && !messages.getValue().isEmpty()) {
             entry = messages.getValue().get(0);
@@ -222,6 +254,17 @@ public class RedisMessageStream implements MessageStream<String> {
             log.trace("Redis stream id={}; claimed entry={}", streamId, entry);
         }
         return entry;
+    }
+
+    /* Update the claim cursor for the next iteration. When xautoclaim reaches
+       the end of the PEL, it returns "0-0" signaling wrap around to the beginning. */
+    protected void updateClaimCursor(String streamId, StreamEntryID nextCursor) {
+        if (nextCursor == null)
+            return;
+        if (STREAM_ENTRY_ZERO.equals(nextCursor))
+            lastClaimCursor.remove(streamId);
+        else
+            lastClaimCursor.put(streamId, nextCursor);
     }
 
     /**

@@ -1,0 +1,18 @@
+# micronaut-cache-redis changelog
+
+0.2.0
+- Probabilistic early revalidation: opt-in cache stampede prevention via `early-revalidation-window` config property
+- Based on exponential probability function p = e^(-λ × remainingSeconds) from https://blog.cloudflare.com/sometimes-i-cache/
+- Background async refresh returns stale value immediately, no distributed locks needed
+
+0.1.0 - 8 Jan 2026
+- Initial release of micronaut-cache-redis
+- Micronaut cache implementation using Jedis Redis driver
+- Drop-in compatibility with official Micronaut Redis (Lettuce) cache module
+- Support for @Cacheable, @CachePut, @CacheInvalidate annotations
+- JedisPool-based connection pooling
+- Expiration policies: expire-after-write, expire-after-access
+- Custom ExpirationAfterWritePolicy support for dynamic TTL
+- AsyncCache support via CompletableFuture
+- Configurable key and value serializers
+- Same configuration namespace as official Lettuce implementation

@@ -1,0 +1,12 @@
+# lib-jedis-pool changelog
+
+1.0.0 - 12 Jan 2026
+- Initial release of lib-jedis-pool extracted from Wave project
+- Add JedisPoolFactory for creating configured JedisPool beans
+- Support full Redis URI parsing including database selection
+- Support SSL/TLS connections via rediss:// scheme
+- Add configurable connection pool settings (minIdle, maxIdle, maxTotal)
+- Add optional password override via redis.password property
+- Add JedisPoolMetricsBinder for Micrometer metrics integration
+- Use RedisActivator marker interface for conditional bean loading
+- Include comprehensive test suite with Spock

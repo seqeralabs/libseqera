@@ -28,7 +28,7 @@ version = "${project.file('VERSION').text.trim()}"
 dependencies {
     testFixturesImplementation project(':lib-activator')
     testFixturesImplementation 'redis.clients:jedis:5.1.4'
-    testFixturesImplementation 'org.testcontainers:testcontainers:1.20.6'
+    testFixturesImplementation 'org.testcontainers:testcontainers:1.21.4'
 
     compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     testFixturesImplementation("io.micronaut:micronaut-runtime:${micronautCoreVersion}")

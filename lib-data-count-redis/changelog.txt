@@ -1,0 +1,13 @@
+# lib-data-count-redis changelog
+
+0.1.0 - 12 Feb 2026
+- Initial release
+- Implement CountStore interface for distributed counters (increment, decrement, get, clear)
+- Add AbstractCountStore base class with key prefix support
+- Add CountProvider interface for storage backend abstraction
+- Add LocalCountProvider for in-memory counters using ConcurrentHashMap and AtomicLong
+- Add RedisCountProvider implementation using Redis INCRBY/DECRBY commands
+- Add CountStoreConfig with @EachProperty for configuration-driven named stores
+- Add DefaultCountStore with @EachBean for automatic bean creation per config entry
+- Use @Requires(bean = RedisActivator.class) for conditional bean loading
+- Include comprehensive test suite with Redis testcontainers

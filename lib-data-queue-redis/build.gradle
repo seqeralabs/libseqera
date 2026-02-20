@@ -34,7 +34,7 @@ dependencies {
     implementation 'redis.clients:jedis:5.1.4'
 
     compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
-    implementation "ch.qos.logback:logback-classic:1.5.19"
+    implementation "ch.qos.logback:logback-classic:1.5.25"
     implementation "org.apache.groovy:groovy:4.0.24"
     implementation "org.apache.groovy:groovy-nio:4.0.24"
     implementation "org.apache.groovy:groovy-templates:4.0.24"
@@ -46,7 +46,7 @@ dependencies {
     testImplementation testFixtures(project(':lib-fixtures-redis'))
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
-    testImplementation 'org.testcontainers:testcontainers:1.20.6'
+    testImplementation 'org.testcontainers:testcontainers:1.21.4'
 }
 
 test {

@@ -61,18 +61,23 @@ jobs:
       - name: Release
         if: "contains(github.event.head_commit.message, '[release]')"
         run: |
-          bash publish.sh jedis-lock
+          bash publish.sh lib-jedis-lock
           bash publish.sh lib-activator
           bash publish.sh lib-cache-tiered-redis
           bash publish.sh lib-commons-io
           bash publish.sh lib-crypto
           bash publish.sh lib-docker-cli
+          bash publish.sh lib-data-count-redis
           bash publish.sh lib-data-queue-redis
+          bash publish.sh lib-data-range-redis
           bash publish.sh lib-data-store-future-redis
           bash publish.sh lib-data-store-state-redis
           bash publish.sh lib-data-stream-redis
           bash publish.sh lib-fixtures-redis
+          bash publish.sh lib-hashx
           bash publish.sh lib-lang
+          bash publish.sh lib-lock
+          bash publish.sh lib-lock-redis
           bash publish.sh lib-httpx
           bash publish.sh lib-mail
           bash publish.sh lib-util-http
@@ -84,6 +89,10 @@ jobs:
           bash publish.sh lib-serde-moshi
           bash publish.sh lib-serde-jackson
           bash publish.sh lib-trace
+          bash publish.sh lib-jedis-pool
+          bash publish.sh lib-cmd-queue-redis
+          bash publish.sh lib-cloudinfo
+          bash publish.sh micronaut-cache-redis
 
         env:
           GRADLE_OPTS: '-Dorg.gradle.daemon=false'

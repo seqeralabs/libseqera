@@ -36,7 +36,7 @@ This is a library collection (`libseqera`) containing reusable components for Se
 - **lib-lang**: Language and type utilities
 - **lib-trace**: Tracing and logging utilities
 - **lib-commons-io**: Common I/O utilities for logging and streaming
-- **jedis-lock**: Redis-based distributed locking using Jedis
+- **lib-jedis-lock**: Redis-based distributed locking using Jedis
 
 #### Messaging & Data Libraries
 - **lib-data-queue-redis**: Message queue abstraction with Redis and local implementations

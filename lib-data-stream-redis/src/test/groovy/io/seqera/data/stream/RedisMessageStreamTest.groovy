@@ -129,4 +129,59 @@ class RedisMessageStreamTest extends Specification implements RedisTestContainer
         stream.length(id1) == 2
     }
 
+    def 'should claim messages in round-robin fashion to prevent starvation' () {
+        given: 'a stream with multiple messages'
+        def streamId = "stream-${LongRndKey.rndHex()}"
+        def stream = context.getBean(RedisMessageStream)
+        stream.init(streamId)
+        and: 'track which messages are consumed'
+        def consumedMessages = Collections.synchronizedList([])
+
+        when: 'add 5 messages to the stream'
+        stream.offer(streamId, 'msg-1')
+        stream.offer(streamId, 'msg-2')
+        stream.offer(streamId, 'msg-3')
+        stream.offer(streamId, 'msg-4')
+        stream.offer(streamId, 'msg-5')
+
+        and: 'consume all messages but reject them (return false) - simulating RUNNING tasks'
+        // First pass - read all messages, reject all (they go to PEL)
+        5.times {
+            stream.consume(streamId, { msg ->
+                consumedMessages << msg
+                return false  // reject - message stays in PEL
+            })
+        }
+
+        then: 'all 5 messages should have been read once'
+        consumedMessages.size() == 5
+        consumedMessages.containsAll(['msg-1', 'msg-2', 'msg-3', 'msg-4', 'msg-5'])
+
+        when: 'clear tracking and wait for claim timeout'
+        consumedMessages.clear()
+        sleep 1500  // claim timeout is 1 second in test config
+
+        and: 'consume again multiple times - messages should be reclaimed in round-robin'
+        // Consume 10 times to verify round-robin (should see each message ~2 times)
+        10.times {
+            stream.consume(streamId, { msg ->
+                consumedMessages << msg
+                return false  // keep rejecting
+            })
+            sleep 100  // small delay between consumes
+        }
+
+        then: 'all messages should be processed fairly (round-robin), not just msg-1 repeatedly'
+        // Each message should appear at least once in the 10 consume attempts
+        // Without the fix, only msg-1 would be claimed repeatedly
+        def uniqueMessages = consumedMessages.toSet()
+        uniqueMessages.size() > 1  // more than just the first message
+
+        and: 'verify no single message dominates (starvation prevention)'
+        def counts = consumedMessages.countBy { it }
+        // No message should have more than 4 occurrences out of 10
+        // (with fair round-robin, each should have ~2)
+        counts.values().every { it <= 4 }
+    }
+
 }
