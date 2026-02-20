@@ -27,6 +27,7 @@ import io.seqera.serde.encode.StringEncodingStrategy;
 import io.seqera.util.retry.ExponentialAttempt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static io.seqera.data.stream.impl.SleepHelper.sleep;
 
 /**
  * Abstract base implementation of a message stream that provides asynchronous message consumption.
@@ -148,7 +149,7 @@ public abstract class AbstractMessageStream<M> implements Closeable {
      * @param message the message to be added to the stream; may be null depending on encoding strategy
      */
     public void offer(String streamId, M message) {
-        String msg = encoder.encode(message);
+        final var msg = encoder.encode(message);
         stream.offer(streamId, msg);
     }
 
@@ -210,7 +211,7 @@ public abstract class AbstractMessageStream<M> implements Closeable {
      */
     protected boolean processMessage(String msg, MessageConsumer<M> consumer, AtomicInteger count) {
         count.incrementAndGet();
-        M decoded = encoder.decode(msg);
+        final M decoded = encoder.decode(msg);
         log.trace("Message stream - receiving message={}; decoded={}", msg, decoded);
         return consumer.accept(decoded);
     }
@@ -222,10 +223,10 @@ public abstract class AbstractMessageStream<M> implements Closeable {
         log.trace("Message stream - starting listener thread");
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                AtomicInteger count = new AtomicInteger();
+                final var count = new AtomicInteger();
                 for (Map.Entry<String, MessageConsumer<M>> entry : listeners.entrySet()) {
-                    String streamId = entry.getKey();
-                    MessageConsumer<M> consumer = entry.getValue();
+                    final var streamId = entry.getKey();
+                    final var consumer = entry.getValue();
                     stream.consume(streamId, (String msg) -> processMessage(msg, consumer, count));
                 }
                 // reset the attempt count because no error has been thrown
@@ -242,14 +243,9 @@ public abstract class AbstractMessageStream<M> implements Closeable {
                 break;
             }
             catch (Throwable e) {
-                Duration d0 = attempt.delay();
+                final var d0 = attempt.delay();
                 log.error("Unexpected error on message stream {} (await: {}) - cause: {}", name0, d0, e.getMessage(), e);
-                try {
-                    Thread.sleep(d0.toMillis());
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
+                sleep(d0.toMillis());
             }
         }
         log.trace("Message stream - exiting listener thread");

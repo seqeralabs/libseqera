@@ -27,6 +27,7 @@ import io.seqera.data.stream.MessageStream;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import static io.seqera.data.stream.impl.SleepHelper.sleep;
 
 /**
  * In-memory implementation of {@link MessageStream} using Java {@link LinkedBlockingQueue}
@@ -91,29 +92,26 @@ public class LocalMessageStream implements MessageStream<String> {
      */
     @Override
     public boolean consume(String streamId, MessageConsumer<String> consumer) {
-        String message = delegate
+        final var message = delegate
                 .get(streamId)
                 .poll();
         if (message == null) {
             return false;
         }
 
+        Throwable error = null;
         boolean result = false;
         try {
             result = consumer.accept(message);
         }
         catch (Throwable e) {
             result = false;
-            // exception is caught but not rethrown - message will be re-queued
+            log.debug("Failed to consume message from stream={} - cause: {}", streamId, e.getMessage(), e);
         }
         finally {
             if (!result) {
                 // add again message not consumed to mimic the behavior or redis stream
-                try {
-                    Thread.sleep(1_000);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                }
+                sleep(1_000);
                 offer(streamId, message);
             }
         }

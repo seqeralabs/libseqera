@@ -35,7 +35,6 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.StreamEntryID;
-import redis.clients.jedis.Transaction;
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.params.XAutoClaimParams;
 import redis.clients.jedis.params.XReadGroupParams;
@@ -148,16 +147,16 @@ public class RedisMessageStream implements MessageStream<String> {
     public boolean consume(String streamId, MessageConsumer<String> consumer) {
         try (Jedis jedis = pool.getResource()) {
             String msg;
-            long begin = System.currentTimeMillis();
+            final long begin = System.currentTimeMillis();
             StreamEntry entry = claimMessage(jedis, streamId);
             if (entry == null) {
                 entry = readMessage(jedis, streamId);
             }
             if (entry != null && consumer.accept(msg = entry.getFields().get(DATA_FIELD))) {
-                Transaction tx = jedis.multi();
+                final var tx = jedis.multi();
                 // acknowledge the entry has been processed so that it cannot be claimed anymore
                 tx.xack(streamId, config.getDefaultConsumerGroupName(), entry.getID());
-                long delta = System.currentTimeMillis() - begin;
+                final var delta = System.currentTimeMillis() - begin;
                 if (delta > config.getConsumerWarnTimeoutMillis()) {
                     log.warn("Redis message stream - consume processing took {} - offending entry={}; message={}",
                             Duration.ofMillis(delta), entry.getID(), msg);
@@ -175,7 +174,7 @@ public class RedisMessageStream implements MessageStream<String> {
 
     protected StreamEntry readMessage(Jedis jedis, String streamId) {
         // Create parameters for reading with a group
-        XReadGroupParams params = new XReadGroupParams()
+        final var params = new XReadGroupParams()
                 // Read one message at a time
                 .count(1);
 
@@ -201,7 +200,7 @@ public class RedisMessageStream implements MessageStream<String> {
 
     protected StreamEntry claimMessage(Jedis jedis, String streamId) {
         // Attempt to claim any pending messages that are idle for more than the threshold
-        XAutoClaimParams params = new XAutoClaimParams()
+        final var params = new XAutoClaimParams()
                 // claim one entry at time
                 .count(1);
 
@@ -223,7 +222,8 @@ public class RedisMessageStream implements MessageStream<String> {
           Poll 2: start=msg-2  → claim msg-2  → cursor=msg-3
           ...
           Poll 11: start=msg-11 → claim msg-11 → finally reached! */
-        StreamEntryID startId = lastClaimCursor.getOrDefault(streamId, STREAM_ENTRY_ZERO);
+        final var startId = lastClaimCursor.getOrDefault(streamId, STREAM_ENTRY_ZERO);
+
         Map.Entry<StreamEntryID, List<StreamEntry>> messages;
         try {
             messages = jedis.xautoclaim(
@@ -246,10 +246,9 @@ public class RedisMessageStream implements MessageStream<String> {
             updateClaimCursor(streamId, messages.getKey());
         }
 
-        StreamEntry entry = null;
-        if (messages != null && messages.getValue() != null && !messages.getValue().isEmpty()) {
-            entry = messages.getValue().get(0);
-        }
+        final var entry = (messages != null && messages.getValue() != null && !messages.getValue().isEmpty())
+                ? messages.getValue().get(0)
+                : null;
         if (entry != null) {
             log.trace("Redis stream id={}; claimed entry={}", streamId, entry);
         }
