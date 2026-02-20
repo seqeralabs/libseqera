@@ -45,7 +45,7 @@ import org.slf4j.LoggerFactory;
  *   <li><strong>Header Injection</strong>: Automatically adds Authorization headers to HTTP requests</li>
  *   <li><strong>Token Validation</strong>: Validates JWT token format (header.payload.signature)</li>
  *   <li><strong>Token Refresh</strong>: Implements OAuth 2.0 refresh token flow</li>
- *   <li><strong>Thread Safety</strong>: Uses read/write locks for safe concurrent access</li>
+ *   <li><strong>Thread Safety</strong>: Uses synchronized blocks and ConcurrentHashMap for safe concurrent access</li>
  * </ul>
  * 
  * <p><strong>Token Refresh Process:</strong><br>
@@ -72,21 +72,21 @@ import org.slf4j.LoggerFactory;
  * 
  * <p><strong>Usage Example:</strong>
  * <pre>{@code
- * HttpClientConfig config = HttpClientConfig.builder()
- *     .withJwtToken("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
- *     .withRefreshToken("your-refresh-token")
- *     .withRefreshTokenUrl("https://api.example.com/oauth/token")
+ * HxConfig config = HxConfig.newBuilder()
+ *     .bearerToken("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")
+ *     .refreshToken("your-refresh-token")
+ *     .refreshTokenUrl("https://api.example.com/oauth/token")
  *     .build();
- *     
- * JwtTokenManager manager = new JwtTokenManager(config);
- * 
+ *
+ * HxTokenManager manager = new HxTokenManager(config);
+ *
  * // Add auth header to requests
  * HttpRequest authenticatedRequest = manager.addAuthHeader(originalRequest);
- * 
- * // Refresh tokens when needed
- * if (manager.canRefreshToken()) {
- *     boolean success = manager.refreshToken();
- * }
+ *
+ * // Multi-session: use HxAuth for per-user token management
+ * HxAuth userAuth = new DefaultHxAuth("user.jwt.token", "refresh-token", "https://example.com/oauth/token");
+ * HxAuth current = manager.getAuth(userAuth);
+ * HttpRequest userRequest = manager.addAuthHeader(originalRequest, current);
  * }</pre>
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
@@ -282,16 +282,18 @@ class HxTokenManager {
         // Use computeIfAbsent for atomic coordination - only first caller creates the future
         return ongoingRefreshes.computeIfAbsent(key, k -> {
             log.trace("Starting coordinated token refresh for key {}", k);
-            return CompletableFuture.supplyAsync(() -> doRefreshToken(auth))
-                    .whenComplete((result, throwable) -> {
-                        // Remove from map after completion to allow future refreshes
-                        ongoingRefreshes.remove(key);
+            CompletableFuture<HxAuth> future = CompletableFuture.supplyAsync(() -> doRefreshToken(auth));
+            future.whenComplete((result, throwable) -> {
+                        // Use two-arg remove to only remove if still our future,
+                        // avoiding accidental removal of a concurrent caller's future
+                        ongoingRefreshes.remove(key, future);
                         if (throwable != null) {
                             log.error("Coordinated token refresh failed for key {}: {}", key, throwable.getMessage(), throwable);
                         } else {
                             log.trace("Coordinated token refresh completed for key {} with result: {}", key, (result != null));
                         }
                     });
+            return future;
         });
     }
 
@@ -414,6 +416,9 @@ class HxTokenManager {
      * @param jwtToken the new JWT token to set, may be null
      * @param refreshToken the new refresh token to set, may be null
      */
+    // Note: synchronized protects the read-modify-write on DEFAULT_TOKEN only.
+    // Multi-session refreshes (doRefreshTokenInternal) operate on separate keys
+    // and are coordinated via ongoingRefreshes/computeIfAbsent.
     synchronized void updateTokens(String jwtToken, String refreshToken) {
         final HxAuth currentAuth = tokenStore.get(DEFAULT_TOKEN);
         String newToken = (currentAuth != null) ? currentAuth.accessToken() : null;
@@ -488,8 +493,10 @@ class HxTokenManager {
         if (auth == null) {
             return false;
         }
-        final HxAuth currentAuth = getAuth(auth);
-        return currentAuth.refreshToken() != null && resolveRefreshUrl(currentAuth) != null;
+        // Use tokenStore.get() to avoid the side effect of storing the auth
+        final HxAuth currentAuth = tokenStore.get(auth.id());
+        final HxAuth effectiveAuth = currentAuth != null ? currentAuth : auth;
+        return effectiveAuth.refreshToken() != null && resolveRefreshUrl(effectiveAuth) != null;
     }
 
     /**

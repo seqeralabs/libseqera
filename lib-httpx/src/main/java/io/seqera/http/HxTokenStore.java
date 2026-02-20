@@ -18,11 +18,11 @@
 package io.seqera.http;
 
 /**
- * Interface for storing and retrieving JWT token pairs by key.
+ * Interface for storing and retrieving {@link HxAuth} instances by key.
  *
  * <p>This interface allows for different storage strategies for managing
- * multiple user sessions, each with their own token-refresh pair. The key
- * is typically derived from the token itself (e.g., SHA-256 hash).
+ * multiple authentication sessions. The key is typically derived from
+ * {@link HxAuth#id()}.
  *
  * <p>Implementations should be thread-safe as they may be accessed
  * concurrently by multiple requests.
@@ -34,7 +34,7 @@ public interface HxTokenStore {
     /**
      * Retrieves the authentication data for the given key.
      *
-     * @param key the unique key identifying the token pair (typically SHA-256 of the token)
+     * @param key the unique key identifying the auth session (typically {@link HxAuth#id()})
      * @return the {@link HxAuth} containing the token pair, or null if not found
      */
     HxAuth get(String key);
@@ -42,7 +42,7 @@ public interface HxTokenStore {
     /**
      * Stores the authentication data for the given key.
      *
-     * @param key the unique key identifying the token pair (typically SHA-256 of the token)
+     * @param key the unique key identifying the auth session (typically {@link HxAuth#id()})
      * @param auth the {@link HxAuth} containing the token pair to store
      */
     void put(String key, HxAuth auth);
@@ -57,7 +57,7 @@ public interface HxTokenStore {
      * <p>Implementations should ensure this operation is atomic to prevent race conditions
      * in concurrent environments.
      *
-     * @param key the unique key identifying the token pair
+     * @param key the unique key identifying the auth session
      * @param auth the {@link HxAuth} to store if no value exists for the key
      * @return the existing {@link HxAuth} if present, otherwise the newly stored auth
      */
@@ -66,7 +66,7 @@ public interface HxTokenStore {
     /**
      * Removes the authentication data for the given key.
      *
-     * @param key the unique key identifying the token pair to remove
+     * @param key the unique key identifying the auth session to remove
      * @return the removed {@link HxAuth}, or null if not found
      */
     HxAuth remove(String key);

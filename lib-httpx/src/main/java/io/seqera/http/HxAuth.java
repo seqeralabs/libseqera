@@ -21,7 +21,7 @@ package io.seqera.http;
  * Interface for JWT authentication credentials.
  *
  * <p>Provides access to the JWT access token, optional refresh token, and optional
- * refresh URL. The {@link #id()} method returns a stable stable identifier for the token
+ * refresh URL. The {@link #id()} method returns a stable identifier for the token
  * store that persists across token refreshes.
  *
  * <p>The {@link #withToken(String)} and {@link #withRefresh(String)} methods return

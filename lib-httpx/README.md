@@ -155,44 +155,11 @@ For applications managing multiple users or authentication contexts, use the `Hx
 | `withToken(token)` | Returns an `HxAuth` with the updated access token (same `id`) |
 | `withRefresh(refresh)` | Returns an `HxAuth` with the updated refresh token (same `id`) |
 
-The default implementation `DefaultHxAuth` is an immutable record that auto-generates a UUID as `id()`. The `withToken` and `withRefresh` methods return new instances preserving the same `id`.
-
-#### Basic Multi-Session Usage
-
-```java
-// Create a shared client
-HxClient client = HxClient.newBuilder().build();
-
-// Create auth for each user session (each gets a unique id)
-HxAuth user1Auth = new DefaultHxAuth("user1.jwt.token", "user1-refresh-token", "https://api.example.com/oauth/token");
-HxAuth user2Auth = new DefaultHxAuth("user2.jwt.token", "user2-refresh-token", "https://api.example.com/oauth/token");
-
-// Make requests with per-user authentication
-HttpRequest request = HttpRequest.newBuilder()
-    .uri(URI.create("https://api.example.com/data"))
-    .GET()
-    .build();
-
-HttpResponse<String> response1 = client.send(request, user1Auth, HttpResponse.BodyHandlers.ofString());
-HttpResponse<String> response2 = client.send(request, user2Auth, HttpResponse.BodyHandlers.ofString());
-
-// Async requests also supported
-CompletableFuture<HttpResponse<String>> future = client.sendAsync(request, user1Auth, HttpResponse.BodyHandlers.ofString());
-```
-
-#### Per-Auth Refresh URL
-
-Each `HxAuth` can carry its own `refreshUrl`, allowing different auth sessions to refresh against different endpoints. If `refreshUrl()` returns null, the global `refreshTokenUrl` from `HxConfig` is used as fallback.
-
-```java
-// Different users refresh against different endpoints
-HxAuth user1 = new DefaultHxAuth("user1.jwt.token", "user1-refresh", "https://region1.example.com/oauth/token");
-HxAuth user2 = new DefaultHxAuth("user2.jwt.token", "user2-refresh", "https://region2.example.com/oauth/token");
-```
+Implementations must ensure `id()` remains constant — `withToken` and `withRefresh` return new instances preserving the same `id`.
 
 #### Custom `HxAuth` Implementation
 
-Implement `HxAuth` to customise the identity strategy (e.g., key by user ID or tenant):
+Implement `HxAuth` to define the identity strategy and token lifecycle for your application (e.g., key by user ID or tenant). Each `HxAuth` can also carry its own `refreshUrl`, allowing different auth sessions to refresh against different endpoints. If `refreshUrl()` returns null, the global `refreshTokenUrl` from `HxConfig` is used as fallback.
 
 ```java
 public class TenantAuth implements HxAuth {
@@ -221,6 +188,25 @@ public class TenantAuth implements HxAuth {
         return new TenantAuth(tenantId, accessToken, refresh);
     }
 }
+
+// Create a shared client
+HxClient client = HxClient.newBuilder().build();
+
+// Create auth for each user/tenant session
+HxAuth user1Auth = new TenantAuth("tenant-1", "user1.jwt.token", "user1-refresh-token");
+HxAuth user2Auth = new TenantAuth("tenant-2", "user2.jwt.token", "user2-refresh-token");
+
+// Make requests with per-user authentication
+HttpRequest request = HttpRequest.newBuilder()
+    .uri(URI.create("https://api.example.com/data"))
+    .GET()
+    .build();
+
+HttpResponse<String> response1 = client.send(request, user1Auth, HttpResponse.BodyHandlers.ofString());
+HttpResponse<String> response2 = client.send(request, user2Auth, HttpResponse.BodyHandlers.ofString());
+
+// Async requests also supported
+CompletableFuture<HttpResponse<String>> future = client.sendAsync(request, user1Auth, HttpResponse.BodyHandlers.ofString());
 ```
 
 #### Custom Token Store
@@ -333,7 +319,6 @@ HxClient client = HxClient.newBuilder()
 - **`HxClient`**: Main HTTP client with retry, JWT, and WWW-Authenticate functionality
 - **`HxConfig`**: Configuration builder with all available options
 - **`HxAuth`**: Interface for authentication credentials with stable identity across refreshes
-- **`DefaultHxAuth`**: Immutable record implementation of `HxAuth` with UUID-based identity
 - **`HxTokenStore`**: Interface for pluggable token storage (default: in-memory ConcurrentHashMap)
 - **`HxTokenManager`**: Thread-safe JWT token lifecycle management with multi-session support
 - **`AuthenticationChallenge`**: Represents a parsed WWW-Authenticate challenge
