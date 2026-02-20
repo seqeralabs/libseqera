@@ -417,11 +417,6 @@ public class HxClient {
      * Internal method that implements the retry logic for synchronous requests.
      *
      * <p>Delegates to {@link #sendWithRetry(HttpRequest, HxAuth, HttpResponse.BodyHandler)} with default auth.
-     *
-     * @param <T> the response body type
-     * @param request the HTTP request to send
-     * @param responseBodyHandler the response body handler
-     * @return the HTTP response after successful execution or retry exhaustion
      */
     protected <T> HttpResponse<T> sendWithRetry(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler) {
         return sendWithRetry(request, tokenManager.getDefaultAuth(), responseBodyHandler);
@@ -431,18 +426,33 @@ public class HxClient {
      * Internal method that implements the retry logic for asynchronous requests.
      *
      * <p>Delegates to {@link #sendWithRetryAsync(HttpRequest, HxAuth, HttpResponse.BodyHandler, Executor)} with default auth.
-     *
-     * @param <T> the response body type
-     * @param request the HTTP request to send
-     * @param responseBodyHandler the response body handler
-     * @param executor optional executor for async operations, may be null
-     * @return a CompletableFuture that completes with the HTTP response
      */
     protected <T> CompletableFuture<HttpResponse<T>> sendWithRetryAsync(
             HttpRequest request,
             HttpResponse.BodyHandler<T> responseBodyHandler,
             Executor executor) {
         return sendWithRetryAsync(request, tokenManager.getDefaultAuth(), responseBodyHandler, executor);
+    }
+
+    // -- Auth helpers that accept nullable HxAuth and delegate to the right tokenManager method --
+
+    private HttpRequest applyAuthHeader(HttpRequest request, HxAuth auth) {
+        return (auth != null)
+                ? tokenManager.addAuthHeader(request, auth)
+                : tokenManager.addAuthHeader(request);
+    }
+
+    private boolean canRefreshToken(HxAuth auth) {
+        return (auth != null)
+                ? tokenManager.canRefreshToken(auth)
+                : tokenManager.canRefreshToken();
+    }
+
+    private boolean refreshToken(HxAuth auth) throws Exception {
+        if (auth != null) {
+            return tokenManager.getOrRefreshTokenAsync(auth).get() != null;
+        }
+        return tokenManager.getOrRefreshTokenAsync().get();
     }
 
     /**
@@ -455,9 +465,6 @@ public class HxClient {
      *   <li>Attempting token refresh on 401 responses</li>
      *   <li>Re-executing requests with refreshed tokens</li>
      * </ul>
-     *
-     * <p>If auth is null, uses the default token from configuration. Otherwise uses
-     * the specific {@link HxAuth} for multi-user authentication scenarios.
      *
      * @param <T> the response body type
      * @param request the HTTP request to send
@@ -478,9 +485,7 @@ public class HxClient {
                 });
 
         return retry.apply(() -> {
-            final HttpRequest actualRequest = (auth != null)
-                    ? tokenManager.addAuthHeader(request, auth)
-                    : tokenManager.addAuthHeader(request);
+            final HttpRequest actualRequest = applyAuthHeader(request, auth);
             final HttpResponse<T> response = httpClient.send(actualRequest, responseBodyHandler);
 
             if (response.statusCode() != 401 || tokenRefreshed[0]) {
@@ -488,21 +493,14 @@ public class HxClient {
             }
 
             // Try JWT token refresh
-            final boolean canRefresh = (auth != null) ? tokenManager.canRefreshToken(auth) : tokenManager.canRefreshToken();
-            if (canRefresh) {
+            if (canRefreshToken(auth)) {
                 final String debugKey = HxAuth.keyOrDefault(auth, "-");
                 log.debug("Received 401 status for auth key {}, attempting token refresh", debugKey);
                 try {
-                    final boolean refreshed = (auth != null)
-                            ? tokenManager.getOrRefreshTokenAsync(auth).get() != null
-                            : tokenManager.getOrRefreshTokenAsync().get();
-                    if (refreshed) {
+                    if (refreshToken(auth)) {
                         tokenRefreshed[0] = true;
-                        final HttpRequest refreshedRequest = (auth != null)
-                                ? tokenManager.addAuthHeader(request, auth)
-                                : tokenManager.addAuthHeader(request);
                         closeResponse(response);
-                        return httpClient.send(refreshedRequest, responseBodyHandler);
+                        return httpClient.send(applyAuthHeader(request, auth), responseBodyHandler);
                     }
                 } catch (Exception e) {
                     log.warn("Token refresh failed for auth key {}: {}", debugKey, e.getMessage());
@@ -534,9 +532,6 @@ public class HxClient {
      *   <li>Re-executing requests with refreshed tokens</li>
      * </ul>
      *
-     * <p>If auth is null, uses the default token from configuration. Otherwise uses
-     * the specific {@link HxAuth} for multi-user authentication scenarios.
-     *
      * @param <T> the response body type
      * @param request the HTTP request to send
      * @param auth the authentication data for this request, or null to use default token
@@ -562,10 +557,7 @@ public class HxClient {
                 });
 
         return retry.applyAsync(() -> {
-            final HttpRequest actualRequest = (auth != null)
-                    ? tokenManager.addAuthHeader(request, auth)
-                    : tokenManager.addAuthHeader(request);
-
+            final HttpRequest actualRequest = applyAuthHeader(request, auth);
             try {
                 final HttpResponse<T> response = httpClient.sendAsync(actualRequest, responseBodyHandler).get();
 
@@ -574,21 +566,14 @@ public class HxClient {
                 }
 
                 // Try JWT token refresh
-                final boolean canRefresh = (auth != null) ? tokenManager.canRefreshToken(auth) : tokenManager.canRefreshToken();
-                if (canRefresh) {
+                if (canRefreshToken(auth)) {
                     final String debugKey = HxAuth.keyOrDefault(auth, "-");
                     log.debug("Received 401 status in async call for auth key {}, attempting token refresh", debugKey);
                     try {
-                        final boolean refreshed = (auth != null)
-                                ? tokenManager.getOrRefreshTokenAsync(auth).get() != null
-                                : tokenManager.getOrRefreshTokenAsync().get();
-                        if (refreshed) {
+                        if (refreshToken(auth)) {
                             tokenRefreshed[0] = true;
-                            final HttpRequest refreshedRequest = (auth != null)
-                                    ? tokenManager.addAuthHeader(request, auth)
-                                    : tokenManager.addAuthHeader(request);
                             closeResponse(response);
-                            return httpClient.sendAsync(refreshedRequest, responseBodyHandler).get();
+                            return httpClient.sendAsync(applyAuthHeader(request, auth), responseBodyHandler).get();
                         }
                     } catch (Exception e) {
                         log.warn("Async token refresh failed for auth key {}: {}", debugKey, e.getMessage());
