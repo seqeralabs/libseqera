@@ -15,32 +15,35 @@
  *
  */
 
-package io.seqera.data.stream.impl
+package io.seqera.data.stream.impl;
 
-import java.time.Duration
-import java.util.concurrent.ConcurrentHashMap
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-import groovy.transform.CompileStatic
-import groovy.util.logging.Slf4j
-import io.micronaut.context.annotation.Requires
-import io.seqera.activator.redis.RedisActivator
-import io.seqera.data.stream.MessageConsumer
-import io.seqera.data.stream.MessageStream
-import io.seqera.random.LongRndKey
-import jakarta.annotation.PostConstruct
-import jakarta.inject.Inject
-import jakarta.inject.Singleton
-import redis.clients.jedis.Jedis
-import redis.clients.jedis.JedisPool
-import redis.clients.jedis.StreamEntryID
-import redis.clients.jedis.exceptions.JedisDataException
-import redis.clients.jedis.params.XAutoClaimParams
-import redis.clients.jedis.params.XReadGroupParams
-import redis.clients.jedis.resps.StreamEntry
+import io.micronaut.context.annotation.Requires;
+import io.seqera.activator.redis.RedisActivator;
+import io.seqera.data.stream.MessageConsumer;
+import io.seqera.data.stream.MessageStream;
+import io.seqera.random.LongRndKey;
+import jakarta.annotation.PostConstruct;
+import jakarta.inject.Inject;
+import jakarta.inject.Singleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.StreamEntryID;
+import redis.clients.jedis.exceptions.JedisDataException;
+import redis.clients.jedis.params.XAutoClaimParams;
+import redis.clients.jedis.params.XReadGroupParams;
+import redis.clients.jedis.resps.StreamEntry;
+
 /**
  * Redis-based implementation of {@link MessageStream} that provides distributed message
  * streaming capabilities using Redis Streams as the underlying storage mechanism.
- * 
+ *
  * <p>This implementation offers the following features:
  * <ul>
  *   <li><b>Distributed Processing:</b> Supports multiple concurrent consumers across different instances</li>
@@ -49,7 +52,7 @@ import redis.clients.jedis.resps.StreamEntry
  *   <li><b>Message Claiming:</b> Automatically reclaims stalled messages from failed consumers</li>
  *   <li><b>Persistence:</b> Messages are persisted in Redis until explicitly acknowledged and deleted</li>
  * </ul>
- * 
+ *
  * <p>The implementation follows Redis Streams best practices:
  * <ul>
  *   <li>Creates consumer groups automatically on initialization</li>
@@ -57,7 +60,7 @@ import redis.clients.jedis.resps.StreamEntry
  *   <li>Implements message claiming for handling consumer failures</li>
  *   <li>Acknowledges and removes processed messages to prevent memory bloat</li>
  * </ul>
- * 
+ *
  * <p>Message processing workflow:
  * <ol>
  *   <li>Attempt to claim any stalled messages from failed consumers</li>
@@ -65,77 +68,65 @@ import redis.clients.jedis.resps.StreamEntry
  *   <li>Process the message through the provided consumer</li>
  *   <li>Acknowledge and delete the message upon successful processing</li>
  * </ol>
- * 
+ *
  * <p>This class is automatically activated when the 'redis' environment is active
  * and requires a configured {@link JedisPool} for Redis connectivity.
  *
- * @param <String> the message type (currently fixed to String)
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  */
-@Slf4j
-@Requires(bean = RedisActivator)
+@Requires(bean = RedisActivator.class)
 @Singleton
-@CompileStatic
-class RedisMessageStream implements MessageStream<String> {
+public class RedisMessageStream implements MessageStream<String> {
 
-    private static final StreamEntryID STREAM_ENTRY_ZERO = new StreamEntryID("0-0")
+    private static final Logger log = LoggerFactory.getLogger(RedisMessageStream.class);
 
-    private static final String DATA_FIELD = 'data'
+    private static final StreamEntryID STREAM_ENTRY_ZERO = new StreamEntryID("0-0");
 
-    @Inject
-    private JedisPool pool
+    private static final String DATA_FIELD = "data";
 
     @Inject
-    private RedisStreamConfig config
+    private JedisPool pool;
 
-    private String consumerName
+    @Inject
+    private RedisStreamConfig config;
+
+    private String consumerName;
 
     /**
      * Tracks the last claimed message position per stream for round-robin claiming.
      * This ensures fair processing of all pending messages instead of always starting
      * from the beginning of the stream, which would cause message starvation.
      */
-    private final Map<String, StreamEntryID> lastClaimCursor = new ConcurrentHashMap<>()
+    private final Map<String, StreamEntryID> lastClaimCursor = new ConcurrentHashMap<>();
 
     @PostConstruct
     private void create() {
-        consumerName = "consumer-${LongRndKey.rndLong()}"
-        log.info "Creating Redis message stream - consumer=${consumerName}"
+        consumerName = "consumer-" + LongRndKey.rndLong();
+        log.info("Creating Redis message stream - consumer={}", consumerName);
     }
 
     protected boolean initGroup0(Jedis jedis, String streamId, String group) {
-        log.debug "Initializing Redis group='$group'; streamId='$streamId'"
+        log.debug("Initializing Redis group='{}'; streamId='{}'", group, streamId);
         try {
-            jedis.xgroupCreate(streamId, group, STREAM_ENTRY_ZERO, true)
-            return true
+            jedis.xgroupCreate(streamId, group, STREAM_ENTRY_ZERO, true);
+            return true;
         }
         catch (JedisDataException e) {
-            if (e.message.contains("BUSYGROUP")) {
+            if (e.getMessage().contains("BUSYGROUP")) {
                 // The group already exists, so we can safely ignore this exception
-                log.info "Redis message stream - consume group=$group already exists"
-                return true
+                log.info("Redis message stream - consume group={} already exists", group);
+                return true;
             }
-            throw e
+            throw e;
         }
     }
 
     @Override
-    void init(String streamId) {
-        log.info "Initializing Redis message stream=$streamId; consumer=${consumerName}; config=${config}"
-        this.config = config
+    public void init(String streamId) {
+        log.info("Initializing Redis message stream={}; consumer={}; config={}", streamId, consumerName, config);
         try (Jedis jedis = pool.getResource()) {
-            initGroup0(jedis, streamId, config.getDefaultConsumerGroupName())
-        }
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    void offer(String streamId, String message) {
-        try (Jedis jedis = pool.getResource()) {
-            jedis.xadd(streamId, StreamEntryID.NEW_ENTRY, Map.of(DATA_FIELD, message))
+            initGroup0(jedis, streamId, config.getDefaultConsumerGroupName());
         }
     }
 
@@ -143,53 +134,75 @@ class RedisMessageStream implements MessageStream<String> {
      * {@inheritDoc}
      */
     @Override
-    boolean consume(String streamId, MessageConsumer<String> consumer) {
+    public void offer(String streamId, String message) {
         try (Jedis jedis = pool.getResource()) {
-            String msg
-            final long begin = System.currentTimeMillis()
-            final entry = claimMessage(jedis,streamId) ?: readMessage(jedis, streamId)
-            if( entry && consumer.accept(msg=entry.getFields().get(DATA_FIELD)) ) {
-                final tx = jedis.multi()
+            jedis.xadd(streamId, StreamEntryID.NEW_ENTRY, Map.of(DATA_FIELD, message));
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean consume(String streamId, MessageConsumer<String> consumer) {
+        try (Jedis jedis = pool.getResource()) {
+            String msg;
+            final long begin = System.currentTimeMillis();
+            StreamEntry entry = claimMessage(jedis, streamId);
+            if (entry == null) {
+                entry = readMessage(jedis, streamId);
+            }
+            if (entry != null && consumer.accept(msg = entry.getFields().get(DATA_FIELD))) {
+                final var tx = jedis.multi();
                 // acknowledge the entry has been processed so that it cannot be claimed anymore
-                tx.xack(streamId, config.getDefaultConsumerGroupName(), entry.getID())
-                final delta = System.currentTimeMillis()-begin
-                if( delta>config.consumerWarnTimeoutMillis ) {
-                    log.warn "Redis message stream - consume processing took ${Duration.ofMillis(delta)} - offending entry=${entry.getID()}; message=${msg}"
+                tx.xack(streamId, config.getDefaultConsumerGroupName(), entry.getID());
+                final var delta = System.currentTimeMillis() - begin;
+                if (delta > config.getConsumerWarnTimeoutMillis()) {
+                    log.warn("Redis message stream - consume processing took {} - offending entry={}; message={}",
+                            Duration.ofMillis(delta), entry.getID(), msg);
                 }
                 // this remove permanently the entry from the stream
-                tx.xdel(streamId, entry.getID())
-                tx.exec()
-                return true
+                tx.xdel(streamId, entry.getID());
+                tx.exec();
+                return true;
             }
-            else
-                return false
+            else {
+                return false;
+            }
         }
     }
 
     protected StreamEntry readMessage(Jedis jedis, String streamId) {
         // Create parameters for reading with a group
-        final params = new XReadGroupParams()
+        final var params = new XReadGroupParams()
                 // Read one message at a time
-                .count(1)
+                .count(1);
 
         // Read new messages from the stream using the correct xreadGroup signature
         List<Map.Entry<String, List<StreamEntry>>> messages = jedis.xreadGroup(
                 config.getDefaultConsumerGroupName(),
                 consumerName,
                 params,
-                Map.of(streamId, StreamEntryID.UNRECEIVED_ENTRY) )
+                Map.of(streamId, StreamEntryID.UNRECEIVED_ENTRY));
 
-        final entry = messages?.first()?.value?.first()
-        if( entry!=null )
-            log.trace "Redis stream id=$streamId; read entry=$entry"
-        return entry
+        StreamEntry entry = null;
+        if (messages != null && !messages.isEmpty()) {
+            List<StreamEntry> entries = messages.get(0).getValue();
+            if (entries != null && !entries.isEmpty()) {
+                entry = entries.get(0);
+            }
+        }
+        if (entry != null) {
+            log.trace("Redis stream id={}; read entry={}", streamId, entry);
+        }
+        return entry;
     }
 
     protected StreamEntry claimMessage(Jedis jedis, String streamId) {
         // Attempt to claim any pending messages that are idle for more than the threshold
-        final params = new XAutoClaimParams()
+        final var params = new XAutoClaimParams()
                 // claim one entry at time
-                .count(1)
+                .count(1);
 
         /* Use the last claim cursor position for round-robin claiming.
 
@@ -209,53 +222,57 @@ class RedisMessageStream implements MessageStream<String> {
           Poll 2: start=msg-2  → claim msg-2  → cursor=msg-3
           ...
           Poll 11: start=msg-11 → claim msg-11 → finally reached! */
-        final startId = lastClaimCursor.getOrDefault(streamId, STREAM_ENTRY_ZERO)
+        final var startId = lastClaimCursor.getOrDefault(streamId, STREAM_ENTRY_ZERO);
 
-        def messages
+        Map.Entry<StreamEntryID, List<StreamEntry>> messages;
         try {
             messages = jedis.xautoclaim(
                     streamId,
                     config.getDefaultConsumerGroupName(),
                     consumerName,
-                    config.claimTimeoutMillis,
+                    config.getClaimTimeoutMillis(),
                     startId,
                     params
-            )
+            );
         } catch (JedisDataException e) {
-            if (e.message.contains("NOGROUP")) {
+            if (e.getMessage().contains("NOGROUP")) {
                 // The group does not exist. We initialize it and avoid printing the exception
-                log.info "Redis message stream - consume group=$streamId do not exist"
-                init(streamId)
+                log.info("Redis message stream - consume group={} do not exist", streamId);
+                init(streamId);
             }
-            throw e
+            throw e;
+        }
+        if (messages != null) {
+            updateClaimCursor(streamId, messages.getKey());
         }
 
-        updateClaimCursor(streamId, messages?.getKey())
-
-        final entry = messages?.getValue()?[0]
-        if( entry!=null )
-            log.trace "Redis stream id=$streamId; claimed entry=$entry"
-        return entry
+        final var entry = (messages != null && messages.getValue() != null && !messages.getValue().isEmpty())
+                ? messages.getValue().get(0)
+                : null;
+        if (entry != null) {
+            log.trace("Redis stream id={}; claimed entry={}", streamId, entry);
+        }
+        return entry;
     }
 
     /* Update the claim cursor for the next iteration. When xautoclaim reaches
        the end of the PEL, it returns "0-0" signaling wrap around to the beginning. */
     protected void updateClaimCursor(String streamId, StreamEntryID nextCursor) {
         if (nextCursor == null)
-            return
-        if (nextCursor == STREAM_ENTRY_ZERO)
-            lastClaimCursor.remove(streamId)
+            return;
+        if (STREAM_ENTRY_ZERO.equals(nextCursor))
+            lastClaimCursor.remove(streamId);
         else
-            lastClaimCursor.put(streamId, nextCursor)
+            lastClaimCursor.put(streamId, nextCursor);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    int length(String streamId) {
+    public int length(String streamId) {
         try (Jedis jedis = pool.getResource()) {
-            jedis.xlen(streamId)
+            return (int) jedis.xlen(streamId);
         }
     }
 }

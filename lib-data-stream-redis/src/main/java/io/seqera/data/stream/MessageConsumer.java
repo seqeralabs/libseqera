@@ -15,16 +15,16 @@
  *
  */
 
-package io.seqera.data.stream
+package io.seqera.data.stream;
 
 /**
  * Interface for consuming messages from a message stream.
- * 
+ *
  * <p>A message consumer defines how individual messages should be processed when they
  * are read from a stream. The consumer's return value determines whether the message
  * was successfully processed and should be acknowledged, or if it failed and may need
  * to be reprocessed.</p>
- * 
+ *
  * <p>Key characteristics:</p>
  * <ul>
  *   <li><strong>Single Message Processing:</strong> Each invocation processes exactly one message</li>
@@ -32,7 +32,7 @@ package io.seqera.data.stream
  *   <li><strong>Error Handling:</strong> Failed processing can trigger redelivery</li>
  *   <li><strong>Stateless:</strong> Should be stateless and thread-safe when possible</li>
  * </ul>
- * 
+ *
  * <p>Common implementation patterns:</p>
  * <pre>{@code
  * // Simple message processor
@@ -45,7 +45,7 @@ package io.seqera.data.stream
  *         return false; // Failure - don't acknowledge
  *     }
  * };
- * 
+ *
  * // Conditional processing
  * MessageConsumer<NotificationEvent> notificationFilter = event -> {
  *     if (event.getPriority() == Priority.HIGH) {
@@ -54,7 +54,7 @@ package io.seqera.data.stream
  *     }
  *     return false; // Skip - let another consumer handle it
  * };
- * 
+ *
  * // Batch processing with validation
  * MessageConsumer<DataRecord> batchProcessor = record -> {
  *     if (isValidRecord(record)) {
@@ -69,13 +69,13 @@ package io.seqera.data.stream
  *     }
  * };
  * }</pre>
- * 
+ *
  * <p>Return value semantics:</p>
  * <ul>
  *   <li><strong>{@code true}:</strong> Message processed successfully, acknowledge and remove from stream</li>
  *   <li><strong>{@code false}:</strong> Message not processed, leave available for other consumers</li>
  * </ul>
- * 
+ *
  * <p>Error handling strategies:</p>
  * <ul>
  *   <li><strong>Retry:</strong> Return {@code false} to allow reprocessing</li>
@@ -84,21 +84,22 @@ package io.seqera.data.stream
  * </ul>
  *
  * @param <T> the type of messages that this consumer can process
- * 
+ *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  * @see MessageStream#consume(String, MessageConsumer)
  * @see AbstractMessageStream
  */
-interface MessageConsumer<T> {
+@FunctionalInterface
+public interface MessageConsumer<T> {
 
     /**
      * Processes a single message from a stream.
-     * 
+     *
      * <p>This method is called by the stream infrastructure when a message is available
      * for processing. The implementation should handle the message according to its
      * business logic and return an appropriate acknowledgment status.</p>
-     * 
+     *
      * <p>Processing guidelines:</p>
      * <ul>
      *   <li><strong>Idempotent:</strong> Should handle duplicate messages gracefully</li>
@@ -106,7 +107,7 @@ interface MessageConsumer<T> {
      *   <li><strong>Exception Safe:</strong> Handle exceptions appropriately, don't let them propagate</li>
      *   <li><strong>Logging:</strong> Log important events for debugging and monitoring</li>
      * </ul>
-     * 
+     *
      * <p>Return value meaning:</p>
      * <ul>
      *   <li><strong>{@code true}:</strong> Message was successfully processed and should be acknowledged.
@@ -114,7 +115,7 @@ interface MessageConsumer<T> {
      *   <li><strong>{@code false}:</strong> Message was not processed successfully or was rejected.
      *       The message remains available for consumption by other consumers or for retry.</li>
      * </ul>
-     * 
+     *
      * <p>Common scenarios for returning {@code false}:</p>
      * <ul>
      *   <li>Temporary downstream service unavailability</li>
@@ -127,6 +128,6 @@ interface MessageConsumer<T> {
      * @return {@code true} if the message was successfully processed and should be acknowledged,
      *         {@code false} if the message was not processed and should remain available
      */
-    boolean accept(T message)
+    boolean accept(T message);
 
 }
