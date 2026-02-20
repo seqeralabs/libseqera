@@ -18,6 +18,7 @@ jobs:
           "lib-commons-io",
           "lib-crypto",
           "lib-docker-cli",
+          "lib-data-count-redis",
           "lib-data-queue-redis",
           "lib-data-range-redis",
           "lib-data-store-future-redis",

@@ -17,220 +17,236 @@
 
 package io.seqera.http
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*
 
-import io.seqera.http.auth.AuthenticationCallback
-import io.seqera.http.auth.AuthenticationScheme
-import io.seqera.http.auth.WwwAuthenticateParser
-import spock.lang.Specification
-import spock.lang.Timeout
-import spock.lang.Unroll
-
-import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
-import java.time.Duration
+
+import com.github.tomakehurst.wiremock.WireMockServer
+import com.github.tomakehurst.wiremock.client.WireMock
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration
+import io.seqera.http.auth.AuthenticationCallback
+import io.seqera.http.auth.AuthenticationScheme
+import spock.lang.Shared
+import spock.lang.Specification
+import spock.lang.Unroll
 
 /**
- * Integration test for HxClient WWW-Authenticate handling using real endpoints.
- * 
- * <p>This test verifies that HxClient can properly handle 401 responses with
- * WWW-Authenticate headers from real-world services, specifically testing
- * against container registry endpoints that require authentication.
- * 
+ * Integration test for HxClient WWW-Authenticate handling using WireMock.
+ *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 class HxClientWwwAuthIntegrationTest extends Specification {
 
-    private static final String TEST_URL = "https://public.cr.seqera.io/v2/nextflow/plugin/nf-amazon/blobs/sha256:bbc79350c844eba39e08a908056ce238a534b04cde7628767059d874bf725d72"
+    @Shared
+    WireMockServer wireMockServer
 
-    @Timeout(30)
-    def "should automatically handle WWW-Authenticate challenge when enabled"() {
-        given: "HxClient configured for WWW-Authenticate handling"
-        def config = HxConfig.newBuilder()
-                .withWwwAuthentication(true)
-                .build()
-
-        and: "HttpClient configured to not follow redirects"
-        def httpClient = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(Duration.ofSeconds(10))
-                .build()
-
-        def client = HxClient.newBuilder().httpClient(httpClient).config(config).build()
-
-        when: "making request to endpoint that requires authentication"
-        def request = HttpRequest.newBuilder()
-                .uri(URI.create(TEST_URL))
-                .GET()
-                .timeout(Duration.ofSeconds(10))
-                .build()
-
-        def response = client.send(request, HttpResponse.BodyHandlers.ofString())
-
-        then: "should automatically handle authentication and return success status (200 or 307 redirect)"
-        response != null
-        response.statusCode() == 307 // 307 is redirect after successful auth
-        response.headers().firstValue('Location').get() == "https://public-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/bb/bbc79350c844eba39e08a908056ce238a534b04cde7628767059d874bf725d72/data"
+    def setupSpec() {
+        wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort())
+        wireMockServer.start()
+        WireMock.configureFor("localhost", wireMockServer.port())
     }
 
-    @Timeout(30)
-    def "should handle WWW-Authenticate challenge with callback providing credentials"() {
-        given: "Authentication callback that provides test credentials"
+    def cleanupSpec() {
+        wireMockServer?.stop()
+    }
+
+    def cleanup() {
+        wireMockServer.resetAll()
+    }
+
+    private String baseUrl() {
+        return "http://localhost:${wireMockServer.port()}"
+    }
+
+    def "should automatically handle Bearer WWW-Authenticate challenge when enabled"() {
+        given: 'endpoint returns 401 with Bearer challenge pointing to local token endpoint'
+        wireMockServer.stubFor(get(urlEqualTo('/v2/repo/blobs/sha256:abc123'))
+                .withHeader('Authorization', absent())
+                .willReturn(aResponse()
+                        .withStatus(401)
+                        .withHeader('WWW-Authenticate',
+                                "Bearer realm=\"${baseUrl()}/token\",service=\"registry.example.com\",scope=\"repository:repo:pull\"")))
+
+        and: 'token endpoint returns anonymous token'
+        wireMockServer.stubFor(get(urlPathEqualTo('/token'))
+                .withQueryParam('service', equalTo('registry.example.com'))
+                .withQueryParam('scope', equalTo('repository:repo:pull'))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader('Content-Type', 'application/json')
+                        .withBody('{"token": "anon-token-123", "expires_in": 300}')))
+
+        and: 'endpoint succeeds with Bearer token'
+        wireMockServer.stubFor(get(urlEqualTo('/v2/repo/blobs/sha256:abc123'))
+                .withHeader('Authorization', equalTo('Bearer anon-token-123'))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withBody('blob-content')))
+
+        and: 'HxClient configured for WWW-Authenticate handling'
+        def config = HxConfig.newBuilder()
+                .wwwAuthentication(true)
+                .build()
+        def client = HxClient.newBuilder().config(config).build()
+
+        when:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("${baseUrl()}/v2/repo/blobs/sha256:abc123"))
+                .GET()
+                .build()
+        def response = client.send(request, HttpResponse.BodyHandlers.ofString())
+
+        then: 'should succeed after automatic authentication'
+        response.statusCode() == 200
+        response.body() == 'blob-content'
+
+        and: 'original request was made, then token fetched, then retry with auth'
+        wireMockServer.verify(2, getRequestedFor(urlEqualTo('/v2/repo/blobs/sha256:abc123')))
+        wireMockServer.verify(1, getRequestedFor(urlPathEqualTo('/token')))
+    }
+
+    def "should handle WWW-Authenticate challenge with callback providing Basic credentials"() {
+        given: 'endpoint returns 401 with Basic challenge'
+        wireMockServer.stubFor(get(urlEqualTo('/api/data'))
+                .withHeader('Authorization', absent())
+                .willReturn(aResponse()
+                        .withStatus(401)
+                        .withHeader('WWW-Authenticate', 'Basic realm="Protected Area"')))
+
+        and: 'endpoint succeeds with valid Basic credentials'
+        def encodedCreds = Base64.getEncoder().encodeToString("user:pass".getBytes())
+        wireMockServer.stubFor(get(urlEqualTo('/api/data'))
+                .withHeader('Authorization', equalTo("Basic ${encodedCreds}"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withBody('secret-data')))
+
+        and: 'callback provides credentials for Basic scheme'
         def callback = { scheme, realm ->
-            if (scheme == AuthenticationScheme.BASIC) {
-                // Return base64 encoded test:test
-                return Base64.getEncoder().encodeToString("test:test".getBytes())
+            if (scheme == AuthenticationScheme.BASIC && realm == "Protected Area") {
+                return encodedCreds
             }
             return null
         } as AuthenticationCallback
 
-        and: "HxClient configured with authentication callback"
         def config = HxConfig.newBuilder()
-                .withWwwAuthentication(true)
-                .withWwwAuthenticationCallback(callback)
+                .wwwAuthentication(true)
+                .wwwAuthenticationCallback(callback)
                 .build()
+        def client = HxClient.newBuilder().config(config).build()
 
-        and: "HttpClient configured to not follow redirects"
-        def httpClient = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(Duration.ofSeconds(10))
-                .build()
-
-        def client = HxClient.newBuilder().httpClient(httpClient).config(config).build()
-
-        when: "making request to endpoint that requires authentication"
+        when:
         def request = HttpRequest.newBuilder()
-                .uri(URI.create(TEST_URL))
+                .uri(URI.create("${baseUrl()}/api/data"))
                 .GET()
-                .timeout(Duration.ofSeconds(10))
                 .build()
-
         def response = client.send(request, HttpResponse.BodyHandlers.ofString())
 
-        then: "should receive a response with successful authentication"
-        response != null
-        response.statusCode() in [200, 307] // Various possible outcomes - 307 indicates successful auth with redirect
-
-        cleanup:
-        println "Response status: ${response?.statusCode()}"
-        println "Response headers: ${response?.headers()?.map()}"
+        then: 'should succeed with callback-provided credentials'
+        response.statusCode() == 200
+        response.body() == 'secret-data'
     }
 
-    @Timeout(30)
     def "should not handle WWW-Authenticate when feature is disabled"() {
-        given: "HxClient with WWW-Authenticate handling disabled"
+        given: 'endpoint returns 401 with WWW-Authenticate header'
+        wireMockServer.stubFor(get(urlEqualTo('/api/data'))
+                .willReturn(aResponse()
+                        .withStatus(401)
+                        .withHeader('WWW-Authenticate', 'Bearer realm="api"')))
+
+        and: 'HxClient with WWW-Authenticate handling disabled'
         def config = HxConfig.newBuilder()
-                .withWwwAuthentication(false) // Explicitly disabled
+                .wwwAuthentication(false)
                 .build()
+        def client = HxClient.newBuilder().config(config).build()
 
-        and: "HttpClient configured to not follow redirects"
-        def httpClient = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(Duration.ofSeconds(10))
-                .build()
-
-        def client = HxClient.newBuilder().httpClient(httpClient).config(config).build()
-
-        when: "making request to endpoint that requires authentication"
+        when:
         def request = HttpRequest.newBuilder()
-                .uri(URI.create(TEST_URL))
+                .uri(URI.create("${baseUrl()}/api/data"))
                 .GET()
-                .timeout(Duration.ofSeconds(10))
                 .build()
-
         def response = client.send(request, HttpResponse.BodyHandlers.ofString())
 
-        then: "should receive 401 response without retry attempts"
-        response != null
+        then: 'should return 401 without retry'
         response.statusCode() == 401
-        
-        and: "should have WWW-Authenticate headers"
-        def wwwAuthHeaders = response.headers().allValues("WWW-Authenticate")
-        wwwAuthHeaders.size() > 0
 
-        cleanup:
-        println "Response status: ${response?.statusCode()}"
-        println "WWW-Authenticate headers: ${response?.headers()?.allValues('WWW-Authenticate')}"
+        and: 'only one request was made (no auth retry)'
+        wireMockServer.verify(1, getRequestedFor(urlEqualTo('/api/data')))
     }
 
-    def "should parse WWW-Authenticate headers from real response"() {
-        given: "Direct HTTP client to get raw response"
-        def httpClient = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(Duration.ofSeconds(10))
-                .build()
+    def "should handle Bearer challenge with access_token field in response"() {
+        given: 'endpoint returns 401 with Bearer challenge'
+        wireMockServer.stubFor(get(urlEqualTo('/api/resource'))
+                .withHeader('Authorization', absent())
+                .willReturn(aResponse()
+                        .withStatus(401)
+                        .withHeader('WWW-Authenticate',
+                                "Bearer realm=\"${baseUrl()}/token\",service=\"api.example.com\",scope=\"read\"")))
 
-        when: "making request to get 401 with WWW-Authenticate"
+        and: 'token endpoint returns access_token (alternative JSON field)'
+        wireMockServer.stubFor(get(urlPathEqualTo('/token'))
+                .withQueryParam('service', equalTo('api.example.com'))
+                .withQueryParam('scope', equalTo('read'))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader('Content-Type', 'application/json')
+                        .withBody('{"access_token": "oauth-token-456", "token_type": "Bearer"}')))
+
+        and: 'endpoint succeeds with the token'
+        wireMockServer.stubFor(get(urlEqualTo('/api/resource'))
+                .withHeader('Authorization', equalTo('Bearer oauth-token-456'))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withBody('ok')))
+
+        def config = HxConfig.newBuilder()
+                .wwwAuthentication(true)
+                .build()
+        def client = HxClient.newBuilder().config(config).build()
+
+        when:
         def request = HttpRequest.newBuilder()
-                .uri(URI.create(TEST_URL))
+                .uri(URI.create("${baseUrl()}/api/resource"))
                 .GET()
-                .timeout(Duration.ofSeconds(10))
                 .build()
+        def response = client.send(request, HttpResponse.BodyHandlers.ofString())
 
-        def response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-
-        then: "should receive 401 with WWW-Authenticate headers"
-        response.statusCode() == 401
-        
-        def wwwAuthHeaders = response.headers().allValues("WWW-Authenticate")
-        wwwAuthHeaders.size() > 0
-
-        when: "parsing the WWW-Authenticate headers"
-        def allChallenges = []
-        wwwAuthHeaders.each { headerValue ->
-            def challenges = WwwAuthenticateParser.parse(headerValue)
-            allChallenges.addAll(challenges)
-        }
-
-        then: "should successfully parse authentication challenges"
-        allChallenges.size() > 0
-        
-        and: "should contain expected authentication schemes"
-        def schemes = allChallenges.collect { it.scheme }
-        schemes.any { it in [AuthenticationScheme.BASIC, AuthenticationScheme.BEARER] }
-
-        cleanup:
-        println "WWW-Authenticate headers: ${wwwAuthHeaders}"
-        println "Parsed challenges: ${allChallenges}"
+        then:
+        response.statusCode() == 200
+        response.body() == 'ok'
     }
 
     @Unroll
-    def "should handle different authentication callback results: #scenario"() {
-        given: "Authentication callback with specific behavior"
-        def callback = callbackBehavior as AuthenticationCallback
+    def "should handle different callback results: #SCENARIO"() {
+        given: 'endpoint returns 401 with Basic challenge'
+        wireMockServer.stubFor(get(urlEqualTo('/api/data'))
+                .willReturn(aResponse()
+                        .withStatus(401)
+                        .withHeader('WWW-Authenticate', 'Basic realm="Test"')))
 
-        and: "HxClient configured with callback"
+        and: 'HxClient with callback'
+        def callback = CALLBACK as AuthenticationCallback
         def config = HxConfig.newBuilder()
-                .withWwwAuthentication(true)
-                .withWwwAuthenticationCallback(callback)
+                .wwwAuthentication(true)
+                .wwwAuthenticationCallback(callback)
                 .build()
+        def client = HxClient.newBuilder().config(config).build()
 
-        and: "HttpClient configured to not follow redirects"
-        def httpClient = HttpClient.newBuilder()
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(Duration.ofSeconds(10))
-                .build()
-
-        def client = HxClient.newBuilder().httpClient(httpClient).config(config).build()
-
-        when: "making request"
+        when:
         def request = HttpRequest.newBuilder()
-                .uri(URI.create(TEST_URL))
+                .uri(URI.create("${baseUrl()}/api/data"))
                 .GET()
-                .timeout(Duration.ofSeconds(10))
                 .build()
-
         def response = client.send(request, HttpResponse.BodyHandlers.ofString())
 
-        then: "should receive a response without throwing exceptions"
-        response != null
-        response.statusCode() == expectedStatus
+        then: 'should receive expected status'
+        response.statusCode() == EXPECTED_STATUS
 
         where:
-        scenario           | callbackBehavior                                                      | expectedStatus // comment
-        "returns null"     | { scheme, realm -> null }                                             | 307            // Falls back to anonymous auth, succeeds
-        "throws exception" | { scheme, realm -> throw new RuntimeException("Callback error") }     | 307            // Falls back to anonymous auth after callback error, succeeds
-        "returns empty"    | { scheme, realm -> "" }                                               | 401            // Empty credentials fail authentication
-        "returns invalid"  | { scheme, realm -> "invalid-credentials" }                            | 401            // Invalid credentials fail authentication
+        SCENARIO           | CALLBACK                                                          | EXPECTED_STATUS
+        "returns null"     | { scheme, realm -> null }                                         | 401  // falls back to anonymous Basic (empty creds), server rejects
+        "throws exception" | { scheme, realm -> throw new RuntimeException("Callback error") } | 401  // falls back to anonymous Basic, server rejects
+        "returns empty"    | { scheme, realm -> "" }                                           | 401  // empty credentials, server rejects
     }
 }

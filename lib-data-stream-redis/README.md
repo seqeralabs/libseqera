@@ -8,9 +8,11 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-data-stream-redis:1.0.0'
+    implementation 'io.seqera:lib-data-stream-redis:1.3.0'
 }
 ```
+
+As of version 1.3.0, this library no longer requires Groovy as a runtime dependency.
 
 ## Usage
 

@@ -38,6 +38,7 @@ public abstract class AbstractRedisCacheConfiguration {
     protected Duration expireAfterAccess;
     protected String expirationAfterWritePolicy;
     protected Long invalidateScanCount = 100L;
+    protected Duration earlyRevalidationWindow;
 
     /**
      * Constructor.
@@ -159,5 +160,28 @@ public abstract class AbstractRedisCacheConfiguration {
      */
     public void setInvalidateScanCount(Long invalidateScanCount) {
         this.invalidateScanCount = invalidateScanCount;
+    }
+
+    /**
+     * Returns the early revalidation window duration. When set, cache entries within this
+     * time window before expiry will be probabilistically refreshed in the background,
+     * preventing cache stampedes.
+     *
+     * @return The early revalidation window, or empty if disabled
+     * @see <a href="https://blog.cloudflare.com/sometimes-i-cache/">Cloudflare: Probabilistic early revalidation</a>
+     */
+    public Optional<Duration> getEarlyRevalidationWindow() {
+        return Optional.ofNullable(earlyRevalidationWindow);
+    }
+
+    /**
+     * Sets the early revalidation window. When a cached entry's remaining TTL falls within
+     * this window, read operations with a supplier will probabilistically trigger an async
+     * refresh. The probability increases exponentially as expiry approaches.
+     *
+     * @param earlyRevalidationWindow the duration before expiry to start probabilistic refresh
+     */
+    public void setEarlyRevalidationWindow(Duration earlyRevalidationWindow) {
+        this.earlyRevalidationWindow = earlyRevalidationWindow;
     }
 }
