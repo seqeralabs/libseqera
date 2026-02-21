@@ -17,14 +17,16 @@
 
 package io.seqera.http;
 
-import java.util.UUID;
+import java.util.Objects;
 
 /**
  * Default immutable implementation of {@link HxAuth}.
  *
  * <p>Stores JWT access token, refresh token, and refresh URL.
- * A stable {@link #id()} is assigned at creation and preserved
- * through {@link #withToken(String)} and {@link #withRefresh(String)}.
+ * A stable {@link #id()} is derived from the initial {@code accessToken}
+ * and {@code refreshUrl}, so that identical credentials always produce
+ * the same id. The id is preserved through {@link #withToken(String)}
+ * and {@link #withRefresh(String)}.
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
@@ -40,7 +42,7 @@ record DefaultHxAuth(String id, String accessToken, String refreshToken, String 
     }
 
     DefaultHxAuth(String accessToken, String refreshToken, String refreshUrl) {
-        this(UUID.randomUUID().toString(), accessToken, refreshToken, refreshUrl);
+        this(computeId(accessToken, refreshUrl), accessToken, refreshToken, refreshUrl);
     }
 
     DefaultHxAuth(String accessToken, String refreshToken) {
@@ -65,6 +67,14 @@ record DefaultHxAuth(String id, String accessToken, String refreshToken, String 
                 ", refreshToken=" + mask(refreshToken) +
                 ", refreshUrl=" + refreshUrl +
                 ']';
+    }
+
+    private static String computeId(String accessToken, String refreshUrl) {
+        if (accessToken == null) {
+            throw new IllegalArgumentException("accessToken cannot be null");
+        }
+        int hash = Objects.hash(accessToken, refreshUrl);
+        return Integer.toHexString(hash);
     }
 
     private static String mask(String value) {

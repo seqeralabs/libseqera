@@ -393,6 +393,6 @@ class HxClientTest extends Specification {
                 .build()
 
         then:
-        client.tokenManager.getTokenStore() == customStore
+        client.tokenManager.tokenStore == customStore
     }
 }

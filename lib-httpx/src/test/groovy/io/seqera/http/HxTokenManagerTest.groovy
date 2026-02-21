@@ -122,39 +122,6 @@ class HxTokenManagerTest extends Specification {
     // Note: Skipping this test as HttpHeaders is a final class that cannot be easily mocked in Spock
     // This functionality is covered by integration tests
 
-    def 'should update tokens thread-safely'() {
-        given:
-        def config = HxConfig.newBuilder()
-                .bearerToken('fake.jwt.token')
-                .refreshToken('fake-refresh-token')
-                .refreshTokenUrl('https://example.com/oauth/token')
-                .build()
-        def tokenManager = new HxTokenManager(config)
-
-        when:
-        tokenManager.updateTokens('new-jwt-token.new.token', 'new-refresh-token')
-
-        then:
-        tokenManager.getCurrentJwtToken() == 'new-jwt-token.new.token'
-        tokenManager.getCurrentRefreshToken() == 'new-refresh-token'
-    }
-
-    def 'should not update invalid JWT token'() {
-        given:
-        def config = HxConfig.newBuilder()
-                .bearerToken('fake.jwt.token')
-                .build()
-        def tokenManager = new HxTokenManager(config)
-        def originalToken = tokenManager.getCurrentJwtToken()
-
-        when:
-        tokenManager.updateTokens('invalid-token', 'new-refresh-token')
-
-        then:
-        tokenManager.getCurrentJwtToken() == originalToken
-        tokenManager.getCurrentRefreshToken() == 'new-refresh-token'
-    }
-
     def 'should validate JWT token refresh configuration'() {
         when: 'creating with JWT token + refresh token but missing refresh URL'
         def config1 = HxConfig.newBuilder()
@@ -324,6 +291,39 @@ class HxTokenManagerTest extends Specification {
 
         then:
         customStore.get(auth.id()) == auth
-        tokenManager.getTokenStore() == customStore
+    }
+
+    def 'stateless request should resolve refreshed token by same id'() {
+        given: 'a token manager with a store'
+        def store = new HxMapTokenStore()
+        def config = HxConfig.newBuilder().build()
+        def tokenManager = new HxTokenManager(config, store)
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create('https://example.com/api'))
+                .GET()
+                .build()
+
+        and: 'initial auth is registered'
+        def originalAuth = new DefaultHxAuth('original.jwt.token', 'refresh1', 'https://example.com/oauth')
+        tokenManager.getAuth(originalAuth)
+
+        when: 'a token refresh updates the stored auth'
+        def refreshedAuth = originalAuth.withToken('refreshed.jwt.token').withRefresh('refresh2')
+        store.put(originalAuth.id(), refreshedAuth)
+
+        and: 'a new stateless request creates auth from the same original credentials'
+        def newRequestAuth = new DefaultHxAuth('original.jwt.token', 'refresh1', 'https://example.com/oauth')
+
+        then: 'same credentials produce the same id'
+        newRequestAuth.id() == originalAuth.id()
+
+        and: 'getAuth returns the refreshed tokens from the store'
+        def resolved = tokenManager.getAuth(newRequestAuth)
+        resolved.accessToken() == 'refreshed.jwt.token'
+        resolved.refreshToken() == 'refresh2'
+
+        and: 'a request made with the old credentials is authenticated with the refreshed token'
+        def authedRequest = tokenManager.addAuthHeader(request, newRequestAuth)
+        authedRequest.headers().firstValue('Authorization').orElse(null) == 'Bearer refreshed.jwt.token'
     }
 }

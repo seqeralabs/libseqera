@@ -56,15 +56,21 @@ class HxAuthTest extends Specification {
         auth.refreshUrl() == 'https://example.com/oauth/token'
     }
 
-    def 'should assign unique stable key'() {
+    def 'should compute deterministic stable id'() {
         given:
         def auth1 = new DefaultHxAuth('my.jwt.token', 'refresh1')
         def auth2 = new DefaultHxAuth('my.jwt.token', 'refresh2')
+        def auth3 = new DefaultHxAuth('different.jwt.token', 'refresh1')
+        def auth4 = new DefaultHxAuth('my.jwt.token', 'refresh1', 'https://example.com/oauth')
+        def auth5 = new DefaultHxAuth('my.jwt.token', 'refresh1', 'https://other.com/oauth')
 
         expect:
-        auth1.id() != auth2.id()  // each instance gets a unique key
-        auth1.id() == auth1.withToken('new.jwt.token').id()  // key is stable across withToken
-        auth1.id() == auth1.withRefresh('new-refresh').id()  // key is stable across withRefresh
+        auth1.id() == auth2.id()  // same accessToken + refreshUrl = same id
+        auth1.id() != auth3.id()  // different accessToken = different id
+        auth1.id() != auth4.id()  // different refreshUrl = different id
+        auth4.id() != auth5.id()  // different refreshUrl = different id
+        auth1.id() == auth1.withToken('new.jwt.token').id()  // id stable across withToken
+        auth1.id() == auth1.withRefresh('new-refresh').id()  // id stable across withRefresh
     }
 
     def 'should reject null access token'() {
@@ -93,14 +99,13 @@ class HxAuthTest extends Specification {
         auth.toString().startsWith('HxAuth[')
     }
 
-    def 'each instance should have unique identity'() {
+    def 'same credentials should produce same id'() {
         given:
         def auth1 = new DefaultHxAuth('a.b.c', 'r1')
-        def auth2 = new DefaultHxAuth('a.b.c', 'r1')
+        def auth2 = new DefaultHxAuth('a.b.c', 'r2')
 
         expect:
-        auth1.id() != auth2.id()  // different instances have different keys
-        auth1.id() == auth1.withToken('x.y.z').id()  // key preserved after withToken
-        auth1.id() == auth1.withRefresh('r2').id()    // key preserved after withRefresh
+        auth1.id() == auth2.id()  // same accessToken + refreshUrl = same id
+        auth1.id() != null && !auth1.id().isEmpty()
     }
 }

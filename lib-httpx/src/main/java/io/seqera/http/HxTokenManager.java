@@ -49,7 +49,7 @@ import org.slf4j.LoggerFactory;
  * </ul>
  * 
  * <p><strong>Token Refresh Process:</strong><br>
- * When {@link #refreshToken()} or {@link #refreshTokenAsync()} is called, the manager:
+ * When {@link #getOrRefreshTokenAsync(HxAuth)} is called, the manager:
  * <ol>
  *   <li>Sends a POST request to the configured refresh URL</li>
  *   <li>Uses {@code grant_type=refresh_token} with the current refresh token</li>
@@ -225,37 +225,6 @@ class HxTokenManager {
     }
 
     /**
-     * Attempts to refresh the JWT token synchronously using the configured refresh token.
-     * 
-     * <p>This method performs an OAuth 2.0 refresh token flow:
-     * <ul>
-     *   <li>Sends a POST request to the configured refresh token URL</li>
-     *   <li>Uses application/x-www-form-urlencoded content type</li>
-     *   <li>Includes grant_type=refresh_token and the current refresh token</li>
-     *   <li>Extracts new tokens from response cookies or JSON body</li>
-     *   <li>Updates the current JWT and refresh tokens if successful</li>
-     * </ul>
-     * 
-     * <p>This method is thread-safe and uses write locks to prevent concurrent modifications.
-     * 
-     * @return true if token refresh was successful, false otherwise
-     */
-    public boolean refreshToken() {
-        return refreshToken(getDefaultAuth()) != null;
-    }
-
-    /**
-     * Gets or initiates a coordinated token refresh operation to prevent concurrent refreshes.
-     *
-     * <p>This method delegates to {@link #getOrRefreshTokenAsync(HxAuth)} using the default token.
-     *
-     * @return a CompletableFuture that completes with true if refresh was successful, false otherwise
-     */
-    public CompletableFuture<Boolean> getOrRefreshTokenAsync() {
-        return getOrRefreshTokenAsync(getDefaultAuth()).thenApply(result -> result != null);
-    }
-
-    /**
      * Gets or initiates a coordinated token refresh operation for the given auth.
      *
      * <p>This method ensures that multiple concurrent requests that need token refresh will
@@ -295,30 +264,6 @@ class HxTokenManager {
                     });
             return future;
         });
-    }
-
-    /**
-     * Attempts to refresh the JWT token asynchronously using the configured refresh token.
-     *
-     * <p>This method performs the same OAuth 2.0 refresh token flow as {@link #refreshToken()}
-     * but returns a CompletableFuture for non-blocking execution.
-     *
-     * @return a CompletableFuture that completes with true if refresh was successful, false otherwise
-     */
-    public CompletableFuture<Boolean> refreshTokenAsync() {
-        return refreshTokenAsync(getDefaultAuth()).thenApply(result -> result != null);
-    }
-
-    /**
-     * Internal method that performs the actual token refresh HTTP request.
-     *
-     * <p>This method delegates to {@link #doRefreshTokenInternal(String, HxAuth)} using the default token.
-     *
-     * @return true if the token refresh was successful, false otherwise
-     */
-    protected boolean doRefreshToken() {
-        final HxAuth auth = getDefaultAuth();
-        return auth != null && doRefreshToken(auth) != null;
     }
 
     /**
@@ -379,19 +324,6 @@ class HxTokenManager {
     }
 
     /**
-     * Returns the configured basic authentication token, if any.
-     * 
-     * <p>This method provides read-only access to the basic authentication token
-     * configured in the HxConfig. This can be useful for logging, debugging, or
-     * conditional authentication logic.
-     * 
-     * @return the basic authentication token in "username:password" format, or null if not configured
-     */
-    public String getBasicAuthToken() {
-        return config.getBasicAuthToken();
-    }
-
-    /**
      * Checks if basic authentication is properly configured.
      * 
      * <p>Basic authentication is considered properly configured when the
@@ -404,38 +336,6 @@ class HxTokenManager {
         return config.getBasicAuthToken() != null && 
                !config.getBasicAuthToken().isEmpty() &&
                !":".equals(config.getBasicAuthToken());
-    }
-
-    /**
-     * Updates both JWT and refresh tokens atomically.
-     *
-     * <p>This method validates the JWT token format before updating and will not
-     * update an invalid JWT token. The refresh token is updated if provided,
-     * regardless of format (as refresh tokens may have different formats).
-     *
-     * @param jwtToken the new JWT token to set, may be null
-     * @param refreshToken the new refresh token to set, may be null
-     */
-    // Note: synchronized protects the read-modify-write on DEFAULT_TOKEN only.
-    // Multi-session refreshes (doRefreshTokenInternal) operate on separate keys
-    // and are coordinated via ongoingRefreshes/computeIfAbsent.
-    synchronized void updateTokens(String jwtToken, String refreshToken) {
-        final HxAuth currentAuth = tokenStore.get(DEFAULT_TOKEN);
-        String newToken = (currentAuth != null) ? currentAuth.accessToken() : null;
-        String newRefresh = (currentAuth != null) ? currentAuth.refreshToken() : null;
-
-        if (jwtToken != null && isValidJwtToken(jwtToken)) {
-            newToken = jwtToken;
-            log.trace("JWT token updated");
-        }
-        if (refreshToken != null) {
-            newRefresh = refreshToken;
-            log.trace("Refresh token updated");
-        }
-
-        if (newToken != null) {
-            tokenStore.put(DEFAULT_TOKEN, new DefaultHxAuth(newToken, newRefresh, config.getRefreshTokenUrl()));
-        }
     }
 
     // ========================================================================
@@ -510,39 +410,6 @@ class HxTokenManager {
             return auth.refreshUrl();
         }
         return config.getRefreshTokenUrl();
-    }
-
-    /**
-     * Attempts to refresh the JWT token synchronously for the given auth.
-     *
-     * <p>This method performs an OAuth 2.0 refresh token flow for a specific user session.
-     * On success, the new tokens are stored in the token store automatically.
-     *
-     * @param auth the authentication data containing the refresh token
-     * @return the updated {@link HxAuth} with new tokens, or null if refresh failed
-     */
-    public HxAuth refreshToken(HxAuth auth) {
-        if (!canRefreshToken(auth)) {
-            log.warn("Cannot refresh token for auth: refreshToken={} refreshTokenUrl={}",
-                    (auth != null && auth.refreshToken() != null), config.getRefreshTokenUrl());
-            return null;
-        }
-        return doRefreshToken(auth);
-    }
-
-    /**
-     * Attempts to refresh the JWT token asynchronously for the given auth.
-     *
-     * @param auth the authentication data containing the refresh token
-     * @return a CompletableFuture that completes with the updated {@link HxAuth}, or null if refresh failed
-     */
-    public CompletableFuture<HxAuth> refreshTokenAsync(HxAuth auth) {
-        if (!canRefreshToken(auth)) {
-            log.warn("Cannot refresh token asynchronously for auth: refreshToken={} refreshTokenUrl={}",
-                    (auth != null && auth.refreshToken() != null), config.getRefreshTokenUrl());
-            return CompletableFuture.completedFuture(null);
-        }
-        return CompletableFuture.supplyAsync(() -> doRefreshToken(auth));
     }
 
     /**
@@ -665,15 +532,6 @@ class HxTokenManager {
             log.trace("Response is not valid JSON");
             return null;
         }
-    }
-
-    /**
-     * Returns the token store used by this manager.
-     *
-     * @return the {@link HxTokenStore} instance
-     */
-    public HxTokenStore getTokenStore() {
-        return tokenStore;
     }
 
     /**

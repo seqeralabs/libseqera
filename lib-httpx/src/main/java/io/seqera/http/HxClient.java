@@ -449,10 +449,8 @@ public class HxClient {
     }
 
     private boolean refreshToken(HxAuth auth) throws Exception {
-        if (auth != null) {
-            return tokenManager.getOrRefreshTokenAsync(auth).get() != null;
-        }
-        return tokenManager.getOrRefreshTokenAsync().get();
+        final HxAuth effective = (auth != null) ? auth : tokenManager.getDefaultAuth();
+        return effective != null && tokenManager.getOrRefreshTokenAsync(effective).get() != null;
     }
 
     /**
