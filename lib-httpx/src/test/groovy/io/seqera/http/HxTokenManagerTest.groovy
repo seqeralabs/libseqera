@@ -17,7 +17,6 @@
 
 package io.seqera.http
 
-import java.net.CookieManager
 import java.net.CookiePolicy
 import java.net.http.HttpRequest
 
@@ -123,39 +122,6 @@ class HxTokenManagerTest extends Specification {
     // Note: Skipping this test as HttpHeaders is a final class that cannot be easily mocked in Spock
     // This functionality is covered by integration tests
 
-    def 'should update tokens thread-safely'() {
-        given:
-        def config = HxConfig.newBuilder()
-                .bearerToken('fake.jwt.token')
-                .refreshToken('fake-refresh-token')
-                .refreshTokenUrl('https://example.com/oauth/token')
-                .build()
-        def tokenManager = new HxTokenManager(config)
-
-        when:
-        tokenManager.updateTokens('new-jwt-token.new.token', 'new-refresh-token')
-
-        then:
-        tokenManager.getCurrentJwtToken() == 'new-jwt-token.new.token'
-        tokenManager.getCurrentRefreshToken() == 'new-refresh-token'
-    }
-
-    def 'should not update invalid JWT token'() {
-        given:
-        def config = HxConfig.newBuilder()
-                .bearerToken('fake.jwt.token')
-                .build()
-        def tokenManager = new HxTokenManager(config)
-        def originalToken = tokenManager.getCurrentJwtToken()
-
-        when:
-        tokenManager.updateTokens('invalid-token', 'new-refresh-token')
-
-        then:
-        tokenManager.getCurrentJwtToken() == originalToken
-        tokenManager.getCurrentRefreshToken() == 'new-refresh-token'
-    }
-
     def 'should validate JWT token refresh configuration'() {
         when: 'creating with JWT token + refresh token but missing refresh URL'
         def config1 = HxConfig.newBuilder()
@@ -225,59 +191,139 @@ class HxTokenManagerTest extends Specification {
         !noJwtManager.canRefreshToken()
     }
     
-    def 'should use custom cookie policy when provided'() {
-        given:
+    def 'should accept custom cookie policy configuration'() {
+        when:
         def config = HxConfig.newBuilder()
                 .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
                 .build()
-        
-        when:
         def tokenManager = new HxTokenManager(config)
-        
+
         then:
-        tokenManager.cookieManager != null
-        tokenManager.cookieManager instanceof CookieManager
-        // We can't directly access the policy, but we can verify the CookieManager was created
-        // This verifies that the construction succeeded with the custom policy
+        // Cookie managers are now created per-refresh operation;
+        // this verifies the configuration is accepted without errors
         noExceptionThrown()
+        tokenManager != null
     }
-    
-    def 'should use default cookie policy when none provided'() {
+
+    def 'should accept default cookie policy configuration'() {
+        when:
+        def config = HxConfig.newBuilder().build()
+        def tokenManager = new HxTokenManager(config)
+
+        then:
+        noExceptionThrown()
+        tokenManager != null
+    }
+
+    // --- Multi-token support tests ---
+
+    def 'getAuth should store and return auth on first call'() {
         given:
         def config = HxConfig.newBuilder().build()
-        
-        when:
         def tokenManager = new HxTokenManager(config)
-        
-        then:
-        tokenManager.cookieManager != null
-        tokenManager.cookieManager instanceof CookieManager
-        // This verifies that the default CookieManager construction works
-        noExceptionThrown()
-    }
-    
-    def 'should create different cookie managers for different policies'() {
-        given:
-        def configAcceptAll = HxConfig.newBuilder()
-                .refreshCookiePolicy(CookiePolicy.ACCEPT_ALL)
-                .build()
-        def configAcceptNone = HxConfig.newBuilder()
-                .refreshCookiePolicy(CookiePolicy.ACCEPT_NONE)
-                .build()
-        def configDefault = HxConfig.newBuilder().build()
-        
+        def auth = new DefaultHxAuth('my.jwt.token', 'refresh')
+
         when:
-        def tokenManager1 = new HxTokenManager(configAcceptAll)
-        def tokenManager2 = new HxTokenManager(configAcceptNone)
-        def tokenManager3 = new HxTokenManager(configDefault)
-        
+        def result = tokenManager.getAuth(auth)
+
         then:
-        tokenManager1.cookieManager != null
-        tokenManager2.cookieManager != null
-        tokenManager3.cookieManager != null
-        // Each should have their own distinct CookieManager instance
-        tokenManager1.cookieManager != tokenManager2.cookieManager
-        tokenManager2.cookieManager != tokenManager3.cookieManager
-        tokenManager1.cookieManager != tokenManager3.cookieManager
+        result == auth
+        tokenManager.getAuth(auth) == auth  // subsequent calls return same
+    }
+
+    def 'getAuth should return null for null input'() {
+        given:
+        def config = HxConfig.newBuilder().build()
+        def tokenManager = new HxTokenManager(config)
+
+        expect:
+        tokenManager.getAuth(null) == null
+    }
+
+    def 'addAuthHeader should work with HxAuth parameter'() {
+        given:
+        def config = HxConfig.newBuilder().build()
+        def tokenManager = new HxTokenManager(config)
+        def auth = new DefaultHxAuth('custom.jwt.token', 'refresh')
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create('https://example.com/api'))
+                .GET()
+                .build()
+
+        when:
+        def result = tokenManager.addAuthHeader(request, auth)
+
+        then:
+        result.headers().firstValue('Authorization').orElse(null) == 'Bearer custom.jwt.token'
+    }
+
+    def 'canRefreshToken should check HxAuth configuration'() {
+        given:
+        def configWithUrl = HxConfig.newBuilder()
+                .bearerToken('default.jwt.token')
+                .refreshToken('default-refresh')
+                .refreshTokenUrl('https://example.com/oauth/token')
+                .build()
+        def configWithoutUrl = HxConfig.newBuilder().build()
+
+        expect:
+        // config has refreshUrl → can refresh if auth has refresh token
+        new HxTokenManager(configWithUrl).canRefreshToken(new DefaultHxAuth('a.b.c', 'refresh')) == true
+        new HxTokenManager(configWithUrl).canRefreshToken(new DefaultHxAuth('a.b.c', null)) == false
+        new HxTokenManager(configWithUrl).canRefreshToken(null) == false
+        // config has no refreshUrl, auth has no refreshUrl → cannot refresh
+        new HxTokenManager(configWithoutUrl).canRefreshToken(new DefaultHxAuth('a.b.c', 'refresh')) == false
+        // config has no refreshUrl, but auth carries its own refreshUrl → can refresh
+        new HxTokenManager(configWithoutUrl).canRefreshToken(new DefaultHxAuth('a.b.c', 'refresh', 'https://other.com/oauth/token')) == true
+        // auth has refreshUrl but no refresh token → cannot refresh
+        new HxTokenManager(configWithoutUrl).canRefreshToken(new DefaultHxAuth('a.b.c', null, 'https://other.com/oauth/token')) == false
+    }
+
+    def 'should accept custom token store'() {
+        given:
+        def customStore = new HxMapTokenStore()
+        def config = HxConfig.newBuilder().build()
+        def tokenManager = new HxTokenManager(config, customStore)
+        def auth = new DefaultHxAuth('my.jwt.token', 'refresh')
+
+        when:
+        tokenManager.getAuth(auth)
+
+        then:
+        customStore.get(auth.id()) == auth
+    }
+
+    def 'stateless request should resolve refreshed token by same id'() {
+        given: 'a token manager with a store'
+        def store = new HxMapTokenStore()
+        def config = HxConfig.newBuilder().build()
+        def tokenManager = new HxTokenManager(config, store)
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create('https://example.com/api'))
+                .GET()
+                .build()
+
+        and: 'initial auth is registered'
+        def originalAuth = new DefaultHxAuth('original.jwt.token', 'refresh1', 'https://example.com/oauth')
+        tokenManager.getAuth(originalAuth)
+
+        when: 'a token refresh updates the stored auth'
+        def refreshedAuth = originalAuth.withAccessToken('refreshed.jwt.token').withRefreshToken('refresh2')
+        store.put(originalAuth.id(), refreshedAuth)
+
+        and: 'a new stateless request creates auth from the same original credentials'
+        def newRequestAuth = new DefaultHxAuth('original.jwt.token', 'refresh1', 'https://example.com/oauth')
+
+        then: 'same credentials produce the same id'
+        newRequestAuth.id() == originalAuth.id()
+
+        and: 'getAuth returns the refreshed tokens from the store'
+        def resolved = tokenManager.getAuth(newRequestAuth)
+        resolved.accessToken() == 'refreshed.jwt.token'
+        resolved.refreshToken() == 'refresh2'
+
+        and: 'a request made with the old credentials is authenticated with the refreshed token'
+        def authedRequest = tokenManager.addAuthHeader(request, newRequestAuth)
+        authedRequest.headers().firstValue('Authorization').orElse(null) == 'Bearer refreshed.jwt.token'
     }
 }

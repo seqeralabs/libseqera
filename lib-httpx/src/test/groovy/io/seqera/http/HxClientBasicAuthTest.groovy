@@ -185,14 +185,14 @@ class HxClientBasicAuthTest extends Specification {
         
         then:
         client1.tokenManager.hasBasicAuth()
-        client1.tokenManager.basicAuthToken == "user:pass"
+        client1.config.basicAuthToken == "user:pass"
         
         when:
         def client2 = HxClient.newHxClient()  // No basic auth
         
         then:
         !client2.tokenManager.hasBasicAuth()
-        client2.tokenManager.basicAuthToken == null
+        client2.config.basicAuthToken == null
     }
 
     def "should preserve request properties when adding auth header"() {
