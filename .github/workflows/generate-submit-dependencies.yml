@@ -40,6 +40,7 @@ jobs:
           "lib-serde-jackson",
           "lib-trace",
           "lib-util-http",
+          "lib-util-string",
           "lib-jedis-pool",
           "lib-cmd-queue-redis",
           "lib-cloudinfo",

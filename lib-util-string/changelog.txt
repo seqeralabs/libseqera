@@ -1,0 +1,4 @@
+# lib-util-string changelog
+
+1.0.0 - 22 Feb 2026
+- Initial release with shared string utilities (emptiness/case checks, pattern matching, redaction, URL/path helpers, email validation)
