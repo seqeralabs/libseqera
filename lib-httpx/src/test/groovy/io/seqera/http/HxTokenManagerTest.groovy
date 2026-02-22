@@ -308,7 +308,7 @@ class HxTokenManagerTest extends Specification {
         tokenManager.getAuth(originalAuth)
 
         when: 'a token refresh updates the stored auth'
-        def refreshedAuth = originalAuth.withToken('refreshed.jwt.token').withRefresh('refresh2')
+        def refreshedAuth = originalAuth.withAccessToken('refreshed.jwt.token').withRefreshToken('refresh2')
         store.put(originalAuth.id(), refreshedAuth)
 
         and: 'a new stateless request creates auth from the same original credentials'

@@ -115,7 +115,7 @@ class HxTokenManager {
         this.config = config;
         this.tokenStore = tokenStore;
 
-        // Store initial tokens from config using DEFAULT_KEY
+        // Store initial tokens from config using DEFAULT_TOKEN
         final String jwtToken = config.getJwtToken();
         final String refreshToken = config.getRefreshToken();
         if (jwtToken != null && !jwtToken.isEmpty()) {
@@ -492,9 +492,9 @@ class HxTokenManager {
         final String newToken = extractTokenFromCookies(cookieManager);
         if (newToken != null) {
             final String newRefresh = extractRefreshFromCookies(cookieManager);
-            HxAuth result = auth.withToken(newToken);
+            HxAuth result = auth.withAccessToken(newToken);
             if (newRefresh != null) {
-                result = result.withRefresh(newRefresh);
+                result = result.withRefreshToken(newRefresh);
             }
             return result;
         }
@@ -523,9 +523,9 @@ class HxTokenManager {
             if (!isValidJwtToken(accessToken)) {
                 return null;
             }
-            HxAuth result = auth.withToken(accessToken);
+            HxAuth result = auth.withAccessToken(accessToken);
             if (json.has("refresh_token")) {
-                result = result.withRefresh(json.get("refresh_token").getAsString());
+                result = result.withRefreshToken(json.get("refresh_token").getAsString());
             }
             return result;
         } catch (Exception e) {

@@ -152,10 +152,12 @@ For applications managing multiple users or authentication contexts, use the `Hx
 | `accessToken()` | The current JWT access token |
 | `refreshToken()` | The refresh token (nullable) |
 | `refreshUrl()` | Per-auth refresh URL override (nullable, falls back to global config) |
-| `withToken(token)` | Returns an `HxAuth` with the updated access token (same `id`) |
-| `withRefresh(refresh)` | Returns an `HxAuth` with the updated refresh token (same `id`) |
+| `withAccessToken(token)` | Returns an `HxAuth` with the updated access token (same `id`) |
+| `withRefreshToken(refresh)` | Returns an `HxAuth` with the updated refresh token (same `id`) |
 
-Implementations must ensure `id()` remains constant — `withToken` and `withRefresh` return new instances preserving the same `id`.
+Implementations must ensure `id()` remains constant — `withAccessToken` and `withRefreshToken` return new instances preserving the same `id`.
+
+**Note:** The built-in `DefaultHxAuth` derives its `id()` from a 32-bit hash of the access token and refresh URL. This is suitable for simple scenarios with a small number of auth sessions. For production multi-tenant deployments, provide a custom `HxAuth` implementation with explicit, collision-free identifiers (e.g., user ID or tenant ID) to prevent token store collisions. Alternatively, a custom implementation could use a stronger hash such as SHA-256 or SipHash-2-4 (64-bit) for better collision resistance when explicit IDs are not practical.
 
 #### Custom `HxAuth` Implementation
 
@@ -179,12 +181,12 @@ public class TenantAuth implements HxAuth {
     @Override public String refreshUrl() { return null; }  // use global config
 
     @Override
-    public HxAuth withToken(String token) {
+    public HxAuth withAccessToken(String token) {
         return new TenantAuth(tenantId, token, refreshToken);
     }
 
     @Override
-    public HxAuth withRefresh(String refresh) {
+    public HxAuth withRefreshToken(String refresh) {
         return new TenantAuth(tenantId, accessToken, refresh);
     }
 }
@@ -325,6 +327,11 @@ HxClient client = HxClient.newBuilder()
 - **`AuthenticationScheme`**: Enumeration of supported authentication schemes (Basic, Bearer)
 - **`AuthenticationCallback`**: Interface for providing authentication credentials
 - **`WwwAuthenticateParser`**: RFC 7235 compliant parser for WWW-Authenticate headers
+
+## Future Improvements
+
+- **Inherit HTTP settings for token refresh client**: The internal `HttpClient` used for token refresh currently hardcodes `HTTP/1.1` and `Redirect.NORMAL`. It should inherit HTTP version, redirect policy, and other settings from the main client configuration.
+- **Reuse refresh `HttpClient` instances**: A new `HttpClient` (with its own thread pool) is created for each token refresh to prevent cross-user cookie leakage in multi-tenant scenarios. Under high concurrency with many auth sessions refreshing simultaneously, this could cause thread and file descriptor pressure. A per-auth-key cached client or a shared client with per-request cookie isolation could reduce this overhead.
 
 ## Dependencies
 

@@ -17,6 +17,7 @@
 
 package io.seqera.http;
 
+import java.time.Instant;
 import java.util.Objects;
 
 /**
@@ -25,12 +26,12 @@ import java.util.Objects;
  * <p>Stores JWT access token, refresh token, and refresh URL.
  * A stable {@link #id()} is derived from the initial {@code accessToken}
  * and {@code refreshUrl}, so that identical credentials always produce
- * the same id. The id is preserved through {@link #withToken(String)}
- * and {@link #withRefresh(String)}.
+ * the same id. The id is preserved through {@link #withAccessToken(String)}
+ * and {@link #withRefreshToken(String)}.
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-record DefaultHxAuth(String id, String accessToken, String refreshToken, String refreshUrl) implements HxAuth {
+record DefaultHxAuth(String id, String accessToken, String refreshToken, String refreshUrl, Instant createdAt, Instant updatedAt) implements HxAuth {
 
     DefaultHxAuth {
         if (accessToken == null) {
@@ -42,7 +43,7 @@ record DefaultHxAuth(String id, String accessToken, String refreshToken, String 
     }
 
     DefaultHxAuth(String accessToken, String refreshToken, String refreshUrl) {
-        this(computeId(accessToken, refreshUrl), accessToken, refreshToken, refreshUrl);
+        this(computeId(accessToken, refreshUrl), accessToken, refreshToken, refreshUrl, Instant.now(), Instant.now());
     }
 
     DefaultHxAuth(String accessToken, String refreshToken) {
@@ -50,13 +51,13 @@ record DefaultHxAuth(String id, String accessToken, String refreshToken, String 
     }
 
     @Override
-    public HxAuth withToken(String token) {
-        return new DefaultHxAuth(id, token, refreshToken, refreshUrl);
+    public HxAuth withAccessToken(String token) {
+        return new DefaultHxAuth(id, token, refreshToken, refreshUrl, createdAt, Instant.now());
     }
 
     @Override
-    public HxAuth withRefresh(String refresh) {
-        return new DefaultHxAuth(id, accessToken, refresh, refreshUrl);
+    public HxAuth withRefreshToken(String refresh) {
+        return new DefaultHxAuth(id, accessToken, refresh, refreshUrl, createdAt, Instant.now());
     }
 
     @Override

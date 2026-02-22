@@ -17,6 +17,7 @@
 
 package io.seqera.http;
 
+
 /**
  * Interface for JWT authentication credentials.
  *
@@ -24,7 +25,7 @@ package io.seqera.http;
  * refresh URL. The {@link #id()} method returns a stable identifier for the token
  * store that persists across token refreshes.
  *
- * <p>The {@link #withToken(String)} and {@link #withRefresh(String)} methods return
+ * <p>The {@link #withAccessToken(String)} and {@link #withRefreshToken(String)} methods return
  * an {@link HxAuth} with the updated token after a refresh operation.
  *
  * <p>A default implementation is provided by {@link DefaultHxAuth}.
@@ -58,8 +59,8 @@ public interface HxAuth {
      * Returns a stable identifier for this auth in the token store.
      *
      * <p>The key must remain constant across token refreshes so the same
-     * auth session can be tracked after {@link #withToken(String)} or
-     * {@link #withRefresh(String)} updates.
+     * auth session can be tracked after {@link #withAccessToken(String)} or
+     * {@link #withRefreshToken(String)} updates.
      *
      * @return the stable identifier
      */
@@ -71,7 +72,7 @@ public interface HxAuth {
      * @param token the new access token
      * @return an {@link HxAuth} with the updated token
      */
-    HxAuth withToken(String token);
+    HxAuth withAccessToken(String token);
 
     /**
      * Returns an {@link HxAuth} with the given refresh token.
@@ -79,6 +80,6 @@ public interface HxAuth {
      * @param refresh the new refresh token
      * @return an {@link HxAuth} with the updated refresh token
      */
-    HxAuth withRefresh(String refresh);
+    HxAuth withRefreshToken(String refresh);
 
 }

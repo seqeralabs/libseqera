@@ -69,8 +69,8 @@ class HxAuthTest extends Specification {
         auth1.id() != auth3.id()  // different accessToken = different id
         auth1.id() != auth4.id()  // different refreshUrl = different id
         auth4.id() != auth5.id()  // different refreshUrl = different id
-        auth1.id() == auth1.withToken('new.jwt.token').id()  // id stable across withToken
-        auth1.id() == auth1.withRefresh('new-refresh').id()  // id stable across withRefresh
+        auth1.id() == auth1.withAccessToken('new.jwt.token').id()  // id stable across withToken
+        auth1.id() == auth1.withRefreshToken('new-refresh').id()  // id stable across withRefresh
     }
 
     def 'should reject null access token'() {
