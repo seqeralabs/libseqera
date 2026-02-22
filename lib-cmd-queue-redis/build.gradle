@@ -32,9 +32,6 @@ dependencies {
     // JSON serialization
     implementation project(':lib-serde-jackson')
 
-    // Groovy (needed for AbstractMessageStream base class)
-    compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
-
     // Message stream
     implementation project(':lib-data-stream-redis')
     implementation project(':lib-serde-moshi')

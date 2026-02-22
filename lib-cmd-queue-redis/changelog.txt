@@ -1,5 +1,8 @@
 # lib-cmd-queue-redis changelog
 
+0.3.0 - 22 Feb 2026
+- Remove stale compileOnly Groovy dependency (AbstractMessageStream is now pure Java)
+
 0.2.0 - 5 Feb 2026
 - Add explicit start()/stop() lifecycle to CommandService
 - Replace @PostConstruct auto-start with caller-controlled queue consumption
