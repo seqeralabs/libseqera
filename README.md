@@ -19,6 +19,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-retry](lib-retry/)** - Retry mechanisms with exponential backoff
 - **[lib-trace](lib-trace/)** - Tracing and logging utilities
 - **[lib-util-http](lib-util-http/)** - HTTP utilities for debugging, header dumping, and sensitive data masking
+- **[lib-util-string](lib-util-string/)** - General-purpose string utilities (pattern matching, redaction, URL/path helpers, email validation)
 - **[lib-jedis-pool](lib-jedis-pool/)** - JedisPool factory with Micrometer metrics integration
 - **[lib-lock](lib-lock/)** - Distributed lock interface abstraction
 - **[lib-lock-redis](lib-lock-redis/)** - Redis-based distributed locking with Micronaut integration
