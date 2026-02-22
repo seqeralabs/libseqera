@@ -1,5 +1,8 @@
 # lib-httpx changelog
 
+2.2.0 - 22 Feb 2026
+- Add multi-tenant JWT auth support for HxClient
+
 2.1.1 - 3 Jan 2026
 - Change lib-retry from implementation to api dependency to expose retry types to consumers
 
