@@ -80,6 +80,7 @@ jobs:
           bash publish.sh lib-lock-redis
           bash publish.sh lib-httpx
           bash publish.sh lib-mail
+          bash publish.sh lib-pairing
           bash publish.sh lib-util-http
           bash publish.sh lib-util-string
           bash publish.sh lib-pool

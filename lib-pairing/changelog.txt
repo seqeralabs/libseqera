@@ -1,0 +1,14 @@
+# lib-pairing changelog
+
+1.0.0
+- Initial release of lib-pairing module extracted from Wave codebase
+- Implement PairingService with RSA key pair generation and management
+- Add PairingWebSocket server for WebSocket-based key exchange protocol
+- Add PairingChannel for message routing between WebSocket sessions and callers
+- Add PairingStore interface with Redis-backed state and future stores
+- Add PairingConfig interface for configurable key lease, duration, and channel timeouts
+- Add LicenseValidator integration for optional token validation on connect
+- Add PairingRecord for tracking pairing state (pairingId, public/private keys, endpoint)
+- Add exchange message types (PairingRequest, PairingResponse)
+- Add heartbeat support for connection liveness detection
+- Support deny-host filtering for endpoint access control

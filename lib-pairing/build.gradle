@@ -1,0 +1,74 @@
+/*
+ * Copyright 2026, Seqera Labs
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+plugins {
+    id 'io.seqera.java-library-conventions'
+    id 'io.seqera.groovy-library-conventions'
+    // Micronaut minimal lib
+    // https://micronaut-projects.github.io/micronaut-gradle-plugin/latest/
+    id "io.micronaut.minimal.library" version '4.5.3'
+}
+
+group = 'io.seqera'
+version = "${project.file('VERSION').text.trim()}"
+
+dependencies {
+    // Core dependencies
+    api project(':lib-crypto')
+    api project(':lib-random')
+    api project(':lib-serde')
+
+    // State/Queue stores
+    implementation project(':lib-lang')
+    implementation project(':lib-retry')
+    implementation project(':lib-data-store-state-redis')
+    implementation project(':lib-data-store-future-redis')
+    implementation project(':lib-data-queue-redis')
+    implementation project(':lib-serde-moshi')
+
+    // Micronaut
+    compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
+    implementation "io.micronaut:micronaut-websocket:${micronautCoreVersion}"
+    implementation "io.micronaut:micronaut-runtime:${micronautCoreVersion}"
+    implementation "io.micronaut:micronaut-http-client:${micronautCoreVersion}"
+
+    // Jakarta APIs
+    implementation 'jakarta.annotation:jakarta.annotation-api:3.0.0'
+    implementation 'jakarta.validation:jakarta.validation-api:3.0.2'
+
+    // Caching
+    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+
+    // JSON
+    implementation 'com.squareup.moshi:moshi:1.15.2'
+    implementation 'com.squareup.moshi:moshi-adapters:1.15.2'
+    implementation 'com.fasterxml.jackson.core:jackson-annotations:2.17.2'
+
+    // Testing
+    testImplementation testFixtures(project(':lib-fixtures-redis'))
+    testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
+    testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
+}
+
+micronaut {
+    version '4.8.3'
+    runtime("netty")
+    processing {
+        incremental(true)
+    }
+    importMicronautPlatform = false
+}

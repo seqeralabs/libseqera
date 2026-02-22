@@ -24,8 +24,6 @@ pluginManagement {
 
 
 rootProject.name = 'libseqera'
-include('wave-api')
-include('wave-utils')
 include('lib-activator')
 include('lib-crypto')
 include('lib-commons-io')
@@ -59,4 +57,5 @@ include('lib-jedis-pool')
 include('lib-cmd-queue-redis')
 include('lib-cloudinfo')
 include('lib-hashx')
+include('lib-pairing')
 
