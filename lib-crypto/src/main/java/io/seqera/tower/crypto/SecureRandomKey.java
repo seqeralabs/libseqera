@@ -15,32 +15,31 @@
  *
  */
 
-package io.seqera.tower.crypto
+package io.seqera.tower.crypto;
 
-import java.security.SecureRandom
-
-import groovy.transform.CompileStatic
+import java.security.SecureRandom;
+import java.util.Base64;
 
 /**
  * Generate a secure random key
  *
  * Inspired to https://neilmadden.blog/2018/08/30/moving-away-from-uuids/
  */
-@CompileStatic
-class SecureRandomKey {
+public class SecureRandomKey {
 
     protected static final SecureRandom random = new SecureRandom();
-    protected static final Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding()
-    protected static final Base64.Decoder decoder = Base64.getUrlDecoder()
+    protected static final Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
+    protected static final Base64.Decoder decoder = Base64.getUrlDecoder();
 
-    static String generate() {
-        byte[] buffer = new byte[16]
-        random.nextBytes(buffer)
-        return encoder.encodeToString(buffer)
+    private SecureRandomKey() {}
+
+    public static String generate() {
+        byte[] buffer = new byte[16];
+        random.nextBytes(buffer);
+        return encoder.encodeToString(buffer);
     }
 
-    static byte[] fromString(String key) {
-        decoder.decode(key)
+    public static byte[] fromString(String key) {
+        return decoder.decode(key);
     }
-
 }
