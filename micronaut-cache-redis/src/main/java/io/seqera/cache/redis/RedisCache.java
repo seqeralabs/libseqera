@@ -70,6 +70,7 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
     private final Long invalidateScanCount;
     private final Long earlyRevalidationWindowMs;
     private final double revalidationSteepness;
+    private final CacheValueEncryptor encryptor;
     private final ExecutorService asyncExecutor;
     private final RedisAsyncCache asyncCache;
 
@@ -133,6 +134,16 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                 ? 1.0 / (earlyRevalidationWindowMs / 1000.0)
                 : 0.0;
 
+        this.encryptor = redisCacheConfiguration.getEncryptionPassword()
+                .map(password -> {
+                    String salt = redisCacheConfiguration.getEncryptionSalt()
+                            .orElseThrow(() -> new ConfigurationException(
+                                    "Redis cache '" + redisCacheConfiguration.getCacheName()
+                                    + "' has encryption.password set but encryption.salt is missing"));
+                    return new CacheValueEncryptor(password, salt);
+                })
+                .orElse(null);
+
         this.asyncExecutor = Executors.newCachedThreadPool();
         this.asyncCache = new RedisAsyncCache();
     }
@@ -159,7 +170,7 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
             }
             if (data != null) {
                 log.trace("Cache '{}' HIT key={}", getName(), key);
-                return valueSerializer.deserialize(data, requiredType);
+                return valueSerializer.deserialize(decryptValue(data), requiredType);
             }
             log.trace("Cache '{}' MISS key={}", getName(), key);
             return Optional.empty();
@@ -179,7 +190,7 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                 putValue(serializedKey, value);
                 return value;
             }
-            Optional<T> deserialized = valueSerializer.deserialize(data, requiredType);
+            Optional<T> deserialized = valueSerializer.deserialize(decryptValue(data), requiredType);
             if (deserialized.isEmpty()) {
                 log.trace("Cache '{}' MISS key={}, invoking supplier", getName(), key);
                 T value = supplier.get();
@@ -211,7 +222,7 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
             byte[] existingData = jedis.get(serializedKey);
             if (existingData != null) {
                 log.trace("Cache '{}' PUT-IF-ABSENT key={} already exists, returning existing value", getName(), key);
-                return valueSerializer.deserialize(existingData, Argument.of((Class<T>) value.getClass()));
+                return valueSerializer.deserialize(decryptValue(existingData), Argument.of((Class<T>) value.getClass()));
             }
             log.trace("Cache '{}' PUT-IF-ABSENT key={} storing new value", getName(), key);
             putValue(serializedKey, value);
@@ -283,6 +294,14 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                 .orElseThrow(() -> new IllegalArgumentException("Key cannot be null"));
     }
 
+    protected byte[] encryptValue(byte[] data) {
+        return encryptor != null ? encryptor.encrypt(data) : data;
+    }
+
+    protected byte[] decryptValue(byte[] data) {
+        return encryptor != null ? encryptor.decrypt(data) : data;
+    }
+
     /**
      * Get the Redis key pattern for this cache.
      *
@@ -303,7 +322,7 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
         Optional<byte[]> serialized = valueSerializer.serialize(value);
         try (Jedis jedis = jedisPool.getResource()) {
             if (serialized.isPresent()) {
-                byte[] bytes = serialized.get();
+                byte[] bytes = encryptValue(serialized.get());
                 if (expireAfterWritePolicy != null) {
                     long ttl = expireAfterWritePolicy.getExpirationAfterWrite(value);
                     log.trace("Cache '{}' storing value with TTL={}ms, size={} bytes", getName(), ttl, bytes.length);

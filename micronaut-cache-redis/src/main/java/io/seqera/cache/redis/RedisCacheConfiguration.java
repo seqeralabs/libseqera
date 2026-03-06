@@ -22,6 +22,8 @@ import io.micronaut.context.annotation.Parameter;
 import io.micronaut.context.annotation.Requires;
 import io.micronaut.runtime.ApplicationConfiguration;
 
+import java.util.Optional;
+
 /**
  * Configuration for individual Redis caches.
  * Each named cache under 'redis.caches' creates an instance of this configuration.
@@ -33,6 +35,9 @@ import io.micronaut.runtime.ApplicationConfiguration;
 public class RedisCacheConfiguration extends AbstractRedisCacheConfiguration {
 
     protected final String cacheName;
+
+    protected String encryptionPassword;
+    protected String encryptionSalt;
 
     /**
      * Constructor.
@@ -50,5 +55,21 @@ public class RedisCacheConfiguration extends AbstractRedisCacheConfiguration {
      */
     public String getCacheName() {
         return cacheName;
+    }
+
+    public Optional<String> getEncryptionPassword() {
+        return Optional.ofNullable(encryptionPassword);
+    }
+
+    public void setEncryptionPassword(String encryptionPassword) {
+        this.encryptionPassword = encryptionPassword;
+    }
+
+    public Optional<String> getEncryptionSalt() {
+        return Optional.ofNullable(encryptionSalt);
+    }
+
+    public void setEncryptionSalt(String encryptionSalt) {
+        this.encryptionSalt = encryptionSalt;
     }
 }
