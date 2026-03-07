@@ -17,9 +17,7 @@
 package io.seqera.cache.redis;
 
 import javax.crypto.Cipher;
-import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -28,9 +26,12 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
+import io.seqera.tower.crypto.CryptoHelper;
+
 /**
  * AES-256-CBC encryptor for Redis cache values.
- * Derives a 256-bit key from a password and salt using PBKDF2WithHmacSHA256.
+ * Derives a 256-bit key from a password and cache name using PBKDF2WithHmacSHA256
+ * via {@link CryptoHelper#deriveKey(String, byte[])}.
  * Each encryption prepends a random 16-byte IV to the ciphertext.
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
@@ -45,16 +46,7 @@ public class CacheValueEncryptor {
 
     public CacheValueEncryptor(String password, String cacheName) {
         byte[] salt = deriveSalt(cacheName);
-        PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, 65536, 256);
-        try {
-            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            byte[] keyBytes = factory.generateSecret(spec).getEncoded();
-            this.secretKey = new SecretKeySpec(keyBytes, "AES");
-        } catch (GeneralSecurityException e) {
-            throw new RuntimeException("Failed to derive encryption key", e);
-        } finally {
-            spec.clearPassword();
-        }
+        this.secretKey = CryptoHelper.deriveKey(password, salt);
     }
 
     public byte[] encrypt(byte[] data) {

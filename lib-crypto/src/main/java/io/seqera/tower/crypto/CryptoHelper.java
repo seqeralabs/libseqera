@@ -93,6 +93,27 @@ public class CryptoHelper {
     }
 
     /**
+     * Derive an AES-256 SecretKeySpec from a password and salt using PBKDF2WithHmacSHA256.
+     *
+     * @param password the password
+     * @param salt the salt (16 bytes recommended)
+     * @return the derived AES key
+     */
+    public static SecretKeySpec deriveKey(String password, byte[] salt) {
+        PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, 65536, 256);
+        try {
+            byte[] keyBytes = factory.generateSecret(spec).getEncoded();
+            return new SecretKeySpec(keyBytes, "AES");
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Key derivation failed", e);
+        } finally {
+            spec.clearPassword();
+        }
+    }
+
+    /**
      * Salt generator i.e. random piece of data
      */
     public static byte[] rndSalt() {
