@@ -41,7 +41,8 @@ redis:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `encryption-secret` | String | Password for AES-256 value encryption (per-cache only, disabled if absent) |
+| `encryption.enabled` | boolean | Enable AES-256 value encryption (per-cache only, default: false) |
+| `encryption.secret` | String | Passphrase for encryption key derivation (required when encryption is enabled) |
 | `expire-after-write` | Duration | TTL after writing a value |
 | `expire-after-access` | Duration | TTL after accessing a value (touch-based) |
 | `expiration-after-write-policy` | String | Custom policy class name |
@@ -237,17 +238,19 @@ Cache values can be encrypted at rest in Redis using AES-256-CBC. When enabled, 
 
 ### Enabling Encryption
 
-Set `encryption-secret` on any cache:
+Set `encryption.enabled` and `encryption.secret` on any cache:
 
 ```yaml
 redis:
   caches:
     sensitive-cache:
       expire-after-write: 1h
-      encryption-secret: "my-secret-passphrase"
+      encryption:
+        enabled: true
+        secret: "my-secret-passphrase"
 ```
 
-When `encryption-secret` is absent, the cache operates without encryption (default behavior).
+When `encryption.enabled` is `false` (the default), the cache operates without encryption.
 
 ### How It Works
 

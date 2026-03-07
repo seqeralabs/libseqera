@@ -17,12 +17,11 @@
 package io.seqera.cache.redis;
 
 import io.micronaut.cache.SyncCache;
+import io.micronaut.context.annotation.ConfigurationProperties;
 import io.micronaut.context.annotation.EachProperty;
 import io.micronaut.context.annotation.Parameter;
 import io.micronaut.context.annotation.Requires;
 import io.micronaut.runtime.ApplicationConfiguration;
-
-import java.util.Optional;
 
 /**
  * Configuration for individual Redis caches.
@@ -36,7 +35,7 @@ public class RedisCacheConfiguration extends AbstractRedisCacheConfiguration {
 
     protected final String cacheName;
 
-    protected String encryptionSecret;
+    private EncryptionConfiguration encryption = new EncryptionConfiguration();
 
     /**
      * Constructor.
@@ -56,13 +55,56 @@ public class RedisCacheConfiguration extends AbstractRedisCacheConfiguration {
         return cacheName;
     }
 
-    public Optional<String> getEncryptionSecret() {
-        return Optional.ofNullable(encryptionSecret);
+    /**
+     * @return The encryption configuration for this cache
+     */
+    public EncryptionConfiguration getEncryption() {
+        return encryption;
     }
 
-    public void setEncryptionSecret(String encryptionSecret) {
-        this.encryptionSecret = encryptionSecret;
+    /**
+     * @param encryption The encryption configuration
+     */
+    public void setEncryption(EncryptionConfiguration encryption) {
+        this.encryption = encryption;
     }
 
+    /**
+     * Nested configuration for cache value encryption.
+     * Configured under {@code redis.caches.<name>.encryption}.
+     */
+    @ConfigurationProperties("encryption")
+    public static class EncryptionConfiguration {
 
+        private boolean enabled = false;
+        private String secret;
+
+        /**
+         * @return Whether encryption is enabled for this cache (default: false)
+         */
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        /**
+         * @param enabled Whether to enable encryption
+         */
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        /**
+         * @return The secret passphrase used to derive the AES-256 encryption key
+         */
+        public String getSecret() {
+            return secret;
+        }
+
+        /**
+         * @param secret The secret passphrase
+         */
+        public void setSecret(String secret) {
+            this.secret = secret;
+        }
+    }
 }

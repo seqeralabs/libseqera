@@ -429,7 +429,8 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
         given:
         def ctx = ApplicationContext.run([
                 'redis.caches.encrypted-cache.expire-after-write': '1h',
-                'redis.caches.encrypted-cache.encryption-secret': 'test-secret-password',
+                'redis.caches.encrypted-cache.encryption.enabled': true,
+                'redis.caches.encrypted-cache.encryption.secret': 'test-secret-password',
         ], 'test')
         def cache = ctx.getBean(RedisCache, Qualifiers.byName("encrypted-cache"))
 
@@ -449,7 +450,8 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
         given:
         def ctx = ApplicationContext.run([
                 'redis.caches.enc-verify-cache.expire-after-write': '1h',
-                'redis.caches.enc-verify-cache.encryption-secret': 'test-secret-password',
+                'redis.caches.enc-verify-cache.encryption.enabled': true,
+                'redis.caches.enc-verify-cache.encryption.secret': 'test-secret-password',
         ], 'test')
         def cache = ctx.getBean(RedisCache, Qualifiers.byName("enc-verify-cache"))
 
@@ -479,6 +481,20 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
         cleanup:
         ctx.stop()
         ctx2.stop()
+    }
+
+    def 'should fail when encryption enabled but secret is missing'() {
+        when:
+        def ctx = ApplicationContext.run([
+                'redis.caches.bad-enc-cache.encryption.enabled': true,
+        ], 'test')
+        ctx.getBean(RedisCache, Qualifiers.byName("bad-enc-cache"))
+
+        then:
+        thrown(Exception)
+
+        cleanup:
+        ctx?.stop()
     }
 
     def 'should work without encryption (backward compatible)'() {
