@@ -22,9 +22,7 @@ class CacheValueEncryptorTest extends Specification {
 
     def 'should encrypt and decrypt data'() {
         given:
-        def password = 'my-secret-password'
-        def salt = Base64.encoder.encodeToString(new byte[16])
-        def encryptor = new CacheValueEncryptor(password, salt)
+        def encryptor = new CacheValueEncryptor('my-secret-password', 'my-cache')
         def original = 'Hello, World!'.bytes
 
         when:
@@ -38,7 +36,7 @@ class CacheValueEncryptorTest extends Specification {
 
     def 'should produce different ciphertexts for same input (random IV)'() {
         given:
-        def encryptor = new CacheValueEncryptor('password', Base64.encoder.encodeToString(new byte[16]))
+        def encryptor = new CacheValueEncryptor('password', 'my-cache')
         def original = 'same data'.bytes
 
         when:
@@ -55,9 +53,8 @@ class CacheValueEncryptorTest extends Specification {
 
     def 'should fail to decrypt with wrong password'() {
         given:
-        def salt = Base64.encoder.encodeToString(new byte[16])
-        def encryptor1 = new CacheValueEncryptor('password1', salt)
-        def encryptor2 = new CacheValueEncryptor('password2', salt)
+        def encryptor1 = new CacheValueEncryptor('password1', 'my-cache')
+        def encryptor2 = new CacheValueEncryptor('password2', 'my-cache')
         def original = 'secret data'.bytes
 
         when:
@@ -68,13 +65,10 @@ class CacheValueEncryptorTest extends Specification {
         thrown(RuntimeException)
     }
 
-    def 'should fail to decrypt with wrong salt'() {
+    def 'should fail to decrypt with different cache name'() {
         given:
-        def salt1 = Base64.encoder.encodeToString(new byte[16])
-        def salt2Bytes = new byte[16]; salt2Bytes[0] = 1
-        def salt2 = Base64.encoder.encodeToString(salt2Bytes)
-        def encryptor1 = new CacheValueEncryptor('password', salt1)
-        def encryptor2 = new CacheValueEncryptor('password', salt2)
+        def encryptor1 = new CacheValueEncryptor('password', 'cache-a')
+        def encryptor2 = new CacheValueEncryptor('password', 'cache-b')
         def original = 'secret data'.bytes
 
         when:
@@ -87,7 +81,7 @@ class CacheValueEncryptorTest extends Specification {
 
     def 'should handle empty byte array'() {
         given:
-        def encryptor = new CacheValueEncryptor('password', Base64.encoder.encodeToString(new byte[16]))
+        def encryptor = new CacheValueEncryptor('password', 'my-cache')
         def original = new byte[0]
 
         when:
@@ -96,13 +90,5 @@ class CacheValueEncryptorTest extends Specification {
 
         then:
         decrypted == original
-    }
-
-    def 'should reject invalid salt'() {
-        when:
-        new CacheValueEncryptor('password', Base64.encoder.encodeToString(new byte[8]))
-
-        then:
-        thrown(IllegalArgumentException)
     }
 }

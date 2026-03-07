@@ -135,13 +135,7 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                 : 0.0;
 
         this.encryptor = redisCacheConfiguration.getEncryptionPassword()
-                .map(password -> {
-                    String salt = redisCacheConfiguration.getEncryptionSalt()
-                            .orElseThrow(() -> new ConfigurationException(
-                                    "Redis cache '" + redisCacheConfiguration.getCacheName()
-                                    + "' has encryption.password set but encryption.salt is missing"));
-                    return new CacheValueEncryptor(password, salt);
-                })
+                .map(password -> new CacheValueEncryptor(password, redisCacheConfiguration.getCacheName()))
                 .orElse(null);
 
         this.asyncExecutor = Executors.newCachedThreadPool();

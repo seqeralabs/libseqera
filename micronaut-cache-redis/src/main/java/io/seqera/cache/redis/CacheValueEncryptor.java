@@ -21,9 +21,12 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.util.Base64;
+import java.util.Arrays;
 
 /**
  * AES-256-CBC encryptor for Redis cache values.
@@ -40,16 +43,8 @@ public class CacheValueEncryptor {
 
     private final SecretKeySpec secretKey;
 
-    public CacheValueEncryptor(String password, String saltBase64) {
-        byte[] salt;
-        try {
-            salt = Base64.getDecoder().decode(saltBase64);
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid base64 salt: " + e.getMessage(), e);
-        }
-        if (salt.length != SALT_LENGTH) {
-            throw new IllegalArgumentException("Salt must be " + SALT_LENGTH + " bytes, got " + salt.length);
-        }
+    public CacheValueEncryptor(String password, String cacheName) {
+        byte[] salt = deriveSalt(cacheName);
         try {
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, 65536, 256);
@@ -85,6 +80,16 @@ public class CacheValueEncryptor {
             return cipher.doFinal(data, IV_LENGTH, data.length - IV_LENGTH);
         } catch (GeneralSecurityException e) {
             throw new RuntimeException("Decryption failed", e);
+        }
+    }
+
+    private static byte[] deriveSalt(String cacheName) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(cacheName.getBytes(StandardCharsets.UTF_8));
+            return Arrays.copyOf(hash, SALT_LENGTH);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
         }
     }
 }

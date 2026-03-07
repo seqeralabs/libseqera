@@ -24,7 +24,6 @@ import redis.clients.jedis.JedisPool
 import spock.lang.Shared
 import spock.lang.Specification
 
-import java.util.Base64
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -431,7 +430,6 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
         def ctx = ApplicationContext.run([
                 'redis.caches.encrypted-cache.expire-after-write': '1h',
                 'redis.caches.encrypted-cache.encryption-password': 'test-secret-password',
-                'redis.caches.encrypted-cache.encryption-salt': Base64.encoder.encodeToString(new byte[16]),
         ], 'test')
         def cache = ctx.getBean(RedisCache, Qualifiers.byName("encrypted-cache"))
 
@@ -452,7 +450,6 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
         def ctx = ApplicationContext.run([
                 'redis.caches.enc-verify-cache.expire-after-write': '1h',
                 'redis.caches.enc-verify-cache.encryption-password': 'test-secret-password',
-                'redis.caches.enc-verify-cache.encryption-salt': Base64.encoder.encodeToString(new byte[16]),
         ], 'test')
         def cache = ctx.getBean(RedisCache, Qualifiers.byName("enc-verify-cache"))
 
@@ -482,20 +479,6 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
         cleanup:
         ctx.stop()
         ctx2.stop()
-    }
-
-    def 'should fail when encryption password is set but salt is missing'() {
-        when:
-        def ctx = ApplicationContext.run([
-                'redis.caches.bad-enc-cache.encryption-password': 'test-password',
-        ], 'test')
-        ctx.getBean(RedisCache, Qualifiers.byName("bad-enc-cache"))
-
-        then:
-        thrown(Exception)
-
-        cleanup:
-        ctx?.stop()
     }
 
     def 'should work without encryption (backward compatible)'() {
