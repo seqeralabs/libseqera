@@ -1,0 +1,12 @@
+# lib-crypto changelog
+
+1.1.0
+- Convert all source files from Groovy to Java (tests remain Groovy/Spock)
+- Add static encrypt(SecretKeySpec, byte[]) and decrypt(SecretKeySpec, Sealed) methods to CryptoHelper
+- Add deriveKey(String, byte[]) static method for PBKDF2WithHmacSHA256 key derivation
+- Add bounds check in Sealed.deserialize() for null/short input
+- Fix PBEKeySpec.clearPassword() not called in instance encrypt/decrypt methods
+- Fix cipher string casing inconsistency (PKCS5PADDING → PKCS5Padding)
+
+1.0.0
+- Initial release with CryptoHelper, Sealed, AsymmetricCipher, EncryptedPacket, HmacSha1Signature, SecureRandomKey, TokenHelper
