@@ -301,7 +301,13 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
     }
 
     protected byte[] decryptValue(byte[] data) {
-        return encryptor != null ? encryptor.decrypt(data) : data;
+        if (encryptor == null) return data;
+        try {
+            return encryptor.decrypt(data);
+        } catch (RuntimeException e) {
+            log.warn("Cache '{}' decryption failed, treating as miss", getName(), e);
+            return null;
+        }
     }
 
     /**

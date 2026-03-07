@@ -45,13 +45,15 @@ public class CacheValueEncryptor {
 
     public CacheValueEncryptor(String password, String cacheName) {
         byte[] salt = deriveSalt(cacheName);
+        PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, 65536, 256);
         try {
             SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, 65536, 256);
             byte[] keyBytes = factory.generateSecret(spec).getEncoded();
             this.secretKey = new SecretKeySpec(keyBytes, "AES");
         } catch (GeneralSecurityException e) {
             throw new RuntimeException("Failed to derive encryption key", e);
+        } finally {
+            spec.clearPassword();
         }
     }
 
@@ -72,6 +74,9 @@ public class CacheValueEncryptor {
     }
 
     public byte[] decrypt(byte[] data) {
+        if (data == null || data.length < IV_LENGTH) {
+            throw new IllegalArgumentException("Encrypted data is too short or null (expected at least " + IV_LENGTH + " bytes)");
+        }
         try {
             byte[] iv = new byte[IV_LENGTH];
             System.arraycopy(data, 0, iv, 0, IV_LENGTH);
