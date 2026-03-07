@@ -47,7 +47,7 @@ class SealedTest extends Specification {
         when:
         new Sealed(data, [1, 2, 3] as byte[])
         then:
-        thrown(AssertionError)
+        thrown(IllegalArgumentException)
     }
 
 }

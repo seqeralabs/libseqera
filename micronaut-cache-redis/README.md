@@ -11,6 +11,7 @@ A Micronaut cache implementation using the Jedis Redis driver, providing drop-in
 - Custom expiration policy support
 - Async cache operations via `AsyncCache`
 - Probabilistic early revalidation to prevent cache stampedes (opt-in)
+- Optional AES-256 encryption of cache values (per-cache)
 
 ## Installation
 
@@ -40,6 +41,8 @@ redis:
 
 | Property | Type | Description |
 |----------|------|-------------|
+| `encryption.enabled` | boolean | Enable AES-256 value encryption (per-cache only, default: false) |
+| `encryption.secret` | String | Passphrase for encryption key derivation (required when encryption is enabled) |
 | `expire-after-write` | Duration | TTL after writing a value |
 | `expire-after-access` | Duration | TTL after accessing a value (touch-based) |
 | `expiration-after-write-policy` | String | Custom policy class name |
@@ -228,6 +231,39 @@ redis:
     my-cache:
       expiration-after-write-policy: com.example.TypeBasedExpirationPolicy
 ```
+
+## Value Encryption
+
+Cache values can be encrypted at rest in Redis using AES-256-CBC. When enabled, values are encrypted after serialization on write and decrypted before deserialization on read. This is configured per-cache.
+
+### Enabling Encryption
+
+Set `encryption.enabled` and `encryption.secret` on any cache:
+
+```yaml
+redis:
+  caches:
+    sensitive-cache:
+      expire-after-write: 1h
+      encryption:
+        enabled: true
+        secret: "my-secret-passphrase"
+```
+
+When `encryption.enabled` is `false` (the default), the cache operates without encryption.
+
+### How It Works
+
+- At cache startup, a 256-bit AES key is derived from the password using **PBKDF2WithHmacSHA256** (65536 iterations). The salt is derived deterministically from the cache name via SHA-256, so the same password + cache name always produces the same key, while different cache names produce different keys.
+- On each `put`, a random 16-byte IV is generated and prepended to the AES-CBC ciphertext before storing in Redis.
+- On each `get`, the IV is split from the stored bytes and used to decrypt.
+- Encryption is transparent to application code — `@Cacheable`, `SyncCache`, and `AsyncCache` all work unchanged.
+
+### Considerations
+
+- **Performance**: Key derivation happens once at startup. Per-operation overhead is only the AES encrypt/decrypt, which is fast for typical cache values.
+- **Key rotation**: Changing the password invalidates all existing cached entries (they will fail to decrypt and be treated as cache misses). Plan for a cache flush when rotating secrets.
+- **Scope**: Only values are encrypted. Keys are not encrypted (they must remain readable for Redis key operations like SCAN).
 
 ## Probabilistic Early Revalidation
 

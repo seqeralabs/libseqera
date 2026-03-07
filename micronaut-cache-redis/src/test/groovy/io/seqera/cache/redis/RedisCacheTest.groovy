@@ -423,6 +423,93 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
         ctx.stop()
     }
 
+    // --- Encryption tests ---
+
+    def 'should put and get encrypted value'() {
+        given:
+        def ctx = ApplicationContext.run([
+                'redis.caches.encrypted-cache.expire-after-write': '1h',
+                'redis.caches.encrypted-cache.encryption.enabled': true,
+                'redis.caches.encrypted-cache.encryption.secret': 'test-secret-password',
+        ], 'test')
+        def cache = ctx.getBean(RedisCache, Qualifiers.byName("encrypted-cache"))
+
+        when:
+        cache.put("enc-key1", new TestObject(name: "encrypted-value"))
+        def result = cache.get("enc-key1", TestObject)
+
+        then:
+        result.isPresent()
+        result.get().name == "encrypted-value"
+
+        cleanup:
+        ctx.stop()
+    }
+
+    def 'should store encrypted data in redis that differs from plaintext'() {
+        given:
+        def ctx = ApplicationContext.run([
+                'redis.caches.enc-verify-cache.expire-after-write': '1h',
+                'redis.caches.enc-verify-cache.encryption.enabled': true,
+                'redis.caches.enc-verify-cache.encryption.secret': 'test-secret-password',
+        ], 'test')
+        def cache = ctx.getBean(RedisCache, Qualifiers.byName("enc-verify-cache"))
+
+        and: 'also create an unencrypted cache for comparison'
+        def ctx2 = ApplicationContext.run([
+                'redis.caches.plain-verify-cache.expire-after-write': '1h',
+        ], 'test')
+        def plainCache = ctx2.getBean(RedisCache, Qualifiers.byName("plain-verify-cache"))
+
+        when:
+        cache.put("verify-key", new TestObject(name: "test-data"))
+        plainCache.put("verify-key", new TestObject(name: "test-data"))
+
+        and: 'read raw bytes from Redis for both'
+        byte[] encRaw
+        byte[] plainRaw
+        cache.getNativeCache().getResource().withCloseable { jedis ->
+            encRaw = jedis.get(cache.serializeKey("verify-key"))
+        }
+        plainCache.getNativeCache().getResource().withCloseable { jedis ->
+            plainRaw = jedis.get(plainCache.serializeKey("verify-key"))
+        }
+
+        then: 'encrypted raw data should differ from plaintext raw data'
+        encRaw != plainRaw
+
+        cleanup:
+        ctx.stop()
+        ctx2.stop()
+    }
+
+    def 'should fail when encryption enabled but secret is missing'() {
+        when:
+        def ctx = ApplicationContext.run([
+                'redis.caches.bad-enc-cache.encryption.enabled': true,
+        ], 'test')
+        ctx.getBean(RedisCache, Qualifiers.byName("bad-enc-cache"))
+
+        then:
+        thrown(Exception)
+
+        cleanup:
+        ctx?.stop()
+    }
+
+    def 'should work without encryption (backward compatible)'() {
+        given:
+        def cache = context.getBean(RedisCache, Qualifiers.byName("test-cache"))
+
+        when:
+        cache.put("compat-key", new TestObject(name: "plain-value"))
+        def result = cache.get("compat-key", TestObject)
+
+        then:
+        result.isPresent()
+        result.get().name == "plain-value"
+    }
+
     static class TestObject implements Serializable {
         String name
     }
