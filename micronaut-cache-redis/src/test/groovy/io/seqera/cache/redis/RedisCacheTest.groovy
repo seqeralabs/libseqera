@@ -429,7 +429,7 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
         given:
         def ctx = ApplicationContext.run([
                 'redis.caches.encrypted-cache.expire-after-write': '1h',
-                'redis.caches.encrypted-cache.encryption-password': 'test-secret-password',
+                'redis.caches.encrypted-cache.encryption-secret': 'test-secret-password',
         ], 'test')
         def cache = ctx.getBean(RedisCache, Qualifiers.byName("encrypted-cache"))
 
@@ -449,7 +449,7 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
         given:
         def ctx = ApplicationContext.run([
                 'redis.caches.enc-verify-cache.expire-after-write': '1h',
-                'redis.caches.enc-verify-cache.encryption-password': 'test-secret-password',
+                'redis.caches.enc-verify-cache.encryption-secret': 'test-secret-password',
         ], 'test')
         def cache = ctx.getBean(RedisCache, Qualifiers.byName("enc-verify-cache"))
 

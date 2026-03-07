@@ -134,7 +134,7 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                 ? 1.0 / (earlyRevalidationWindowMs / 1000.0)
                 : 0.0;
 
-        this.encryptor = redisCacheConfiguration.getEncryptionPassword()
+        this.encryptor = redisCacheConfiguration.getEncryptionSecret()
                 .map(password -> new CacheValueEncryptor(password, redisCacheConfiguration.getCacheName()))
                 .orElse(null);
 

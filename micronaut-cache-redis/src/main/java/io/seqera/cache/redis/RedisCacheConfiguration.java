@@ -36,7 +36,7 @@ public class RedisCacheConfiguration extends AbstractRedisCacheConfiguration {
 
     protected final String cacheName;
 
-    protected String encryptionPassword;
+    protected String encryptionSecret;
 
     /**
      * Constructor.
@@ -56,12 +56,12 @@ public class RedisCacheConfiguration extends AbstractRedisCacheConfiguration {
         return cacheName;
     }
 
-    public Optional<String> getEncryptionPassword() {
-        return Optional.ofNullable(encryptionPassword);
+    public Optional<String> getEncryptionSecret() {
+        return Optional.ofNullable(encryptionSecret);
     }
 
-    public void setEncryptionPassword(String encryptionPassword) {
-        this.encryptionPassword = encryptionPassword;
+    public void setEncryptionSecret(String encryptionSecret) {
+        this.encryptionSecret = encryptionSecret;
     }
 
 
