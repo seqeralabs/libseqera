@@ -1,5 +1,13 @@
 # micronaut-cache-redis changelog
 
+0.3.0
+- Optional AES-256-CBC encryption of cache values (per-cache)
+- Configured via `encryption.enabled` and `encryption.secret` nested properties
+- Key derived once at startup via PBKDF2WithHmacSHA256 (65536 iterations)
+- Deterministic salt derived from cache name (SHA-256)
+- Random 16-byte IV per encrypt, prepended to ciphertext
+- Graceful decryption failure handling (treats as cache miss for key rotation)
+
 0.2.0
 - Probabilistic early revalidation: opt-in cache stampede prevention via `early-revalidation-window` config property
 - Based on exponential probability function p = e^(-λ × remainingSeconds) from https://blog.cloudflare.com/sometimes-i-cache/
