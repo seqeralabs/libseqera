@@ -59,36 +59,52 @@ public class CryptoHelper {
     }
 
     public Sealed encrypt(byte[] bytesToEncrypt, byte[] salt) {
-        try {
-            PBEKeySpec spec = new PBEKeySpec(secretKey.toCharArray(), salt, 65536, 256);
-            var tmp = factory.generateSecret(spec);
-            var keySpec = new SecretKeySpec(tmp.getEncoded(), "AES");
+        SecretKeySpec keySpec = deriveKey(secretKey, salt);
+        return encrypt(keySpec, bytesToEncrypt);
+    }
 
+    public byte[] decrypt(Sealed secure, byte[] salt) {
+        SecretKeySpec keySpec = deriveKey(secretKey, salt);
+        return decrypt(keySpec, secure);
+    }
+
+    /**
+     * Encrypt data using a pre-derived AES key. Generates a random 16-byte IV.
+     *
+     * @param key the AES key
+     * @param data the plaintext data
+     * @return a Sealed containing the ciphertext and IV
+     */
+    public static Sealed encrypt(SecretKeySpec key, byte[] data) {
+        try {
             byte[] iv = rndSalt();
             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-            cipher.init(Cipher.ENCRYPT_MODE, keySpec, new IvParameterSpec(iv));
-            byte[] encrypted = cipher.doFinal(bytesToEncrypt);
+            cipher.init(Cipher.ENCRYPT_MODE, key, new IvParameterSpec(iv));
+            byte[] encrypted = cipher.doFinal(data);
             return new Sealed(encrypted, iv);
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Encryption failed", e);
         }
     }
 
-    public byte[] decrypt(Sealed secure, byte[] salt) {
+    /**
+     * Decrypt a Sealed using a pre-derived AES key.
+     *
+     * @param key the AES key
+     * @param sealed the sealed data (ciphertext + IV)
+     * @return the decrypted plaintext
+     */
+    public static byte[] decrypt(SecretKeySpec key, Sealed sealed) {
         try {
-            PBEKeySpec spec = new PBEKeySpec(secretKey.toCharArray(), salt, 65536, 256);
-            var tmp = factory.generateSecret(spec);
-            var keySpec = new SecretKeySpec(tmp.getEncoded(), "AES");
-
-            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5PADDING");
-            cipher.init(Cipher.DECRYPT_MODE, keySpec, new IvParameterSpec(secure.getSalt()));
-            return cipher.doFinal(secure.getData());
+            Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+            cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(sealed.getSalt()));
+            return cipher.doFinal(sealed.getData());
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Decryption failed", e);
         }
     }
 

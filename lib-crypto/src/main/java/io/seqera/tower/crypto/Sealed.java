@@ -70,6 +70,9 @@ public class Sealed {
     }
 
     public static Sealed deserialize(byte[] source) {
+        if (source == null || source.length < SALT_LEN) {
+            throw new IllegalArgumentException("Sealed data is too short or null (expected at least " + SALT_LEN + " bytes)");
+        }
         byte[] salt = new byte[SALT_LEN];
         byte[] data = new byte[source.length - SALT_LEN];
         System.arraycopy(source, 0, salt, 0, SALT_LEN);
