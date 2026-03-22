@@ -32,6 +32,7 @@ jobs:
           "lib-httpx",
           "lib-mail",
           "lib-pairing",
+          "lib-platform-oidc",
           "lib-pool",
           "lib-random",
           "lib-retry",

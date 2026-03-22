@@ -1,0 +1,4 @@
+# lib-platform-oidc changelog
+
+0.1.0
+- Initial release: OIDC Authorization Code + PKCE login flow for CLI clients
