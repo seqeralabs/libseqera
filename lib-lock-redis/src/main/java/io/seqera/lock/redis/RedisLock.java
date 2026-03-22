@@ -109,9 +109,10 @@ public class RedisLock implements Lock {
     }
 
     private void stopWatchdog() {
-        if (watchdogFuture != null) {
-            watchdogFuture.cancel(false);
+        var future = watchdogFuture;
+        if (future != null) {
             watchdogFuture = null;
+            future.cancel(false);
         }
     }
 
@@ -125,6 +126,9 @@ public class RedisLock implements Lock {
                     Collections.singletonList(lockKey),
                     Collections.singletonList(instanceId));
             return Long.valueOf(1L).equals(result);
+        } catch (Exception e) {
+            log.error("Failed to release lock (will expire via TTL): lockKey={}, error={}", lockKey, e.getMessage());
+            return false;
         }
     }
 }
