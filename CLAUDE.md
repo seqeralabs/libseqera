@@ -73,6 +73,12 @@ This is a library collection (`libseqera`) containing reusable components for Se
 - Test modules commonly depend on `lib-lang` for testing utilities
 - Redis-based modules use `lib-fixtures-redis` for integration tests with Testcontainers
 
+### Git safety rules
+- **NEVER use `git push --force` or `git push --force-with-lease`** — no exceptions, under any circumstances.
+- **NEVER push to master (or main) without explicit user consent.**
+- Always commit and push as separate steps. Confirm with the user before pushing.
+- When asked about git state, always run `git status` / `git log` to verify — never guess or assume.
+
 ### Publishing
 Libraries are published to Seqera's private Maven repository on S3 using AWS credentials.
 
