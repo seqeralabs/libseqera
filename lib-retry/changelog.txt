@@ -1,5 +1,8 @@
 # lib-retry changelog
 
+2.0.1 - 22 Mar 2026
+- Expose failsafe as api dependency for transitive access by consumers [c2c01ae]
+
 2.0.0 - 21 Aug 2025
 - Add comprehensive Javadocs and tests for Retryable class [1decb5b]
 - Add Javadocs for getDelayAsDuration(), getMaxDelayAsDuration(), and applyAsync() methods [1decb5b]
