@@ -88,7 +88,7 @@ seqera:
 |----------|---------|-------------|
 | `auto-expire-duration` | `5m` | Lock TTL. Safety net if the holder crashes. |
 | `acquire-retry-interval` | `100ms` | Polling interval for blocking `acquire()`. |
-| `watchdog-enabled` | `true` | When enabled, the lock TTL is automatically renewed at `ttl/3` intervals while the holder is alive, preventing silent expiration for long-held locks. |
+| `watchdog-enabled` | `true` | *(since 1.1.0)* When enabled, the lock TTL is automatically renewed at `ttl/3` intervals while the holder is alive, preventing silent expiration for long-held locks. |
 
 ## Implementation Selection
 
