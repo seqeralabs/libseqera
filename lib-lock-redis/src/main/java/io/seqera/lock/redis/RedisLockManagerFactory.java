@@ -20,6 +20,7 @@ package io.seqera.lock.redis;
 import io.micronaut.context.annotation.EachBean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Requires;
+import io.micronaut.scheduling.TaskScheduler;
 import io.seqera.activator.redis.RedisActivator;
 import io.seqera.lock.LockConfig;
 import io.seqera.lock.LockManager;
@@ -40,8 +41,11 @@ public class RedisLockManagerFactory {
     @Inject
     private JedisPool jedisPool;
 
+    @Inject
+    private TaskScheduler scheduler;
+
     @EachBean(LockConfig.class)
     public LockManager redisLockManager(LockConfig config) {
-        return new RedisLockManager(config, jedisPool);
+        return new RedisLockManager(config, jedisPool, scheduler);
     }
 }

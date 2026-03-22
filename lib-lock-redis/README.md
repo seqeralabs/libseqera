@@ -53,10 +53,38 @@ See [lib-lock README](../lib-lock/README.md) for full API documentation.
 ### Configuration
 
 ```yaml
-lock:
-  auto-expire-duration: 5m       # Lock auto-expiration (default: 5m)
-  acquire-retry-interval: 100ms  # Polling interval (default: 100ms)
+seqera:
+  lock:
+    my-lock:
+      auto-expire-duration: 5m       # Lock TTL in Redis (default: 5m)
+      acquire-retry-interval: 100ms  # Polling interval for blocking acquire (default: 100ms)
+      watchdog-enabled: true         # Auto-renew TTL while held (default: true)
 ```
+
+Multiple named lock configurations are supported. Each entry under `seqera.lock` creates a separate `LockManager` bean that can be injected with `@Named`:
+
+```java
+@Inject @Named("my-lock") LockManager lockManager;
+```
+
+### Watchdog (auto-renewal)
+
+By default, acquired locks run a **watchdog** that periodically renews the Redis key's TTL, preventing expiration while the holder is alive. This is critical for locks held for an indefinite duration (e.g., singleton leader election).
+
+**How it works:**
+- On acquire, the key is set with `SET NX PX <ttl>`
+- The watchdog renews every `ttl / 3` by calling `PEXPIRE` via a Lua script that checks ownership
+- On release (or `close()`), the watchdog is cancelled and the key is deleted
+
+**Example with `auto-expire-duration: 60s`:**
+- Lock acquired with TTL = 60s
+- Watchdog renews every 20s, resetting the TTL back to 60s
+- If the process crashes, the last renewal expires within 60s and another instance can take over
+- If the process is alive, the lock is held indefinitely
+
+**Why it matters:** Without the watchdog, a lock with a 60s TTL would silently expire after 60s even if the holder is still running, breaking mutual exclusion. A very long TTL (e.g., 24h) avoids this but delays crash recovery. The watchdog gives both: short crash recovery and indefinite hold while alive.
+
+Set `watchdog-enabled: false` to disable auto-renewal for short-lived locks where natural expiry is acceptable.
 
 ## Low-Level API
 
