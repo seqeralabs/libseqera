@@ -46,9 +46,7 @@ jobs:
           "lib-jedis-pool",
           "lib-cmd-queue-redis",
           "lib-cloudinfo",
-          "micronaut-cache-redis",
-          "wave-api",
-          "wave-utils"
+          "micronaut-cache-redis"
         ]
     steps:
     - uses: actions/checkout@v4
