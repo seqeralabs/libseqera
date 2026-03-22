@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
+import io.micronaut.scheduling.TaskScheduler;
 import io.seqera.lock.Lock;
 import io.seqera.lock.LockConfig;
 import io.seqera.lock.LockManager;
@@ -43,10 +44,12 @@ public class RedisLockManager implements LockManager {
 
     private final LockConfig config;
     private final JedisPool jedisPool;
+    private final TaskScheduler scheduler;
 
-    public RedisLockManager(LockConfig config, JedisPool jedisPool) {
+    public RedisLockManager(LockConfig config, JedisPool jedisPool, TaskScheduler scheduler) {
         this.config = config;
         this.jedisPool = jedisPool;
+        this.scheduler = scheduler;
         log.info("Creating RedisLockManager: {}", config);
     }
 
@@ -58,7 +61,11 @@ public class RedisLockManager implements LockManager {
                     new SetParams().nx().px(config.getAutoExpireDuration().toMillis()));
             if ("OK".equals(result)) {
                 log.trace("Redis lock acquired: lockKey={}", lockKey);
-                return new RedisLock(jedisPool, lockKey, instanceId);
+                var lock = new RedisLock(jedisPool, lockKey, instanceId);
+                if (config.isWatchdogEnabled()) {
+                    lock.startWatchdog(config.getAutoExpireDuration(), scheduler);
+                }
+                return lock;
             }
         }
         log.trace("Redis lock not available: lockKey={}", lockKey);

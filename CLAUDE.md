@@ -57,6 +57,8 @@ This is a library collection (`libseqera`) containing reusable components for Se
 
 ### Conventions
 - Each module has its own `VERSION` file containing the version string
+- Each module has a changelog file named `changelog.txt`
+- When releasing a new version, update the module's `README.md` to reflect the new version number
 - All modules use the `io.seqera` group ID
 - Build configurations are centralized in `buildSrc/` with convention plugins:
   - `io.seqera.java-library-conventions` - Base Java library setup

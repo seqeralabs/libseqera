@@ -19,21 +19,28 @@ package io.seqera.lock.redis
 
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 
+import io.micronaut.scheduling.ScheduledExecutorTaskScheduler
 import io.seqera.lock.LockConfig
 import io.seqera.util.redis.BaseRedisTest
 import redis.clients.jedis.JedisPool
+import spock.lang.Shared
 import spock.lang.Specification
 
 class RedisLockManagerTest extends Specification implements BaseRedisTest {
 
-    RedisLockManager createManager(JedisPool pool) {
+    @Shared
+    def scheduler = new ScheduledExecutorTaskScheduler(Executors.newScheduledThreadPool(4))
+
+    RedisLockManager createManager(JedisPool pool, Duration ttl = Duration.ofMinutes(1), boolean watchdog = true) {
         def config = new LockConfig('test')
-        config.setAutoExpireDuration(Duration.ofMinutes(1))
+        config.setAutoExpireDuration(ttl)
         config.setAcquireRetryInterval(Duration.ofMillis(50))
-        return new RedisLockManager(config, pool)
+        config.setWatchdogEnabled(watchdog)
+        return new RedisLockManager(config, pool, scheduler)
     }
 
     def 'should acquire and release lock'() {
@@ -196,6 +203,44 @@ class RedisLockManagerTest extends Specification implements BaseRedisTest {
 
         then:
         successCount.get() == 1  // Only one thread should acquire the lock
+    }
+
+    def 'should keep lock alive via watchdog past TTL'() {
+        given: 'a lock with a short TTL and watchdog enabled'
+        def manager = createManager(jedisPool, Duration.ofSeconds(1), true)
+        def lock = manager.tryAcquire('test-lock-watchdog')
+
+        expect:
+        lock != null
+
+        when: 'we wait longer than the TTL'
+        Thread.sleep(2500)
+
+        then: 'the lock is still held (watchdog renewed it)'
+        manager.tryAcquire('test-lock-watchdog') == null
+
+        cleanup:
+        lock?.release()
+    }
+
+    def 'should expire lock without watchdog'() {
+        given: 'a lock with a short TTL and watchdog disabled'
+        def manager = createManager(jedisPool, Duration.ofSeconds(1), false)
+        def lock = manager.tryAcquire('test-lock-no-watchdog')
+
+        expect:
+        lock != null
+
+        when: 'we wait longer than the TTL'
+        Thread.sleep(1500)
+
+        then: 'the lock expired and can be re-acquired'
+        def lock2 = manager.tryAcquire('test-lock-no-watchdog')
+        lock2 != null
+
+        cleanup:
+        lock?.release()
+        lock2?.release()
     }
 
     def 'should work across multiple manager instances'() {

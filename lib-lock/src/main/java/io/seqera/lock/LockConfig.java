@@ -47,6 +47,7 @@ public class LockConfig {
     private final String name;
     private Duration autoExpireDuration = DEFAULT_AUTO_EXPIRE;
     private Duration acquireRetryInterval = DEFAULT_RETRY_INTERVAL;
+    private boolean watchdogEnabled = true;
 
     public LockConfig(@Parameter String name) {
         this.name = name;
@@ -72,9 +73,18 @@ public class LockConfig {
         this.acquireRetryInterval = acquireRetryInterval;
     }
 
+    public boolean isWatchdogEnabled() {
+        return watchdogEnabled;
+    }
+
+    public void setWatchdogEnabled(boolean watchdogEnabled) {
+        this.watchdogEnabled = watchdogEnabled;
+    }
+
     @Override
     public String toString() {
         return "LockConfig{name='" + name + "', autoExpireDuration=" + autoExpireDuration +
-                ", acquireRetryInterval=" + acquireRetryInterval + '}';
+                ", acquireRetryInterval=" + acquireRetryInterval +
+                ", watchdogEnabled=" + watchdogEnabled + '}';
     }
 }
