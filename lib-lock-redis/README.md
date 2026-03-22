@@ -58,7 +58,7 @@ seqera:
     my-lock:
       auto-expire-duration: 5m       # Lock TTL in Redis (default: 5m)
       acquire-retry-interval: 100ms  # Polling interval for blocking acquire (default: 100ms)
-      watchdog-enabled: true         # Auto-renew TTL while held (default: true)
+      watchdog-enabled: true         # Auto-renew TTL while held (default: auto, see below)
 ```
 
 Multiple named lock configurations are supported. Each entry under `seqera.lock` creates a separate `LockManager` bean that can be injected with `@Named`:
@@ -84,7 +84,7 @@ By default, acquired locks run a **watchdog** that periodically renews the Redis
 
 **Why it matters:** Without the watchdog, a lock with a 60s TTL would silently expire after 60s even if the holder is still running, breaking mutual exclusion. A very long TTL (e.g., 24h) avoids this but delays crash recovery. The watchdog gives both: short crash recovery and indefinite hold while alive.
 
-Set `watchdog-enabled: false` to disable auto-renewal for short-lived locks where natural expiry is acceptable.
+**Default behavior:** If `watchdog-enabled` is not explicitly set, the watchdog is automatically enabled when `auto-expire-duration` is >= 1 minute, and disabled for shorter TTLs. This avoids unnecessary renewal overhead for short-lived locks while protecting long-held locks by default. Set `watchdog-enabled: false` to explicitly disable auto-renewal, or `true` to force it on regardless of TTL.
 
 ## Low-Level API
 

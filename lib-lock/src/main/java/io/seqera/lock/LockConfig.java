@@ -47,7 +47,7 @@ public class LockConfig {
     private final String name;
     private Duration autoExpireDuration = DEFAULT_AUTO_EXPIRE;
     private Duration acquireRetryInterval = DEFAULT_RETRY_INTERVAL;
-    private boolean watchdogEnabled = true;
+    private Boolean watchdogEnabled;
 
     public LockConfig(@Parameter String name) {
         this.name = name;
@@ -74,7 +74,9 @@ public class LockConfig {
     }
 
     public boolean isWatchdogEnabled() {
-        return watchdogEnabled;
+        if (watchdogEnabled != null)
+            return watchdogEnabled;
+        return autoExpireDuration.toMinutes() >= 1;
     }
 
     public void setWatchdogEnabled(boolean watchdogEnabled) {

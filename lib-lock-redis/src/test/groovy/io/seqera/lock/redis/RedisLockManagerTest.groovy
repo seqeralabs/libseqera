@@ -35,10 +35,6 @@ class RedisLockManagerTest extends Specification implements BaseRedisTest {
     @Shared
     def scheduler = new ScheduledExecutorTaskScheduler(Executors.newScheduledThreadPool(1))
 
-    def cleanupSpec() {
-        scheduler.executor.shutdown()
-    }
-
     RedisLockManager createManager(JedisPool pool, Duration ttl = Duration.ofMinutes(1), boolean watchdog = true) {
         def config = new LockConfig('test')
         config.setAutoExpireDuration(ttl)
