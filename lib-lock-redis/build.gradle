@@ -25,7 +25,7 @@ group = 'io.seqera'
 version = "${project.file('VERSION').text.trim()}"
 
 dependencies {
-    implementation project(':lib-lock')
+    api project(':lib-lock')
     implementation project(':lib-activator')
     implementation 'redis.clients:jedis:5.1.4'
 

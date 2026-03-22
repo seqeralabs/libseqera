@@ -27,10 +27,12 @@ import io.micronaut.scheduling.ScheduledExecutorTaskScheduler
 import io.seqera.lock.LockConfig
 import io.seqera.util.redis.BaseRedisTest
 import redis.clients.jedis.JedisPool
+import spock.lang.Shared
 import spock.lang.Specification
 
 class RedisLockManagerTest extends Specification implements BaseRedisTest {
 
+    @Shared
     def scheduler = new ScheduledExecutorTaskScheduler(Executors.newScheduledThreadPool(1))
 
     def cleanupSpec() {
