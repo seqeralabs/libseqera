@@ -1,5 +1,8 @@
 # lib-lock changelog
 
+1.1.0
+- Add `watchdogEnabled` configuration property to LockConfig (default: true)
+
 1.0.0
 - Initial release of lib-lock module with Lock and LockManager interfaces
 - Define Lock interface extending AutoCloseable for distributed locks

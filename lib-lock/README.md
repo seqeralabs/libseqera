@@ -16,7 +16,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-lock:1.0.0'
+    implementation 'io.seqera:lib-lock:1.1.0'
 
     // For Redis support in production:
     runtimeOnly 'io.seqera:lib-jedis-lock:1.0.0'
@@ -76,9 +76,19 @@ class MyService {
 ## Configuration
 
 ```yaml
-lock:
-  acquire-retry-interval: 100ms  # Polling interval when waiting for lock (default: 100ms)
+seqera:
+  lock:
+    my-lock:
+      auto-expire-duration: 5m       # Lock TTL (default: 5m)
+      acquire-retry-interval: 100ms  # Polling interval when waiting for lock (default: 100ms)
+      watchdog-enabled: true         # Auto-renew TTL while held (default: true)
 ```
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `auto-expire-duration` | `5m` | Lock TTL. Safety net if the holder crashes. |
+| `acquire-retry-interval` | `100ms` | Polling interval for blocking `acquire()`. |
+| `watchdog-enabled` | `true` | When enabled, the lock TTL is automatically renewed at `ttl/3` intervals while the holder is alive, preventing silent expiration for long-held locks. |
 
 ## Implementation Selection
 

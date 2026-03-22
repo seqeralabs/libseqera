@@ -1,5 +1,11 @@
 # lib-lock-redis changelog
 
+1.1.0
+- Add watchdog auto-renewal that renews lock TTL at ttl/3 interval while holder is alive
+- Use atomic Lua script for ownership-checked TTL renewal
+- Add AtomicBoolean guard to prevent race between release and watchdog renewal
+- Expose lib-lock as api dependency
+
 1.0.0
 - Initial release of lib-lock-redis module
 - Implement RedisLockManager using JedisPool for distributed locking
