@@ -25,6 +25,12 @@ The `login` method:
 5. Waits for Platform to redirect the browser to the local callback
 6. Exchanges the authorization code for an access token
 
+## Gradle
+
+```groovy
+implementation 'io.seqera:lib-platform-oidc:0.1.0'
+```
+
 ## Dependencies
 
 None — uses only JDK classes (`java.net.http.HttpClient`, `com.sun.net.httpserver.HttpServer`, `java.security.*`).

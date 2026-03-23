@@ -14,6 +14,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-httpx](lib-httpx/)** - Enhanced HTTP client with automatic retry logic and JWT token refresh
 - **[lib-lang](lib-lang/)** - Language and type utilities
 - **[lib-mail](lib-mail/)** - Email functionality with Micronaut integration
+- **[lib-platform-oidc](lib-platform-oidc/)** - OIDC Authorization Code + PKCE login flow for CLI clients authenticating against Seqera Platform
 - **[lib-pool](lib-pool/)** - Simple object pooling utilities
 - **[lib-random](lib-random/)** - Random key generation utilities
 - **[lib-retry](lib-retry/)** - Retry mechanisms with exponential backoff
