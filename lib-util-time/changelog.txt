@@ -1,0 +1,4 @@
+# lib-util-time changelog
+
+1.0.0
+- Initial release with DurationUtils providing random duration generation utilities

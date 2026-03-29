@@ -43,6 +43,7 @@ jobs:
           "lib-trace",
           "lib-util-http",
           "lib-util-string",
+          "lib-util-time",
           "lib-jedis-pool",
           "lib-cmd-queue-redis",
           "lib-cloudinfo",
