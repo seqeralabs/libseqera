@@ -25,10 +25,13 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-jedis-pool](lib-jedis-pool/)** - JedisPool factory with Micrometer metrics integration
 - **[lib-lock](lib-lock/)** - Distributed lock interface abstraction
 - **[lib-lock-redis](lib-lock-redis/)** - Redis-based distributed locking with Micronaut integration
+- **[lib-pairing](lib-pairing/)** - Credential federation library for secure RSA key exchange between services
 
 ### Messaging & Data Libraries
 - **[lib-cache-tiered-redis](lib-cache-tiered-redis/)** - Two-tier caching with Caffeine (L1) and Redis (L2) for distributed caching
 - **[lib-cmd-queue-redis](lib-cmd-queue-redis/)** - Asynchronous command queue for executing long-running tasks with persistent state tracking
+- **[lib-data-broadcast-redis](lib-data-broadcast-redis/)** - Event broadcast with pub/sub semantics and replay support, backed by Redis Streams or in-memory storage
+- **[lib-data-count-redis](lib-data-count-redis/)** - Distributed counter abstraction with Redis and local implementations
 - **[lib-data-queue-redis](lib-data-queue-redis/)** - Message queue abstraction with Redis and local implementations
 - **[lib-data-range-redis](lib-data-range-redis/)** - Range set storage similar to Redis ZRANGE with local and Redis implementations
 - **[lib-data-store-future-redis](lib-data-store-future-redis/)** - Distributed CompletableFuture store for cross-service async operations
