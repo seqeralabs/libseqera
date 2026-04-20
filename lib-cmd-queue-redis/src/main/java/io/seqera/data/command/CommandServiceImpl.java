@@ -54,22 +54,32 @@ public class CommandServiceImpl implements CommandService {
 
     private static final Logger log = LoggerFactory.getLogger(CommandServiceImpl.class);
 
-    @Inject
-    private CommandConfig config;
-
-    @Inject
-    private CommandStateStore store;
-
-    @Inject
-    private CommandQueue queue;
-
-    @Inject
-    @Named(TaskExecutors.BLOCKING)
-    private ExecutorService executor;
+    private final CommandConfig config;
+    private final CommandStateStore store;
+    private final CommandQueue queue;
+    private final ExecutorService executor;
 
     private final Map<String, CommandRegistration<?, ?>> handlers = new ConcurrentHashMap<>();
 
     private volatile boolean started = false;
+
+    /**
+     * Constructor-injected for the default {@code @Singleton} bean; applications
+     * that need multiple services (one per queue) can invoke this constructor
+     * directly from a {@code @Factory} to produce additional {@code @Named}
+     * beans sharing the same {@link CommandStateStore}.
+     */
+    @Inject
+    public CommandServiceImpl(
+            CommandConfig config,
+            CommandStateStore store,
+            CommandQueue queue,
+            @Named(TaskExecutors.BLOCKING) ExecutorService executor) {
+        this.config = config;
+        this.store = store;
+        this.queue = queue;
+        this.executor = executor;
+    }
 
     @Override
     public void start() {
@@ -280,6 +290,15 @@ public class CommandServiceImpl implements CommandService {
                     store.save(state.started());
                 }
                 return false; // Keep in queue - will retry and call checkStatus()
+            }
+
+            // Handler handed the command off to another queue (via an explicit
+            // queue.submit(...) before returning). ACK the source message but
+            // leave the persisted state alone - the command is still active,
+            // just on a different queue from now on.
+            if (result.status() == CommandStatus.HANDED_OFF) {
+                log.info("Command handed off - id={}", state.id());
+                return true; // ACK source - command now lives on the destination queue
             }
 
             // Terminal result (SUCCEEDED, FAILED, or CANCELLED)
