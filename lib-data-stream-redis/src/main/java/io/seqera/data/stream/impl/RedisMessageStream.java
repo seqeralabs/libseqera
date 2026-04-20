@@ -27,7 +27,6 @@ import io.seqera.activator.redis.RedisActivator;
 import io.seqera.data.stream.MessageConsumer;
 import io.seqera.data.stream.MessageStream;
 import io.seqera.random.LongRndKey;
-import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
@@ -85,13 +84,9 @@ public class RedisMessageStream implements MessageStream<String> {
 
     private static final String DATA_FIELD = "data";
 
-    @Inject
-    private JedisPool pool;
-
-    @Inject
-    private RedisStreamConfig config;
-
-    private String consumerName;
+    private final JedisPool pool;
+    private final RedisStreamConfig config;
+    private final String consumerName;
 
     /**
      * Tracks the last claimed message position per stream for round-robin claiming.
@@ -100,9 +95,18 @@ public class RedisMessageStream implements MessageStream<String> {
      */
     private final Map<String, StreamEntryID> lastClaimCursor = new ConcurrentHashMap<>();
 
-    @PostConstruct
-    private void create() {
-        consumerName = "consumer-" + LongRndKey.rndLong();
+    /**
+     * Constructor-injected for the default {@code @Singleton} bean. Applications
+     * that need multiple {@code RedisMessageStream} instances with independent
+     * configurations (e.g. different claim timeouts) can call this constructor
+     * directly from a {@code @Factory} and expose the result as an additional
+     * named bean.
+     */
+    @Inject
+    public RedisMessageStream(JedisPool pool, RedisStreamConfig config) {
+        this.pool = pool;
+        this.config = config;
+        this.consumerName = "consumer-" + LongRndKey.rndLong();
         log.info("Creating Redis message stream - consumer={}", consumerName);
     }
 
