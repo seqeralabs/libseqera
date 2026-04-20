@@ -21,6 +21,9 @@ dependencies {
 - Periodic status checking for async commands
 - Command cancellation support
 - Persistent storage using Redis or in-memory backend
+- Multi-queue consumption with per-queue configuration (e.g. different claim
+  timeouts for slow lifecycle work vs. fast status polling)
+- Cross-queue hand-off via `CommandResult.handoff(streamId)`
 
 ## Usage
 
@@ -78,7 +81,7 @@ public class AsyncProcessingHandler implements CommandHandler<ProcessingParams, 
     public CommandResult<ProcessingResult> execute(Command<ProcessingParams> command) {
         // Start async job
         externalService.startJob(command.id(), command.params());
-        return CommandResult.running();  // checkStatus() will be called later
+        return CommandResult.active();  // checkStatus() will be called later
     }
 
     @Override
@@ -86,10 +89,14 @@ public class AsyncProcessingHandler implements CommandHandler<ProcessingParams, 
         var status = externalService.getStatus(command.id());
         if (status.isComplete()) return CommandResult.success(status.getResult());
         if (status.isFailed()) return CommandResult.failure(status.getError());
-        return CommandResult.running();  // Still running, check again later
+        return CommandResult.active();  // Still active, check again later
     }
 }
 ```
+
+> `CommandResult.running()` is kept as a deprecated alias for `active()`.
+> Prefer `active()` in new code — the name avoids clashing with domain-level
+> "running" statuses (e.g. a container that is actually executing).
 
 ### Submit Commands
 
@@ -125,6 +132,63 @@ submit() ──▶ SUBMITTED ──pickup──▶ RUNNING ─┬─success─�
                                             ├─error────▶ FAILED
                                             └─cancel───▶ CANCELLED
 ```
+
+## Multiple queues and cross-queue hand-off
+
+A single `CommandService` can consume from more than one `CommandQueue` at the
+same time, each with its own underlying `MessageStream` and configuration. This
+is useful when different phases of a command's lifecycle benefit from different
+delivery semantics — for example, a long claim-timeout for slow synchronous
+work (crash-safe against consumer reclaim) and a short claim-timeout for fast
+polling (low detection lag for state transitions).
+
+### Attaching an additional queue
+
+```java
+@Inject CommandService commandService;
+@Inject @Named("monitor") CommandQueue monitorQueue;
+
+commandService.registerHandler(new MyHandler());
+commandService.attachQueue(monitorQueue);   // must be called before start()
+commandService.start();
+```
+
+The service consumes from the primary queue *and* from every attached queue,
+dispatching to the same handler registry and state store. `attachQueue`
+validates input: it rejects `null`, the same instance twice, duplicate stream
+names, and stream-name collisions with the primary queue. Each attached queue
+retains its own `@PreDestroy` lifecycle — `commandService.stop()` closes only
+the primary queue; attached queues are closed by whatever bean owns them.
+
+### Handing a command off between queues
+
+A handler can end a command's life on its current queue and continue it on
+another attached queue by returning `CommandResult.handoff(dstStreamId)`. The
+framework ACKs the source message and offers a fresh delivery on the
+destination via the queue that owns it (correct consumer group, correct
+config). If the destination is unknown to the service the command is marked
+`FAILED` with a descriptive error rather than silently orphaned.
+
+```java
+@Override
+public CommandResult<MyResult> execute(Command<MyParams> command) {
+    backend.startJob(command.id(), command.params());
+    // Heavy synchronous work is done; subsequent polling should run on the
+    // monitor queue with its short claim-timeout.
+    return CommandResult.handoff("cmd-monitor/v1");
+}
+```
+
+From the source queue's perspective `handoff` is terminal (the message is
+ACKed). From the command's lifecycle perspective it remains non-terminal —
+subsequent `checkStatus()` invocations happen on the destination queue and
+drive the command to `SUCCEEDED` / `FAILED` / `CANCELLED` there.
+
+Hand-off is not atomic: the destination offer happens before the source ACK.
+If the consumer crashes between the two the source message is redelivered,
+so handlers that rely on `handoff` must be idempotent under such redelivery
+(typically: persist an intermediate state before the side-effect so the
+retried invocation can skip it).
 
 ## Testing
 

@@ -88,15 +88,17 @@ public interface CommandService {
     <P> Command<P> toCommand(CommandState state, CommandRegistration<P, ?> registration);
 
     /**
-     * Attach an additional command queue to this service. Messages delivered to the
-     * given queue will be processed with the same handler registry, state store and
-     * result-handling logic as the primary queue.
+     * Attach an additional command queue to this service. The service takes on a
+     * dual role with respect to the attached queue: it consumes messages from it
+     * (dispatching to the same handler registry and state store as the primary
+     * queue) and accepts it as a valid {@link CommandResult#handoff(String)}
+     * destination.
      *
-     * <p>This is intended for multi-stream setups in which the same command types
-     * need to be re-delivered with different queue semantics (for example, a fast
-     * monitor stream and a slow lifecycle stream with different claim timeouts).
-     * Handlers use {@link CommandResult#activeOnStream(String)} to move a command
-     * between streams at runtime.</p>
+     * <p>This is intended for multi-queue setups in which the same command types
+     * need to be delivered with different queue semantics — for example, a slow
+     * lifecycle queue for initial synchronous work and a fast monitor queue for
+     * subsequent status polling. Handlers use {@code handoff} to hand a command
+     * from one queue to another at runtime.</p>
      *
      * <p>Must be called before {@link #start()}.</p>
      *

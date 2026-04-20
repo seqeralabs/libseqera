@@ -26,11 +26,10 @@ import io.micronaut.core.annotation.Nullable;
  * @param status        the command execution status
  * @param result        the command result value, or null for non-successful statuses
  * @param error         the error message, or null on success
- * @param targetStream  optional destination stream id: when non-null and status is
- *                      non-terminal, the framework migrates the in-flight command message
- *                      to the named stream before the next redelivery. This allows a
- *                      handler to shift its own polling cadence by moving the command
- *                      from a slow-claim-timeout stream to a fast one (or vice versa).
+ * @param targetStream  optional hand-off destination stream id: when non-null, the
+ *                      framework ACKs the source message and re-enqueues a fresh
+ *                      delivery on the named destination queue (see
+ *                      {@link #handoff(String)}). Null for all other results.
  */
 public record CommandResult<R>(
         CommandStatus status,
@@ -76,21 +75,28 @@ public record CommandResult<R>(
     }
 
     /**
-     * Indicate that the command is still in progress AND request that the in-flight
-     * message be migrated to the given stream before the next redelivery.
+     * Hand off the in-flight command to a different queue. From the source queue's
+     * perspective this is a terminal result: the framework ACKs the source message
+     * and re-enqueues a fresh delivery on the named destination stream. From the
+     * command's lifecycle perspective the command is still active — subsequent
+     * {@code checkStatus()} invocations happen on the destination queue and drive
+     * it to a terminal status there.
      *
-     * <p>Intended for commands whose polling cadence should change after a certain
-     * point in their lifecycle — for example, a task-submit command that moves from
-     * a lifecycle stream (long claim-timeout, crash-safe for slow AWS calls) to a
-     * monitor stream (short claim-timeout, low detection lag) once the initial
+     * <p>The destination must be the {@code streamName()} of a {@link CommandQueue}
+     * attached to the same {@link CommandService} (primary or via
+     * {@link CommandService#attachQueue(CommandQueue)}); the service uses its
+     * internal registry to route the hand-off through the owning queue so consumer
+     * group and configuration are correct. Unknown destinations are rejected.</p>
+     *
+     * <p>Typical use: a command whose polling cadence should change after a certain
+     * point in its lifecycle — for example, a task-submit command moving from a
+     * lifecycle queue (long claim-timeout, crash-safe for slow AWS calls) to a
+     * monitor queue (short claim-timeout, low detection lag) once the initial
      * launch has succeeded.</p>
      *
-     * <p>The destination stream must exist on the same Redis shard as the source
-     * (the included Redis setup is standalone, so this is satisfied implicitly).</p>
-     *
-     * @param dstStreamId the stream id to migrate the command to
+     * @param dstStreamId the stream id of the destination queue
      */
-    public static <R> CommandResult<R> activeOnStream(String dstStreamId) {
+    public static <R> CommandResult<R> handoff(String dstStreamId) {
         if (dstStreamId == null || dstStreamId.isBlank()) {
             throw new IllegalArgumentException("Destination stream id must not be null or blank");
         }

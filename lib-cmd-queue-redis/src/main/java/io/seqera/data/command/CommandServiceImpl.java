@@ -75,10 +75,10 @@ public class CommandServiceImpl implements CommandService {
 
     /**
      * Registry of every queue attached to this service, keyed by its stream name.
-     * Populated at {@link #start()} so cross-stream migrations triggered by
-     * {@link CommandResult#activeOnStream(String)} can route through the exact
-     * queue that owns the destination stream (correct config, correct consumer
-     * group), instead of piggy-backing on the primary queue's MessageStream.
+     * Populated at {@link #start()} so hand-offs triggered by
+     * {@link CommandResult#handoff(String)} can route through the exact queue that
+     * owns the destination stream (correct config, correct consumer group) instead
+     * of piggy-backing on the primary queue's MessageStream.
      */
     private final Map<String, CommandQueue> queuesByStream = new ConcurrentHashMap<>();
 
@@ -331,30 +331,30 @@ public class CommandServiceImpl implements CommandService {
                 if (state.status() != CommandStatus.RUNNING) {
                     store.save(state.started());
                 }
-                // Cross-stream migration: handler asked for the in-flight message to be
-                // re-delivered on a different stream (typically one with a different
-                // claim-timeout, e.g. moving from a slow lifecycle stream to a fast
-                // monitor stream once the initial synchronous work has completed).
-                // Route through the queue that actually owns the destination stream so
-                // the write uses that queue's MessageStream / consumer group, then ACK
-                // the source message via the normal return-true path. Sequencing
-                // (offer-first, ACK-second) means a crash between the two redelivers
-                // the source; handlers relying on this variant are expected to be
-                // idempotent under such redelivery.
+                // Hand-off: handler asked for the command to continue its lifecycle
+                // on a different queue (typically one with a different claim-timeout,
+                // e.g. moving from a slow lifecycle queue to a fast monitor queue
+                // once the initial synchronous work has completed). Route through the
+                // queue that actually owns the destination stream so the write uses
+                // that queue's MessageStream / consumer group, then ACK the source
+                // message via the normal return-true path. Sequencing (offer-first,
+                // ACK-second) means a crash between the two redelivers the source;
+                // handlers relying on this variant are expected to be idempotent
+                // under such redelivery.
                 if (result.targetStream() != null) {
                     final CommandQueue target = queuesByStream.get(result.targetStream());
                     if (target == null) {
                         // Fail fast rather than silently orphan the message by writing
                         // to a stream nobody consumes. A message offered to an unknown
                         // stream would sit there forever with no owner.
-                        log.error("Cannot migrate command: no attached queue owns stream={} (id={})",
+                        log.error("Cannot hand off command: no attached queue owns stream={} (id={})",
                                 result.targetStream(), state.id());
                         store.save(state.failed("Unknown target stream: " + result.targetStream()));
                         return true; // ACK - command is in a terminal FAILED state
                     }
                     target.submit(CommandMsg.of(state.id(), state.type()));
-                    log.info("Command migrated - id={}, dst={}", state.id(), result.targetStream());
-                    return true; // ACK source - message now lives on the destination stream
+                    log.info("Command handed off - id={}, dst={}", state.id(), result.targetStream());
+                    return true; // ACK source - command now lives on the destination queue
                 }
                 return false; // Keep in queue - will retry and call checkStatus()
             }

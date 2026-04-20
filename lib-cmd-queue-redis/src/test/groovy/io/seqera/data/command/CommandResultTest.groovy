@@ -45,9 +45,9 @@ class CommandResultTest extends Specification {
         r.targetStream() == null
     }
 
-    def 'activeOnStream() carries the destination stream id'() {
+    def 'handoff() carries the destination stream id'() {
         when:
-        def r = CommandResult.activeOnStream('cmd-monitor/v1')
+        def r = CommandResult.handoff('cmd-monitor/v1')
 
         then:
         r.status() == CommandStatus.RUNNING
@@ -56,9 +56,9 @@ class CommandResultTest extends Specification {
     }
 
     @Unroll
-    def 'activeOnStream rejects blank destination: "#dst"'() {
+    def 'handoff rejects blank destination: "#dst"'() {
         when:
-        CommandResult.activeOnStream(dst)
+        CommandResult.handoff(dst)
 
         then:
         thrown(IllegalArgumentException)
