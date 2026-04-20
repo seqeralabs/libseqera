@@ -73,15 +73,39 @@ public class CommandServiceImpl implements CommandService {
 
     private final List<CommandQueue> additionalQueues = new CopyOnWriteArrayList<>();
 
+    /**
+     * Registry of every queue attached to this service, keyed by its stream name.
+     * Populated at {@link #start()} so cross-stream migrations triggered by
+     * {@link CommandResult#activeOnStream(String)} can route through the exact
+     * queue that owns the destination stream (correct config, correct consumer
+     * group), instead of piggy-backing on the primary queue's MessageStream.
+     */
+    private final Map<String, CommandQueue> queuesByStream = new ConcurrentHashMap<>();
+
     private volatile boolean started = false;
 
     @Override
     public void attachQueue(CommandQueue additional) {
+        if (additional == null) {
+            throw new IllegalArgumentException("Additional queue must not be null");
+        }
         if (started) {
             throw new IllegalStateException("Cannot attach queue after service has started");
         }
+        final String stream = additional.streamName();
+        for (CommandQueue existing : additionalQueues) {
+            if (existing == additional) {
+                throw new IllegalArgumentException("Queue already attached: stream=" + stream);
+            }
+            if (existing.streamName().equals(stream)) {
+                throw new IllegalArgumentException("Another queue is already attached with stream=" + stream);
+            }
+        }
+        if (queue != null && queue.streamName().equals(stream)) {
+            throw new IllegalArgumentException("Stream name collides with primary queue: stream=" + stream);
+        }
         additionalQueues.add(additional);
-        log.debug("Attached additional command queue");
+        log.info("Attached additional command queue - stream={}", stream);
     }
 
     @Override
@@ -91,10 +115,15 @@ public class CommandServiceImpl implements CommandService {
             return;
         }
         started = true;
+        // Register primary queue and all attached queues in the stream registry,
+        // then wire their consumers. Registry is used to route cross-stream
+        // migrations through the queue that actually owns the destination stream.
+        queuesByStream.put(queue.streamName(), queue);
         queue.addConsumer(this::processCommand);
         for (CommandQueue extra : additionalQueues) {
+            queuesByStream.put(extra.streamName(), extra);
             extra.addConsumer(this::processCommand);
-            log.info("Command service - attached consumer on additional queue");
+            log.info("Command service - attached consumer on queue stream={}", extra.streamName());
         }
         log.info("Command service started - consuming commands");
     }
@@ -105,10 +134,13 @@ public class CommandServiceImpl implements CommandService {
             return;
         }
         started = false;
+        // Only close the primary queue here. Attached queues are typically
+        // Micronaut-managed beans with their own @PreDestroy (see
+        // CommandQueue.destroy); double-closing would interfere with their
+        // shutdown hooks. Ownership contract: the bean that owns the queue's
+        // lifecycle is responsible for closing it.
         queue.close();
-        for (CommandQueue extra : additionalQueues) {
-            extra.close();
-        }
+        queuesByStream.clear();
         log.info("Command service stopped");
     }
 
@@ -303,13 +335,25 @@ public class CommandServiceImpl implements CommandService {
                 // re-delivered on a different stream (typically one with a different
                 // claim-timeout, e.g. moving from a slow lifecycle stream to a fast
                 // monitor stream once the initial synchronous work has completed).
-                // Offer a new CommandMsg to the destination, then ACK the source message
-                // via the normal return-true path. Sequencing (offer-first, ACK-second)
-                // means a crash between the two redelivers the source; handlers relying
-                // on this variant are expected to be idempotent under such redelivery.
+                // Route through the queue that actually owns the destination stream so
+                // the write uses that queue's MessageStream / consumer group, then ACK
+                // the source message via the normal return-true path. Sequencing
+                // (offer-first, ACK-second) means a crash between the two redelivers
+                // the source; handlers relying on this variant are expected to be
+                // idempotent under such redelivery.
                 if (result.targetStream() != null) {
-                    queue.offer(result.targetStream(), CommandMsg.of(state.id(), state.type()));
-                    log.debug("Command migrated to stream: id={}, dst={}", state.id(), result.targetStream());
+                    final CommandQueue target = queuesByStream.get(result.targetStream());
+                    if (target == null) {
+                        // Fail fast rather than silently orphan the message by writing
+                        // to a stream nobody consumes. A message offered to an unknown
+                        // stream would sit there forever with no owner.
+                        log.error("Cannot migrate command: no attached queue owns stream={} (id={})",
+                                result.targetStream(), state.id());
+                        store.save(state.failed("Unknown target stream: " + result.targetStream()));
+                        return true; // ACK - command is in a terminal FAILED state
+                    }
+                    target.submit(CommandMsg.of(state.id(), state.type()));
+                    log.info("Command migrated - id={}, dst={}", state.id(), result.targetStream());
                     return true; // ACK source - message now lives on the destination stream
                 }
                 return false; // Keep in queue - will retry and call checkStatus()

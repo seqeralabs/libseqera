@@ -91,6 +91,9 @@ public record CommandResult<R>(
      * @param dstStreamId the stream id to migrate the command to
      */
     public static <R> CommandResult<R> activeOnStream(String dstStreamId) {
+        if (dstStreamId == null || dstStreamId.isBlank()) {
+            throw new IllegalArgumentException("Destination stream id must not be null or blank");
+        }
         return new CommandResult<>(CommandStatus.RUNNING, null, null, dstStreamId);
     }
 
@@ -100,7 +103,7 @@ public record CommandResult<R>(
      * @deprecated Use {@link #active()} instead. This alias is preserved for
      *             backwards compatibility and will be removed in a future release.
      */
-    @Deprecated
+    @Deprecated(since = "0.4.0", forRemoval = true)
     public static <R> CommandResult<R> running() {
         return active();
     }

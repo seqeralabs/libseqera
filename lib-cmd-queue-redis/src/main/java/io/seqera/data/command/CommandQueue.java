@@ -54,8 +54,13 @@ public abstract class CommandQueue extends AbstractMessageStream<CommandMsg> {
 
     /**
      * The name of the message stream, derived from {@link #name()}.
+     *
+     * <p>Exposed publicly so callers (e.g. {@link CommandServiceImpl}) can register
+     * and look up queues by their stream identifier — required for correct routing
+     * when a command is migrated between streams via
+     * {@link CommandResult#activeOnStream(String)}.</p>
      */
-    protected String streamName() {
+    public String streamName() {
         return name() + "/v1";
     }
 
