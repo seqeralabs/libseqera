@@ -16,9 +16,11 @@
  */
 package io.seqera.data.command;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -69,7 +71,18 @@ public class CommandServiceImpl implements CommandService {
 
     private final Map<String, CommandRegistration<?, ?>> handlers = new ConcurrentHashMap<>();
 
+    private final List<CommandQueue> additionalQueues = new CopyOnWriteArrayList<>();
+
     private volatile boolean started = false;
+
+    @Override
+    public void attachQueue(CommandQueue additional) {
+        if (started) {
+            throw new IllegalStateException("Cannot attach queue after service has started");
+        }
+        additionalQueues.add(additional);
+        log.debug("Attached additional command queue");
+    }
 
     @Override
     public void start() {
@@ -79,6 +92,10 @@ public class CommandServiceImpl implements CommandService {
         }
         started = true;
         queue.addConsumer(this::processCommand);
+        for (CommandQueue extra : additionalQueues) {
+            extra.addConsumer(this::processCommand);
+            log.info("Command service - attached consumer on additional queue");
+        }
         log.info("Command service started - consuming commands");
     }
 
@@ -89,6 +106,9 @@ public class CommandServiceImpl implements CommandService {
         }
         started = false;
         queue.close();
+        for (CommandQueue extra : additionalQueues) {
+            extra.close();
+        }
         log.info("Command service stopped");
     }
 

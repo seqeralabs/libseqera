@@ -27,7 +27,6 @@ import io.seqera.activator.redis.RedisActivator;
 import io.seqera.data.stream.MessageConsumer;
 import io.seqera.data.stream.MessageStream;
 import io.seqera.random.LongRndKey;
-import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
@@ -85,13 +84,11 @@ public class RedisMessageStream implements MessageStream<String> {
 
     private static final String DATA_FIELD = "data";
 
-    @Inject
-    private JedisPool pool;
+    private final JedisPool pool;
 
-    @Inject
-    private RedisStreamConfig config;
+    private final RedisStreamConfig config;
 
-    private String consumerName;
+    private final String consumerName;
 
     /**
      * Tracks the last claimed message position per stream for round-robin claiming.
@@ -100,9 +97,24 @@ public class RedisMessageStream implements MessageStream<String> {
      */
     private final Map<String, StreamEntryID> lastClaimCursor = new ConcurrentHashMap<>();
 
-    @PostConstruct
-    private void create() {
-        consumerName = "consumer-" + LongRndKey.rndLong();
+    /**
+     * Constructs a RedisMessageStream with the given Jedis pool and configuration.
+     *
+     * <p>Micronaut uses this constructor to produce the default {@code @Singleton}
+     * bean with the injected {@link RedisStreamConfig}. Applications that need
+     * multiple streams with independent configurations (for example, to poll
+     * different workloads at different cadences) can construct additional
+     * instances directly via this constructor and register them as named beans
+     * through a {@code @Factory}.</p>
+     *
+     * @param pool   the Jedis connection pool (shared with other stream instances is fine)
+     * @param config the stream configuration for this instance
+     */
+    @Inject
+    public RedisMessageStream(JedisPool pool, RedisStreamConfig config) {
+        this.pool = pool;
+        this.config = config;
+        this.consumerName = "consumer-" + LongRndKey.rndLong();
         log.info("Creating Redis message stream - consumer={}", consumerName);
     }
 
