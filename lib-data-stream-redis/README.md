@@ -45,6 +45,39 @@ class ActivityConsumer implements MessageConsumer<ActivityEvent> {
 messageStream.consume("user-activity", new ActivityConsumer())
 ```
 
+## Multiple streams with independent configurations
+
+`RedisMessageStream` is registered as a default `@Singleton` bean wired via
+constructor injection:
+
+```java
+public RedisMessageStream(JedisPool pool, RedisStreamConfig config)
+```
+
+Applications that need several streams with *different* configurations — for
+example, one with a long claim-timeout for slow synchronous work and one with
+a short claim-timeout for fast status polling — can construct additional
+instances directly and register them as named beans:
+
+```java
+@Factory
+public class MyStreamFactory {
+
+    @Named("monitor")
+    @Singleton
+    public MessageStream<String> monitorStream(
+            JedisPool pool,
+            @Named("monitor") RedisStreamConfig monitorConfig) {
+        return new RedisMessageStream(pool, monitorConfig);
+    }
+}
+```
+
+The default bean is still resolved on unqualified `@Inject MessageStream<String>`;
+additional instances are selected via `@Named(...)`. All instances share the
+same `JedisPool` but each runs its own listener thread and keeps its own
+consumer-group state.
+
 ## Testing
 
 ```bash

@@ -21,6 +21,10 @@ dependencies {
 - Periodic status checking for async commands
 - Command cancellation support
 - Persistent storage using Redis or in-memory backend
+- Multiple `CommandService` instances per application (one per queue), each
+  with its own consumer loop and queue configuration
+- Hand-off of a command from one queue to another via
+  `CommandResult.handedOff()`
 
 ## Usage
 
@@ -125,6 +129,85 @@ submit() ──▶ SUBMITTED ──pickup──▶ RUNNING ─┬─success─�
                                             ├─error────▶ FAILED
                                             └─cancel───▶ CANCELLED
 ```
+
+## Multiple queues and hand-off between them
+
+An application can run more than one `CommandService` at the same time, each
+bound to its own `CommandQueue`. This is useful when different phases of a
+command's lifecycle benefit from different delivery semantics — for example, a
+long claim-timeout queue for slow synchronous work (crash-safe against
+consumer reclaim) and a short claim-timeout queue for fast status polling.
+
+`CommandServiceImpl` uses constructor injection, so applications can produce
+additional `@Named` instances from a factory:
+
+```java
+@Factory
+public class MyCommandServiceFactory {
+
+    @Named("monitor")
+    @Singleton
+    public CommandQueue monitorQueue(
+            JedisPool pool,
+            @Named("monitor") RedisStreamConfig monitorConfig,
+            CommandConfig config) {
+        var monitorStream = new RedisMessageStream(pool, monitorConfig);
+        return new MyMonitorQueue(monitorStream, config.pollInterval());
+    }
+
+    @Named("monitor")
+    @Singleton
+    public CommandService monitorService(
+            @Named("monitor") CommandQueue queue,
+            CommandConfig config,
+            CommandStateStore store,
+            @Named(TaskExecutors.BLOCKING) ExecutorService executor) {
+        return new CommandServiceImpl(config, store, queue, executor);
+    }
+}
+```
+
+Register handlers once per service and start each loop at boot:
+
+```java
+@Inject Collection<CommandService> services;
+
+var handlers = context.getBeansOfType(CommandHandler.class);
+for (CommandService svc : services) {
+    for (CommandHandler h : handlers) svc.registerHandler(h);
+}
+services.forEach(CommandService::start);
+```
+
+### `CommandResult.handedOff()`
+
+A handler can end a command's life on its current queue and continue it on a
+different queue. Submit the command to the destination queue directly, then
+return `CommandResult.handedOff()`:
+
+```java
+@Inject @Named("monitor") CommandQueue monitorQueue;
+
+@Override
+public CommandResult<MyResult> execute(Command<MyParams> command) {
+    backend.launch(...);
+    // heavy synchronous work is done; move further polling to the monitor queue
+    monitorQueue.submit(CommandMsg.of(command.id(), command.type()));
+    return CommandResult.handedOff();
+}
+```
+
+From the source queue's perspective `handedOff()` is terminal (the message is
+ACKed). From the command's lifecycle perspective it remains non-terminal — the
+persisted `CommandState` stays in `RUNNING`; a handler on the destination
+queue eventually drives it to `SUCCEEDED` / `FAILED` / `CANCELLED`.
+
+Hand-off is not atomic (the destination `submit` happens before the source
+ACK). If the consumer crashes between the two the source message is
+redelivered, so handlers that use `handedOff()` must be idempotent under
+re-execution — typically by persisting an intermediate state before the
+non-idempotent side-effect (e.g. the external launch call) so the replay can
+skip it.
 
 ## Testing
 
