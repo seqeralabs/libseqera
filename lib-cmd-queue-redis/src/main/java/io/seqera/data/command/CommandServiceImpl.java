@@ -26,9 +26,7 @@ import java.util.concurrent.TimeoutException;
 
 import io.micronaut.scheduling.TaskExecutors;
 import io.seqera.data.command.store.CommandStateStore;
-import jakarta.inject.Inject;
 import jakarta.inject.Named;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +47,14 @@ import org.slf4j.LoggerFactory;
  *   <li>If result is terminal → return true (message removed from queue)</li>
  * </ul>
  */
-@Singleton
+/**
+ * NOTE: not annotated with {@code @Singleton}. Each application wires its own
+ * {@code CommandService} bean(s) via a {@code @Factory} — this way the same
+ * class can be used to produce any number of per-queue instances (each with
+ * its own {@link CommandQueue}) without competing with a library-level default
+ * bean. Single-queue applications declare one factory method; multi-queue
+ * applications declare one per queue (or use {@code @EachBean}).
+ */
 public class CommandServiceImpl implements CommandService {
 
     private static final Logger log = LoggerFactory.getLogger(CommandServiceImpl.class);
@@ -64,12 +69,11 @@ public class CommandServiceImpl implements CommandService {
     private volatile boolean started = false;
 
     /**
-     * Constructor-injected for the default {@code @Singleton} bean; applications
-     * that need multiple services (one per queue) can invoke this constructor
-     * directly from a {@code @Factory} to produce additional {@code @Named}
-     * beans sharing the same {@link CommandStateStore}.
+     * Construct a {@code CommandService} bound to the given queue. Typically
+     * invoked from an application {@code @Factory}; a single application may
+     * produce multiple instances (one per queue), each with its own consumer
+     * loop, all sharing the same {@link CommandStateStore}.
      */
-    @Inject
     public CommandServiceImpl(
             CommandConfig config,
             CommandStateStore store,
@@ -293,10 +297,16 @@ public class CommandServiceImpl implements CommandService {
             }
 
             // Handler handed the command off to another queue (via an explicit
-            // queue.submit(...) before returning). ACK the source message but
-            // leave the persisted state alone - the command is still active,
-            // just on a different queue from now on.
+            // queue.submit(...) before returning). ACK the source message and
+            // transition the persisted state to RUNNING so the destination
+            // queue's consumer dispatches to checkStatus() rather than running
+            // execute() again — otherwise the non-idempotent initial work
+            // would be re-run every time the command is polled on the new
+            // queue, producing an infinite execute → handedOff loop.
             if (result.status() == CommandStatus.HANDED_OFF) {
+                if (state.status() != CommandStatus.RUNNING) {
+                    store.save(state.started());
+                }
                 log.info("Command handed off - id={}", state.id());
                 return true; // ACK source - command now lives on the destination queue
             }

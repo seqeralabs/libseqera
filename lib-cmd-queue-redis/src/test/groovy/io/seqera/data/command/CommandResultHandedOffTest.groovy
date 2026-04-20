@@ -50,4 +50,15 @@ class CommandResultHandedOffTest extends Specification {
         CommandStatus.FAILED.isTerminal()
         CommandStatus.CANCELLED.isTerminal()
     }
+
+    def 'HANDED_OFF result transitions a SUBMITTED state to RUNNING before ACK'() {
+        given: 'a state currently in SUBMITTED'
+        def state = CommandState.submitted('cmd-1', 'test', null)
+
+        when: 'applying HANDED_OFF semantics (started())'
+        def after = state.started()
+
+        then: 'persisted state becomes RUNNING so the destination queue dispatches to checkStatus()'
+        after.status() == CommandStatus.RUNNING
+    }
 }

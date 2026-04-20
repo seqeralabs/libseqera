@@ -12,6 +12,37 @@ dependencies {
 }
 ```
 
+## ⚠️ Breaking change — `CommandServiceImpl` is no longer `@Singleton`
+
+Previous releases exposed `CommandServiceImpl` as an auto-registered
+`@Singleton` bean, so consumers could just do `@Inject CommandService` and
+everything worked.
+
+From this release onward, `CommandServiceImpl` is a plain class — not a bean.
+Each application must wire its own `CommandService` via a `@Factory`. This
+removes an artificial single-queue assumption and lets applications produce
+one service per queue (primary, monitoring, auxiliary, …) without fighting a
+library default.
+
+**Migration** — single-queue application:
+
+```java
+@Factory
+public class MyCommandFactory {
+
+    @Singleton
+    public CommandService commandService(
+            CommandConfig config,
+            CommandStateStore store,
+            CommandQueue queue,
+            @Named(TaskExecutors.BLOCKING) ExecutorService executor) {
+        return new CommandServiceImpl(config, store, queue, executor);
+    }
+}
+```
+
+Multi-queue application: see [Multiple queues](#multiple-queues-and-hand-off-between-them).
+
 ## Features
 
 - Fire-and-forget command submission

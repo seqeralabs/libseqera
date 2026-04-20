@@ -1,6 +1,7 @@
 # lib-data-stream-redis
 
-Message streaming with Redis Streams and local implementations for persistent event processing.
+Message streaming with Redis Streams and an in-memory fallback for persistent
+event processing.
 
 ## Installation
 
@@ -12,7 +13,74 @@ dependencies {
 }
 ```
 
-As of version 1.3.0, this library no longer requires Groovy as a runtime dependency.
+As of version 1.3.0, this library no longer requires Groovy as a runtime
+dependency.
+
+## ⚠️ Breaking change
+
+In previous releases `RedisMessageStream` and `LocalMessageStream` were
+auto-registered `@Singleton` beans. The class-level Micronaut annotations
+have been removed — both are now plain Java classes with public constructors
+and can be instantiated directly.
+
+Micronaut-managed wiring is provided by the two `Default*` subclasses
+(`DefaultRedisMessageStream`, `DefaultLocalMessageStream`), each annotated
+with `@EachBean(RedisStreamConfig.class)` — see
+[Automatic wiring](#automatic-wiring-eachbean) below. Applications that
+previously injected `MessageStream<String>` unqualified must now declare at
+least one `RedisStreamConfig` bean in their context.
+
+## Implementations
+
+| Class | Use | DI status |
+|---|---|---|
+| `RedisMessageStream` | Redis Streams backend (distributed, durable) | plain class, construct with `new RedisMessageStream(pool, config)` |
+| `LocalMessageStream` | In-memory backend (tests, local dev) | plain class, construct with `new LocalMessageStream()` |
+| `DefaultRedisMessageStream` | Micronaut-managed wrapper — active when `RedisActivator` is present | `@EachBean(RedisStreamConfig.class)` |
+| `DefaultLocalMessageStream` | Micronaut-managed wrapper — active when `RedisActivator` is absent | `@EachBean(RedisStreamConfig.class)` |
+
+## Automatic wiring (`@EachBean`)
+
+`DefaultRedisMessageStream` / `DefaultLocalMessageStream` are annotated with
+`@EachBean(RedisStreamConfig.class)`, so **one `MessageStream` bean is
+produced per `RedisStreamConfig` bean in the context**, and each produced
+stream inherits its config's qualifier. The Redis / in-memory choice is
+resolved automatically by `@Requires(bean = RedisActivator.class)` vs
+`@Requires(missingBeans = RedisActivator.class)` on the two subclasses.
+
+Single-queue applications declare one `RedisStreamConfig` bean and inject
+`MessageStream<String>` unqualified. Multi-queue applications declare
+multiple named configs (typically via `@EachProperty`) and inject by name:
+
+```java
+@EachProperty("myapp.queues")
+public class AppStreamConfig implements RedisStreamConfig {
+    private final String name;
+    public AppStreamConfig(@Parameter String name) { this.name = name; }
+    // ... getters ...
+}
+```
+
+```yaml
+myapp:
+  queues:
+    lifecycle:
+      claim-timeout: 60s
+      consumer-group: app-lifecycle
+    monitor:
+      claim-timeout: 5s
+      consumer-group: app-monitor
+```
+
+Micronaut then produces `@Named("lifecycle")` and `@Named("monitor")`
+instances of both `RedisStreamConfig` and `MessageStream<String>`. No
+hand-written factory is required.
+
+```java
+@Inject
+@Named("monitor")
+MessageStream<String> monitorStream;
+```
 
 ## Usage
 
@@ -45,38 +113,34 @@ class ActivityConsumer implements MessageConsumer<ActivityEvent> {
 messageStream.consume("user-activity", new ActivityConsumer())
 ```
 
-## Multiple streams with independent configurations
+## Programmatic construction
 
-`RedisMessageStream` is registered as a default `@Singleton` bean wired via
-constructor injection:
-
-```java
-public RedisMessageStream(JedisPool pool, RedisStreamConfig config)
-```
-
-Applications that need several streams with *different* configurations — for
-example, one with a long claim-timeout for slow synchronous work and one with
-a short claim-timeout for fast status polling — can construct additional
-instances directly and register them as named beans:
+Outside the Micronaut bean graph, both implementations can be instantiated
+directly — useful for unit tests, one-off tooling, or apps that don't use
+DI:
 
 ```java
-@Factory
-public class MyStreamFactory {
-
-    @Named("monitor")
-    @Singleton
-    public MessageStream<String> monitorStream(
-            JedisPool pool,
-            @Named("monitor") RedisStreamConfig monitorConfig) {
-        return new RedisMessageStream(pool, monitorConfig);
-    }
-}
+var redisStream = new RedisMessageStream(jedisPool, myConfig);
+// ... or ...
+var localStream = new LocalMessageStream();
 ```
 
-The default bean is still resolved on unqualified `@Inject MessageStream<String>`;
-additional instances are selected via `@Named(...)`. All instances share the
-same `JedisPool` but each runs its own listener thread and keeps its own
-consumer-group state.
+## Migration from earlier releases
+
+Existing code that relied on the auto-registered `@Singleton` beans needs
+one of:
+
+1. **Quick fix** — keep the old "single default stream" behaviour by providing
+   one `RedisStreamConfig` bean:
+   ```java
+   @Singleton
+   public class MyConfig implements RedisStreamConfig { /* ... */ }
+   ```
+   Micronaut will then auto-produce a single unqualified `MessageStream`
+   bean via the `Default*` variant appropriate for the environment.
+
+2. **Multi-queue setup** — adopt `@EachProperty`+`@EachBean` as shown under
+   [Automatic wiring](#automatic-wiring-eachbean).
 
 ## Testing
 

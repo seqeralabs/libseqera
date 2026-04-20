@@ -22,13 +22,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import io.micronaut.context.annotation.Requires;
-import io.seqera.activator.redis.RedisActivator;
 import io.seqera.data.stream.MessageConsumer;
 import io.seqera.data.stream.MessageStream;
 import io.seqera.random.LongRndKey;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -68,14 +64,14 @@ import redis.clients.jedis.resps.StreamEntry;
  *   <li>Acknowledge and delete the message upon successful processing</li>
  * </ol>
  *
- * <p>This class is automatically activated when the 'redis' environment is active
- * and requires a configured {@link JedisPool} for Redis connectivity.
+ * <p>This class is a plain Java class — it carries no bean annotations so it
+ * can be instantiated directly with {@code new RedisMessageStream(pool, config)}.
+ * For Micronaut-managed wiring see {@link DefaultRedisMessageStream}, which
+ * produces one bean per {@link RedisStreamConfig} bean via {@code @EachBean}.</p>
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  */
-@Requires(bean = RedisActivator.class)
-@Singleton
 public class RedisMessageStream implements MessageStream<String> {
 
     private static final Logger log = LoggerFactory.getLogger(RedisMessageStream.class);
@@ -96,13 +92,10 @@ public class RedisMessageStream implements MessageStream<String> {
     private final Map<String, StreamEntryID> lastClaimCursor = new ConcurrentHashMap<>();
 
     /**
-     * Constructor-injected for the default {@code @Singleton} bean. Applications
-     * that need multiple {@code RedisMessageStream} instances with independent
-     * configurations (e.g. different claim timeouts) can call this constructor
-     * directly from a {@code @Factory} and expose the result as an additional
-     * named bean.
+     * Construct a {@code RedisMessageStream} with the given Jedis pool and
+     * config. Applications can either call this constructor directly or rely
+     * on {@link DefaultRedisMessageStream} for Micronaut-managed wiring.
      */
-    @Inject
     public RedisMessageStream(JedisPool pool, RedisStreamConfig config) {
         this.pool = pool;
         this.config = config;

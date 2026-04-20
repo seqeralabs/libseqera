@@ -20,11 +20,8 @@ package io.seqera.data.stream.impl;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import io.micronaut.context.annotation.Requires;
-import io.seqera.activator.redis.RedisActivator;
 import io.seqera.data.stream.MessageConsumer;
 import io.seqera.data.stream.MessageStream;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import static io.seqera.data.stream.impl.SleepHelper.sleep;
@@ -61,8 +58,6 @@ import static io.seqera.data.stream.impl.SleepHelper.sleep;
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  */
-@Requires(missingBeans = RedisActivator.class)
-@Singleton
 public class LocalMessageStream implements MessageStream<String> {
 
     private static final Logger log = LoggerFactory.getLogger(LocalMessageStream.class);
