@@ -31,8 +31,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Implementation of the command service.
- * Handles queue consumption and command execution with proper multi-replica support.
+ * Implementation of the command service. Handles queue consumption and command
+ * execution with proper multi-replica support.
+ *
+ * <p>Not annotated with {@code @Singleton}. Each application wires its own
+ * {@code CommandService} bean(s) via a {@code @Factory}, so the same class can
+ * produce any number of per-queue instances (each with its own
+ * {@link CommandQueue}) without competing with a library-level default bean.
+ * Single-queue applications declare one factory method; multi-queue
+ * applications declare one per queue (or use {@code @EachBean}).</p>
  *
  * <p>Processing flow:
  * <ul>
@@ -46,14 +53,6 @@ import org.slf4j.LoggerFactory;
  *   <li>If result is RUNNING → return false (message stays in queue for retry)</li>
  *   <li>If result is terminal → return true (message removed from queue)</li>
  * </ul>
- */
-/**
- * NOTE: not annotated with {@code @Singleton}. Each application wires its own
- * {@code CommandService} bean(s) via a {@code @Factory} — this way the same
- * class can be used to produce any number of per-queue instances (each with
- * its own {@link CommandQueue}) without competing with a library-level default
- * bean. Single-queue applications declare one factory method; multi-queue
- * applications declare one per queue (or use {@code @EachBean}).
  */
 public class CommandServiceImpl implements CommandService {
 
@@ -296,19 +295,29 @@ public class CommandServiceImpl implements CommandService {
                 return false; // Keep in queue - will retry and call checkStatus()
             }
 
-            // Handler handed the command off to another queue (via an explicit
-            // queue.submit(...) before returning). ACK the source message and
-            // transition the persisted state to RUNNING so the destination
-            // queue's consumer dispatches to checkStatus() rather than running
-            // execute() again — otherwise the non-idempotent initial work
-            // would be re-run every time the command is polled on the new
-            // queue, producing an infinite execute → handedOff loop.
+            // Handler re-submitted this command to another queue (via an
+            // explicit otherQueue.submit(...) before returning). We need to:
+            //
+            //   1. Transition persisted state to RUNNING — critical: without
+            //      this, the destination queue's consumer loads state, sees
+            //      SUBMITTED, and dispatches to execute() (which runs the
+            //      non-idempotent initial work), producing an infinite
+            //      execute → handedOff loop. Writing RUNNING here makes the
+            //      destination dispatch to checkStatus() (read-mostly).
+            //
+            //   2. ACK the source message (return true) so this queue stops
+            //      polling the command — it now lives on the destination queue.
+            //
+            // The guard on state.status() avoids a redundant Redis write in the
+            // case where the handler was invoked from checkStatus() (state
+            // already RUNNING) — normal for a command that hops queues more
+            // than once over its lifetime.
             if (result.status() == CommandStatus.HANDED_OFF) {
                 if (state.status() != CommandStatus.RUNNING) {
                     store.save(state.started());
                 }
                 log.info("Command handed off - id={}", state.id());
-                return true; // ACK source - command now lives on the destination queue
+                return true;
             }
 
             // Terminal result (SUCCEEDED, FAILED, or CANCELLED)

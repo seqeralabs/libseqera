@@ -45,6 +45,12 @@ test {
 
 group = 'io.seqera'
 
+afterEvaluate {
+    if (findProperty('snapshot') == 'true' && !version.toString().endsWith('-SNAPSHOT')) {
+        version = "${version}-SNAPSHOT"
+    }
+}
+
 java {
     withSourcesJar()
 }
