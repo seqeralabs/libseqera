@@ -279,6 +279,19 @@ public class CommandServiceImpl implements CommandService {
                 if (state.status() != CommandStatus.RUNNING) {
                     store.save(state.started());
                 }
+                // Cross-stream migration: handler asked for the in-flight message to be
+                // re-delivered on a different stream (typically one with a different
+                // claim-timeout, e.g. moving from a slow lifecycle stream to a fast
+                // monitor stream once the initial synchronous work has completed).
+                // Offer a new CommandMsg to the destination, then ACK the source message
+                // via the normal return-true path. Sequencing (offer-first, ACK-second)
+                // means a crash between the two redelivers the source; handlers relying
+                // on this variant are expected to be idempotent under such redelivery.
+                if (result.targetStream() != null) {
+                    queue.offer(result.targetStream(), CommandMsg.of(state.id(), state.type()));
+                    log.debug("Command migrated to stream: id={}, dst={}", state.id(), result.targetStream());
+                    return true; // ACK source - message now lives on the destination stream
+                }
                 return false; // Keep in queue - will retry and call checkStatus()
             }
 

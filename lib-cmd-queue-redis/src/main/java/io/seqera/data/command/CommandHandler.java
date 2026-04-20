@@ -55,6 +55,6 @@ public interface CommandHandler<P, R> {
      * @return The result indicating current status (RUNNING to continue, or terminal status)
      */
     default CommandResult<R> checkStatus(Command<P> command, CommandState state) {
-        return CommandResult.running();
+        return CommandResult.active();
     }
 }
