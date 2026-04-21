@@ -62,42 +62,62 @@ public class LocalMessageStream implements MessageStream<String> {
 
     private static final Logger log = LoggerFactory.getLogger(LocalMessageStream.class);
 
-    private final ConcurrentHashMap<String, LinkedBlockingQueue<String>> delegate = new ConcurrentHashMap<>();
+    /**
+     * Backing storage shared across every instance in the JVM. Multiple
+     * {@code LocalMessageStream} beans (one per {@code RedisStreamConfig} in
+     * the {@code @EachBean} wiring) still address the same set of streams —
+     * without that, an atomic hand-off queued via
+     * {@link io.seqera.data.stream.TxContext TxContext} on one instance
+     * would land in that instance's isolated map and never reach the
+     * consumer living on another instance. Redis solves this naturally via
+     * the shared server; in-memory we mirror it with shared state.
+     */
+    private static final ConcurrentHashMap<String, LinkedBlockingQueue<String>> delegate = new ConcurrentHashMap<>();
 
     /**
      * {@inheritDoc}
      */
     @Override
     public void init(String streamId) {
-        delegate.put(streamId, new LinkedBlockingQueue<>());
+        delegate.computeIfAbsent(streamId, k -> new LinkedBlockingQueue<>());
     }
 
     /**
      * {@inheritDoc}
+     *
+     * <p>Auto-creates the backing queue if the destination stream hasn't yet
+     * been {@link #init}'d — happens with cross-stream hand-offs that fire
+     * before the destination consumer starts.</p>
      */
     @Override
     public void offer(String streamId, String message) {
         delegate
-                .get(streamId)
+                .computeIfAbsent(streamId, k -> new LinkedBlockingQueue<>())
                 .offer(message);
     }
 
     /**
      * {@inheritDoc}
+     *
+     * <p>When the consumer returns {@code true}, every offer queued via
+     * {@link TxContext#offer} is appended to its destination queue before this
+     * method returns — providing the same atomic hand-off semantics as the
+     * Redis implementation (no transaction needed since the map is held in
+     * memory for the duration of one consume).</p>
      */
     @Override
     public boolean consume(String streamId, MessageConsumer<String> consumer) {
-        final var message = delegate
-                .get(streamId)
-                .poll();
+        final var queue = delegate.get(streamId);
+        final var message = queue == null ? null : queue.poll();
         if (message == null) {
             return false;
         }
 
-        Throwable error = null;
+        final var ctx = new TxContextCollector();
+
         boolean result = false;
         try {
-            result = consumer.accept(message);
+            result = consumer.accept(message, ctx);
         }
         catch (Throwable e) {
             result = false;
@@ -105,9 +125,14 @@ public class LocalMessageStream implements MessageStream<String> {
         }
         finally {
             if (!result) {
-                // add again message not consumed to mimic the behavior or redis stream
+                // Return the un-consumed message; queued offers are discarded —
+                // atomic hand-off materialises only when the source is acknowledged.
                 sleep(1_000);
                 offer(streamId, message);
+            } else {
+                for (var o : ctx.collected()) {
+                    offer(o.streamId(), o.payload());
+                }
             }
         }
         return result;
@@ -118,6 +143,7 @@ public class LocalMessageStream implements MessageStream<String> {
      */
     @Override
     public int length(String streamId) {
-        return delegate.get(streamId).size();
+        final var q = delegate.get(streamId);
+        return q == null ? 0 : q.size();
     }
 }

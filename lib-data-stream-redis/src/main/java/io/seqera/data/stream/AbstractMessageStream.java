@@ -197,23 +197,14 @@ public abstract class AbstractMessageStream<M> implements Closeable {
 
     /**
      * Deserialize the message as string into the target message object and process it by applying
-     * the given consumer {@link MessageConsumer}.
-     *
-     * @param msg
-     *      The message serialised as a string value
-     * @param consumer
-     *      The consumer {@link MessageConsumer} that will handle the message as a object
-     * @param count
-     *      An {@link AtomicInteger} counter incremented by one when this method is invoked,
-     *      irrespective if the consumer is successful or not.
-     * @return
-     *      The result of the consumer {@link MessageConsumer} operation.
+     * the given consumer {@link MessageConsumer}. The supplied {@link TxContext} is a typed view
+     * over the raw stream-level context and encodes offers via this stream's encoding strategy.
      */
-    protected boolean processMessage(String msg, MessageConsumer<M> consumer, AtomicInteger count) {
+    protected boolean processMessage(String msg, MessageConsumer<M> consumer, TxContext<M> ctx, AtomicInteger count) {
         count.incrementAndGet();
         final M decoded = encoder.decode(msg);
         log.trace("Message stream - receiving message={}; decoded={}", msg, decoded);
-        return consumer.accept(decoded);
+        return consumer.accept(decoded, ctx);
     }
 
     /**
@@ -227,7 +218,14 @@ public abstract class AbstractMessageStream<M> implements Closeable {
                 for (Map.Entry<String, MessageConsumer<M>> entry : listeners.entrySet()) {
                     final var streamId = entry.getKey();
                     final var consumer = entry.getValue();
-                    stream.consume(streamId, (String msg) -> processMessage(msg, consumer, count));
+                    // Raw context carries encoded strings; wrap it into a typed
+                    // view that encodes domain messages on their way out. Atomic
+                    // hand-off therefore only works between streams sharing this
+                    // encoding strategy.
+                    stream.consume(streamId, (String msg, TxContext<String> rawCtx) -> {
+                        final TxContext<M> typedCtx = (dst, m) -> rawCtx.offer(dst, encoder.encode(m));
+                        return processMessage(msg, consumer, typedCtx, count);
+                    });
                 }
                 // reset the attempt count because no error has been thrown
                 attempt.reset();

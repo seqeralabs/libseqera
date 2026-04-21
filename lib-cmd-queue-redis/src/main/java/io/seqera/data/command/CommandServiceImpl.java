@@ -26,6 +26,7 @@ import java.util.concurrent.TimeoutException;
 
 import io.micronaut.scheduling.TaskExecutors;
 import io.seqera.data.command.store.CommandStateStore;
+import io.seqera.data.stream.TxContext;
 import jakarta.inject.Named;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,6 +68,12 @@ public class CommandServiceImpl implements CommandService {
 
     private volatile boolean started = false;
 
+    // Peer service that receives commands handed off from this one
+    // (see handoffTo / CommandResult.handedOff). Null when no hand-off is
+    // wired — returning handedOff() without a registered target is a
+    // misconfiguration and marks the command FAILED.
+    private volatile CommandService handoffTarget;
+
     /**
      * Construct a {@code CommandService} bound to the given queue. Typically
      * invoked from an application {@code @Factory}; a single application may
@@ -85,6 +92,17 @@ public class CommandServiceImpl implements CommandService {
     }
 
     @Override
+    public void handoffTo(CommandService target) {
+        if (started) {
+            throw new IllegalStateException("Cannot register hand-off target after service has started");
+        }
+        if (target == null || target == this) {
+            throw new IllegalArgumentException("Hand-off target must be a different non-null CommandService");
+        }
+        this.handoffTarget = target;
+    }
+
+    @Override
     public void start() {
         if (started) {
             log.debug("Command service already started");
@@ -93,6 +111,11 @@ public class CommandServiceImpl implements CommandService {
         started = true;
         queue.addConsumer(this::processCommand);
         log.info("Command service started - consuming commands");
+    }
+
+    @Override
+    public String queueStreamName() {
+        return queue.streamName();
     }
 
     @Override
@@ -198,7 +221,7 @@ public class CommandServiceImpl implements CommandService {
      * @param msg The command message containing commandId and type
      * @return true to acknowledge (remove from queue), false to retry later
      */
-    private boolean processCommand(CommandMsg msg) {
+    private boolean processCommand(CommandMsg msg, TxContext<CommandMsg> ctx) {
         // Step 1: Load command state from persistent storage
         var state = store.findById(msg.commandId()).orElse(null);
         if (state == null) {
@@ -225,7 +248,7 @@ public class CommandServiceImpl implements CommandService {
         // Step 4: Delegate to the type-capturing helper method
         // This pattern allows Java to infer concrete type parameters (P, R) from the
         // CommandRegistration, enabling type-safe handler invocation without raw types.
-        return processCommandWithHandler(msg, state, registration);
+        return processCommandWithHandler(msg, state, registration, ctx);
     }
 
     /**
@@ -257,7 +280,8 @@ public class CommandServiceImpl implements CommandService {
     private <P, R> boolean processCommandWithHandler(
             CommandMsg msg,
             CommandState state,
-            CommandRegistration<P, R> registration) {
+            CommandRegistration<P, R> registration,
+            TxContext<CommandMsg> ctx) {
 
         // Reconstruct the typed Command object from persisted state
         // Uses Class.cast() internally for type-safe conversion
@@ -295,28 +319,22 @@ public class CommandServiceImpl implements CommandService {
                 return false; // Keep in queue - will retry and call checkStatus()
             }
 
-            // Handler re-submitted this command to another queue (via an
-            // explicit otherQueue.submit(...) before returning). We need to:
-            //
-            //   1. Transition persisted state to RUNNING — critical: without
-            //      this, the destination queue's consumer loads state, sees
-            //      SUBMITTED, and dispatches to execute() (which runs the
-            //      non-idempotent initial work), producing an infinite
-            //      execute → handedOff loop. Writing RUNNING here makes the
-            //      destination dispatch to checkStatus() (read-mostly).
-            //
-            //   2. ACK the source message (return true) so this queue stops
-            //      polling the command — it now lives on the destination queue.
-            //
-            // The guard on state.status() avoids a redundant Redis write in the
-            // case where the handler was invoked from checkStatus() (state
-            // already RUNNING) — normal for a command that hops queues more
-            // than once over its lifetime.
+            // Hand-off: persist RUNNING (so the destination consumer dispatches
+            // to checkStatus, not a re-execute of the non-idempotent initial
+            // work) and queue the XADD on the target queue inside the same
+            // MULTI that ACKs the source — atomic, no duplicate window.
             if (result.status() == CommandStatus.HANDED_OFF) {
+                if (handoffTarget == null) {
+                    log.error("Command requested hand-off but no target registered: id={}", state.id());
+                    store.save(state.failed("No hand-off target registered"));
+                    return true;
+                }
                 if (state.status() != CommandStatus.RUNNING) {
                     store.save(state.started());
                 }
-                log.info("Command handed off - id={}", state.id());
+                ctx.offer(handoffTarget.queueStreamName(),
+                        CommandMsg.of(state.id(), state.type()));
+                log.info("Command handed off - id={}, dst={}", state.id(), handoffTarget.queueStreamName());
                 return true;
             }
 

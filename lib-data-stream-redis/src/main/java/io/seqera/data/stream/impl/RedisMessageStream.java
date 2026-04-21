@@ -139,6 +139,11 @@ public class RedisMessageStream implements MessageStream<String> {
 
     /**
      * {@inheritDoc}
+     *
+     * <p>When the consumer returns {@code true}, the XACK/XDEL of the current
+     * message and every XADD queued via {@link TxContext#offer} run in a
+     * single {@code MULTI/EXEC} — giving an atomic hand-off to other streams
+     * on the same Redis instance (or same slot on Redis Cluster).</p>
      */
     @Override
     public boolean consume(String streamId, MessageConsumer<String> consumer) {
@@ -149,23 +154,34 @@ public class RedisMessageStream implements MessageStream<String> {
             if (entry == null) {
                 entry = readMessage(jedis, streamId);
             }
-            if (entry != null && consumer.accept(msg = entry.getFields().get(DATA_FIELD))) {
-                final var tx = jedis.multi();
-                // acknowledge the entry has been processed so that it cannot be claimed anymore
-                tx.xack(streamId, config.getDefaultConsumerGroupName(), entry.getID());
-                final var delta = System.currentTimeMillis() - begin;
-                if (delta > config.getConsumerWarnTimeoutMillis()) {
-                    log.warn("Redis message stream - consume processing took {} - offending entry={}; message={}",
-                            Duration.ofMillis(delta), entry.getID(), msg);
-                }
-                // this remove permanently the entry from the stream
-                tx.xdel(streamId, entry.getID());
-                tx.exec();
-                return true;
-            }
-            else {
+            if (entry == null) {
                 return false;
             }
+            msg = entry.getFields().get(DATA_FIELD);
+
+            // Side-effect offers the consumer may queue run inside the same
+            // MULTI that acknowledges the source message. TxContextCollector
+            // allocates its list lazily so the common "no offers" path stays
+            // allocation-free.
+            final var ctx = new TxContextCollector();
+
+            if (!consumer.accept(msg, ctx)) {
+                return false;
+            }
+
+            final var tx = jedis.multi();
+            tx.xack(streamId, config.getDefaultConsumerGroupName(), entry.getID());
+            tx.xdel(streamId, entry.getID());
+            for (var o : ctx.collected()) {
+                tx.xadd(o.streamId(), StreamEntryID.NEW_ENTRY, Map.of(DATA_FIELD, o.payload()));
+            }
+            final var delta = System.currentTimeMillis() - begin;
+            if (delta > config.getConsumerWarnTimeoutMillis()) {
+                log.warn("Redis message stream - consume processing took {} - offending entry={}; message={}",
+                        Duration.ofMillis(delta), entry.getID(), msg);
+            }
+            tx.exec();
+            return true;
         }
     }
 
