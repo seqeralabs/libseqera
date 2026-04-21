@@ -17,6 +17,7 @@
 
 package io.seqera.cloudinfo.client
 
+import io.seqera.cloudinfo.api.ProductsQuery
 import spock.lang.Specification
 import spock.lang.Shared
 
@@ -56,5 +57,56 @@ class CloudInfoClientTest extends Specification {
         products.size() > 0
         products.every { it.type != null }
         products.any { it.onDemandPrice > 0 }
+    }
+
+    def 'should fetch products with null query equal to no query'() {
+        when:
+        def a = client.getProducts('amazon', 'us-east-1')
+        def b = client.getProducts('amazon', 'us-east-1', null)
+
+        then:
+        a.size() == b.size()
+    }
+
+    def 'should filter products with sched=true to a subset'() {
+        given:
+        def query = ProductsQuery.builder().sched(true).build()
+
+        when:
+        def all = client.getProducts('amazon', 'us-east-1')
+        def filtered = client.getProducts('amazon', 'us-east-1', query)
+
+        then:
+        filtered.size() > 0
+        filtered.size() <= all.size()
+        def allTypes = all*.type as Set
+        filtered.every { allTypes.contains(it.type) }
+    }
+
+    def 'should filter products with nvme=true to a subset'() {
+        given:
+        def query = ProductsQuery.builder().nvme(true).build()
+
+        when:
+        def all = client.getProducts('amazon', 'us-east-1')
+        def filtered = client.getProducts('amazon', 'us-east-1', query)
+
+        then:
+        filtered.size() > 0
+        filtered.size() <= all.size()
+        def allTypes = all*.type as Set
+        filtered.every { allTypes.contains(it.type) }
+    }
+
+    def 'should return all products for unconfigured provider when filters set'() {
+        given:
+        def query = ProductsQuery.builder().sched(true).nvme(true).build()
+
+        when:
+        def all = client.getProducts('google', 'us-central1')
+        def filtered = client.getProducts('google', 'us-central1', query)
+
+        then:
+        filtered.size() == all.size()
     }
 }
