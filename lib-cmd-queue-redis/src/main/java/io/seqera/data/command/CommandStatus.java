@@ -32,7 +32,16 @@ public enum CommandStatus {
     /** Completed with error */
     FAILED,
     /** Canceled by user */
-    CANCELLED;
+    CANCELLED,
+    /**
+     * Pseudo-status used only by {@link CommandResult#handedOff()} — signals to the
+     * framework that the handler has re-submitted this command to another queue
+     * (e.g. via a directly-injected {@link CommandQueue}) and the source message
+     * should be acknowledged without persisting any state transition. Not used for
+     * persisted {@link CommandState}: the stored command remains in RUNNING until
+     * a handler on the destination queue produces a terminal result.
+     */
+    HANDED_OFF;
 
     /**
      * Check if the status is terminal (no further transitions possible).

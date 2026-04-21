@@ -83,7 +83,12 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
         given:
         def begin = System.currentTimeMillis()
         and:
-        def TTL = Duration.ofMillis(150)
+        // TTL must be long enough that a loaded CI runner (testcontainers +
+        // Micronaut context startup + several assertions) doesn't eat the
+        // window between put() at the top and the final get() that exercises
+        // expiration. The final get() sleeps 2*TTL first, so this also bounds
+        // the test duration.
+        def TTL = Duration.ofSeconds(2)
         def store = context.getBean(RedisL2TieredCache)
         def encoder = encoder()
         def cache1 = new MyCache(store)
@@ -129,7 +134,7 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
 
     def 'should get and put a key-value pair /2' () {
         given:
-        def TTL = Duration.ofMillis(150)
+        def TTL = Duration.ofSeconds(2)
         def store = context.getBean(RedisL2TieredCache)
         def encoder = encoder()
         def cache1 = new MyCache(store)
@@ -166,7 +171,7 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
 
     def 'should get or compute a value' () {
         given:
-        def TTL = Duration.ofMillis(150)
+        def TTL = Duration.ofSeconds(2)
         def store = context.getBean(RedisL2TieredCache)
         def cache1 = new MyCache(store)
         def cache2 = new MyCache(store)
@@ -194,7 +199,7 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
 
     def 'should get or compute a value with condition' () {
         given:
-        def TTL = Duration.ofMillis(150)
+        def TTL = Duration.ofSeconds(2)
         def store = context.getBean(RedisL2TieredCache)
         def cache = new MyCache(store)
         and:

@@ -26,15 +26,21 @@ import java.util.concurrent.TimeoutException;
 
 import io.micronaut.scheduling.TaskExecutors;
 import io.seqera.data.command.store.CommandStateStore;
-import jakarta.inject.Inject;
+import io.seqera.data.stream.TxContext;
 import jakarta.inject.Named;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Implementation of the command service.
- * Handles queue consumption and command execution with proper multi-replica support.
+ * Implementation of the command service. Handles queue consumption and command
+ * execution with proper multi-replica support.
+ *
+ * <p>Not annotated with {@code @Singleton}. Each application wires its own
+ * {@code CommandService} bean(s) via a {@code @Factory}, so the same class can
+ * produce any number of per-queue instances (each with its own
+ * {@link CommandQueue}) without competing with a library-level default bean.
+ * Single-queue applications declare one factory method; multi-queue
+ * applications declare one per queue (or use {@code @EachBean}).</p>
  *
  * <p>Processing flow:
  * <ul>
@@ -49,27 +55,52 @@ import org.slf4j.LoggerFactory;
  *   <li>If result is terminal → return true (message removed from queue)</li>
  * </ul>
  */
-@Singleton
 public class CommandServiceImpl implements CommandService {
 
     private static final Logger log = LoggerFactory.getLogger(CommandServiceImpl.class);
 
-    @Inject
-    private CommandConfig config;
-
-    @Inject
-    private CommandStateStore store;
-
-    @Inject
-    private CommandQueue queue;
-
-    @Inject
-    @Named(TaskExecutors.BLOCKING)
-    private ExecutorService executor;
+    private final CommandConfig config;
+    private final CommandStateStore store;
+    private final CommandQueue queue;
+    private final ExecutorService executor;
 
     private final Map<String, CommandRegistration<?, ?>> handlers = new ConcurrentHashMap<>();
 
     private volatile boolean started = false;
+
+    // Peer service that receives commands handed off from this one
+    // (see handoffTo / CommandResult.handedOff). Null when no hand-off is
+    // wired — returning handedOff() without a registered target is a
+    // misconfiguration and marks the command FAILED.
+    private volatile CommandService handoffTarget;
+
+    /**
+     * Construct a {@code CommandService} bound to the given queue. Typically
+     * invoked from an application {@code @Factory}; a single application may
+     * produce multiple instances (one per queue), each with its own consumer
+     * loop, all sharing the same {@link CommandStateStore}.
+     */
+    public CommandServiceImpl(
+            CommandConfig config,
+            CommandStateStore store,
+            CommandQueue queue,
+            @Named(TaskExecutors.BLOCKING) ExecutorService executor) {
+        this.config = config;
+        this.store = store;
+        this.queue = queue;
+        this.executor = executor;
+    }
+
+    @Override
+    public void handoffTo(CommandService target) {
+        if (started) {
+            throw new IllegalStateException("Cannot register hand-off target after service has started");
+        }
+        if (target == null || target == this) {
+            throw new IllegalArgumentException("Hand-off target must be a different non-null CommandService");
+        }
+        this.handoffTarget = target;
+    }
 
     @Override
     public void start() {
@@ -80,6 +111,11 @@ public class CommandServiceImpl implements CommandService {
         started = true;
         queue.addConsumer(this::processCommand);
         log.info("Command service started - consuming commands");
+    }
+
+    @Override
+    public String queueStreamName() {
+        return queue.streamName();
     }
 
     @Override
@@ -185,7 +221,7 @@ public class CommandServiceImpl implements CommandService {
      * @param msg The command message containing commandId and type
      * @return true to acknowledge (remove from queue), false to retry later
      */
-    private boolean processCommand(CommandMsg msg) {
+    private boolean processCommand(CommandMsg msg, TxContext<CommandMsg> ctx) {
         // Step 1: Load command state from persistent storage
         var state = store.findById(msg.commandId()).orElse(null);
         if (state == null) {
@@ -212,7 +248,7 @@ public class CommandServiceImpl implements CommandService {
         // Step 4: Delegate to the type-capturing helper method
         // This pattern allows Java to infer concrete type parameters (P, R) from the
         // CommandRegistration, enabling type-safe handler invocation without raw types.
-        return processCommandWithHandler(msg, state, registration);
+        return processCommandWithHandler(msg, state, registration, ctx);
     }
 
     /**
@@ -244,7 +280,8 @@ public class CommandServiceImpl implements CommandService {
     private <P, R> boolean processCommandWithHandler(
             CommandMsg msg,
             CommandState state,
-            CommandRegistration<P, R> registration) {
+            CommandRegistration<P, R> registration,
+            TxContext<CommandMsg> ctx) {
 
         // Reconstruct the typed Command object from persisted state
         // Uses Class.cast() internally for type-safe conversion
@@ -280,6 +317,25 @@ public class CommandServiceImpl implements CommandService {
                     store.save(state.started());
                 }
                 return false; // Keep in queue - will retry and call checkStatus()
+            }
+
+            // Hand-off: persist RUNNING (so the destination consumer dispatches
+            // to checkStatus, not a re-execute of the non-idempotent initial
+            // work) and queue the XADD on the target queue inside the same
+            // MULTI that ACKs the source — atomic, no duplicate window.
+            if (result.status() == CommandStatus.HANDED_OFF) {
+                if (handoffTarget == null) {
+                    log.error("Command requested hand-off but no target registered: id={}", state.id());
+                    store.save(state.failed("No hand-off target registered"));
+                    return true;
+                }
+                if (state.status() != CommandStatus.RUNNING) {
+                    store.save(state.started());
+                }
+                ctx.offer(handoffTarget.queueStreamName(),
+                        CommandMsg.of(state.id(), state.type()));
+                log.info("Command handed off - id={}, dst={}", state.id(), handoffTarget.queueStreamName());
+                return true;
             }
 
             // Terminal result (SUCCEEDED, FAILED, or CANCELLED)
