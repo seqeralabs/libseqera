@@ -39,7 +39,16 @@ import io.seqera.activator.redis.RedisActivator;
 @EachBean(RedisStreamConfig.class)
 public class DefaultLocalMessageStream extends LocalMessageStream {
 
-    public DefaultLocalMessageStream(@Parameter RedisStreamConfig config) {
-        // config ignored — used only for the @EachBean qualifier cascade
+    /**
+     * @param config unused at runtime — needed only so {@code @EachBean}
+     *               produces one bean per {@link RedisStreamConfig}, each
+     *               inheriting the parent config's qualifier.
+     * @param store  singleton shared across every
+     *               {@code DefaultLocalMessageStream} in this Micronaut
+     *               context — lets atomic cross-stream hand-offs land on
+     *               the map polled by the destination consumer.
+     */
+    public DefaultLocalMessageStream(@Parameter RedisStreamConfig config, LocalMessageStreamStore store) {
+        super(store.delegate);
     }
 }

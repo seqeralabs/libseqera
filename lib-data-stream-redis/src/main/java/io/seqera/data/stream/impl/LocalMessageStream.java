@@ -63,16 +63,26 @@ public class LocalMessageStream implements MessageStream<String> {
     private static final Logger log = LoggerFactory.getLogger(LocalMessageStream.class);
 
     /**
-     * Backing storage shared across every instance in the JVM. Multiple
-     * {@code LocalMessageStream} beans (one per {@code RedisStreamConfig} in
-     * the {@code @EachBean} wiring) still address the same set of streams —
-     * without that, an atomic hand-off queued via
+     * Backing storage. When constructed with the no-arg constructor, each
+     * instance gets its own map (programmatic / unit-test use). When
+     * constructed with an externally-supplied map (typically injected from a
+     * {@code LocalMessageStreamStore} singleton), multiple
+     * {@code LocalMessageStream} beans share the same set of streams — needed
+     * so an atomic hand-off queued via
      * {@link io.seqera.data.stream.TxContext TxContext} on one instance
-     * would land in that instance's isolated map and never reach the
-     * consumer living on another instance. Redis solves this naturally via
-     * the shared server; in-memory we mirror it with shared state.
+     * reaches the consumer living on another instance. Redis solves this
+     * naturally via the shared server; in-memory we mirror it with an
+     * explicitly shared map.
      */
-    private static final ConcurrentHashMap<String, LinkedBlockingQueue<String>> delegate = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, LinkedBlockingQueue<String>> delegate;
+
+    public LocalMessageStream() {
+        this(new ConcurrentHashMap<>());
+    }
+
+    public LocalMessageStream(ConcurrentHashMap<String, LinkedBlockingQueue<String>> delegate) {
+        this.delegate = delegate;
+    }
 
     /**
      * {@inheritDoc}
