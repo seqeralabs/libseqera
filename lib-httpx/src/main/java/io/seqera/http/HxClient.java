@@ -473,9 +473,13 @@ public class HxClient {
     protected <T> HttpResponse<T> sendWithRetry(HttpRequest request, HxAuth auth, HttpResponse.BodyHandler<T> responseBodyHandler) {
         final boolean[] tokenRefreshed = {false};
 
-        final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
-                .retryCondition(config.getRetryCondition())
-                .retryIf(this::shouldRetryOnResponse)
+        final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config);
+        if (config.getRetryConditionChecked() != null) {
+            retry.retryConditionChecked(config.getRetryConditionChecked());
+        } else {
+            retry.retryCondition(config.getRetryCondition());
+        }
+        retry.retryIf(this::shouldRetryOnResponse)
                 .onRetry(event -> {
                     String message = event.getFailure() != null ? event.getFailure().getMessage()
                             : String.valueOf(event.getResult().statusCode());
@@ -545,9 +549,13 @@ public class HxClient {
 
         final boolean[] tokenRefreshed = {false};
 
-        final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
-                .retryCondition(config.getRetryCondition())
-                .retryIf(this::shouldRetryOnResponse)
+        final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config);
+        if (config.getRetryConditionChecked() != null) {
+            retry.retryConditionChecked(config.getRetryConditionChecked());
+        } else {
+            retry.retryCondition(config.getRetryCondition());
+        }
+        retry.retryIf(this::shouldRetryOnResponse)
                 .onRetry(event -> {
                     String message = event.getFailure() != null ? event.getFailure().getMessage()
                             : String.valueOf(event.getResult().statusCode());

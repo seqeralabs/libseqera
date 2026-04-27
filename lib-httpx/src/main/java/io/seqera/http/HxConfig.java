@@ -20,6 +20,7 @@ package io.seqera.http;
 import java.net.CookiePolicy;
 import java.time.Duration;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import dev.failsafe.function.CheckedPredicate;
 import io.seqera.http.auth.AuthenticationCallback;
@@ -66,7 +67,7 @@ import io.seqera.util.retry.Retryable;
  */
 public class HxConfig implements Retryable.Config {
 
-    private static final CheckedPredicate<? extends Throwable> DEFAULT_RETRY_COND = throwable -> throwable instanceof java.io.IOException;
+    private static final Predicate<? extends Throwable> DEFAULT_RETRY_COND = throwable -> throwable instanceof java.io.IOException;
 
     private Duration delay = Duration.ofMillis(500);
     private Duration maxDelay = Duration.ofSeconds(30);
@@ -74,7 +75,8 @@ public class HxConfig implements Retryable.Config {
     private double jitter = 0.25d;
     private double multiplier = 2.0;
 
-    private CheckedPredicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
+    private Predicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
+    private CheckedPredicate<? extends Throwable> retryConditionChecked;
 
     private Set<Integer> retryStatusCodes = Set.of(429, 500, 502, 503, 504);
 
@@ -119,8 +121,19 @@ public class HxConfig implements Retryable.Config {
         return retryStatusCodes;
     }
 
-    public CheckedPredicate<? extends Throwable> getRetryCondition() {
+    public Predicate<? extends Throwable> getRetryCondition() {
         return retryCondition;
+    }
+
+    /**
+     * Returns the {@link CheckedPredicate}-based retry condition, if one was configured.
+     * Returns {@code null} when only the {@link Predicate}-based condition is set; consumers
+     * that want a unified view should fall back to {@link #getRetryCondition()}.
+     *
+     * @return the configured CheckedPredicate retry condition, or null if none is set
+     */
+    public CheckedPredicate<? extends Throwable> getRetryConditionChecked() {
+        return retryConditionChecked;
     }
 
     public String getJwtToken() {
@@ -176,7 +189,8 @@ public class HxConfig implements Retryable.Config {
         private int maxAttempts = 5;
         private double jitter = 0.25d;
         private double multiplier = 2.0;
-        private CheckedPredicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
+        private Predicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
+        private CheckedPredicate<? extends Throwable> retryConditionChecked;
         private Set<Integer> retryStatusCodes = Set.of(429, 500, 502, 503, 504);
         private String bearerToken;
         private String refreshToken;
@@ -293,16 +307,29 @@ public class HxConfig implements Retryable.Config {
          * @param condition the condition to determine if an exception should trigger a retry
          * @return this builder instance for method chaining
          */
-        public Builder retryCondition(CheckedPredicate<? extends Throwable> condition) {
+        public Builder retryCondition(Predicate<? extends Throwable> condition) {
             this.retryCondition = condition;
             return this;
         }
 
         /**
-         * @deprecated Use {@link #retryCondition(CheckedPredicate)} instead. This method will be removed in a future version.
+         * Sets the retry condition using a {@link CheckedPredicate}, which allows the predicate
+         * body to throw checked exceptions. When set, this takes precedence over any
+         * {@link #retryCondition(Predicate)} value.
+         *
+         * @param condition the checked predicate to determine if a throwable should trigger a retry
+         * @return this builder instance for method chaining
+         */
+        public Builder retryConditionChecked(CheckedPredicate<? extends Throwable> condition) {
+            this.retryConditionChecked = condition;
+            return this;
+        }
+
+        /**
+         * @deprecated Use {@link #retryCondition(Predicate)} instead. This method will be removed in a future version.
          */
         @Deprecated(since = "2.1.0", forRemoval = true)
-        public Builder withRetryCondition(CheckedPredicate<? extends Throwable> condition) {
+        public Builder withRetryCondition(Predicate<? extends Throwable> condition) {
             this.retryCondition = condition;
             return this;
         }
@@ -648,6 +675,7 @@ public class HxConfig implements Retryable.Config {
             config.jitter = this.jitter;
             config.multiplier = this.multiplier;
             config.retryCondition = this.retryCondition;
+            config.retryConditionChecked = this.retryConditionChecked;
             config.retryStatusCodes = this.retryStatusCodes;
             config.jwtToken = this.bearerToken;
             config.refreshToken = this.refreshToken;

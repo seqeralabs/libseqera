@@ -1,10 +1,10 @@
 # lib-retry changelog
 
-3.0.0 - 27 Apr 2026
-- BREAKING: Bump `dev.failsafe:failsafe` from 3.1.0 to 3.3.2
-- BREAKING: Change `retryCondition` and `retryIf` parameter type from `java.util.function.Predicate` to `dev.failsafe.function.CheckedPredicate`
-- BREAKING: Change `DEFAULT_CONDITION` constant type from `Predicate` to `CheckedPredicate`
-- Replace removed `getLastFailure()` / `getFailure()` calls with `getLastException()` / `getException()` on Failsafe event objects
+2.1.0 - 27 Apr 2026
+- Bump `dev.failsafe:failsafe` from 3.1.0 to 3.3.2 (fixes a transitive security vulnerability)
+- Add `retryConditionChecked(CheckedPredicate)` and `retryIfChecked(CheckedPredicate)` so predicate bodies can throw checked exceptions (new since failsafe 3.2.1). When set, these take precedence over the corresponding `Predicate`-based setter
+- Existing `retryCondition(Predicate)`, `retryIf(Predicate)` and `DEFAULT_CONDITION` keep their `java.util.function.Predicate` types — fully backward compatible
+- Internal: replaced removed `getLastFailure()` / `getFailure()` calls with `getLastException()` / `getException()` on Failsafe event objects
 
 2.0.1 - 22 Mar 2026
 - Expose failsafe as api dependency for transitive access by consumers [c2c01ae]

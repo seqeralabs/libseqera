@@ -27,6 +27,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import dev.failsafe.Failsafe;
 import dev.failsafe.FailsafeException;
@@ -257,13 +258,15 @@ public class Retryable<R> {
     public static final Duration DEFAULT_MAX_DELAY = Duration.ofSeconds(30);
     public static final int DEFAULT_MAX_ATTEMPTS = 5;
     public static final double DEFAULT_JITTER = 0.25d;
-    public static final CheckedPredicate<? extends Throwable> DEFAULT_CONDITION = e -> e instanceof IOException;
+    public static final Predicate<? extends Throwable> DEFAULT_CONDITION = e -> e instanceof IOException;
     public static final double DEFAULT_MULTIPLIER = 2.0;
 
     private Config config;
-    private CheckedPredicate<? extends Throwable> condition;
+    private Predicate<? extends Throwable> condition;
+    private CheckedPredicate<? extends Throwable> conditionChecked;
     private Consumer<Event<R>> retryEvent;
-    private CheckedPredicate<R> handleResult;
+    private Predicate<R> handleResult;
+    private CheckedPredicate<R> handleResultChecked;
 
     public Retryable<R> withConfig(Config config) {
         this.config = new ConfigImpl(config);
@@ -274,13 +277,39 @@ public class Retryable<R> {
         return config;
     }
 
-    public Retryable<R> retryCondition(CheckedPredicate<? extends Throwable> cond) {
+    public Retryable<R> retryCondition(Predicate<? extends Throwable> cond) {
         this.condition = cond;
         return this;
     }
 
-    public Retryable<R> retryIf(CheckedPredicate<R> predicate) {
+    /**
+     * Sets the retry condition using a {@link CheckedPredicate}, which allows the predicate
+     * body to throw checked exceptions. When set, this takes precedence over any
+     * {@link #retryCondition(Predicate)} value.
+     *
+     * @param cond the checked predicate to determine if a throwable should trigger a retry
+     * @return this Retryable instance for method chaining
+     */
+    public Retryable<R> retryConditionChecked(CheckedPredicate<? extends Throwable> cond) {
+        this.conditionChecked = cond;
+        return this;
+    }
+
+    public Retryable<R> retryIf(Predicate<R> predicate) {
         this.handleResult = predicate;
+        return this;
+    }
+
+    /**
+     * Sets the result-based retry predicate using a {@link CheckedPredicate}, which allows the
+     * predicate body to throw checked exceptions. When set, this takes precedence over any
+     * {@link #retryIf(Predicate)} value.
+     *
+     * @param predicate the checked predicate to determine if a result should trigger a retry
+     * @return this Retryable instance for method chaining
+     */
+    public Retryable<R> retryIfChecked(CheckedPredicate<R> predicate) {
+        this.handleResultChecked = predicate;
         return this;
     }
 
@@ -313,17 +342,40 @@ public class Retryable<R> {
         };
 
         final RetryPolicyBuilder<R> policy = RetryPolicy.<R>builder()
-                .handleIf(condition != null ? condition : DEFAULT_CONDITION)
+                .handleIf(resolvedCondition())
                 .withBackoff(config.getDelayAsDuration(), config.getMaxDelayAsDuration(), config.getMultiplier())
                 .withMaxAttempts(config.getMaxAttempts())
                 .withJitter(config.getJitter())
                 .onRetry(retry0)
                 .onFailure(failure0);
-        
-        if (handleResult != null) {
-            policy.handleResultIf(handleResult);
+
+        if (handleResultChecked != null) {
+            policy.handleResultIf(handleResultChecked);
+        } else if (handleResult != null) {
+            policy.handleResultIf(toChecked(handleResult));
         }
         return policy.build();
+    }
+
+    /**
+     * Resolves the throwable predicate passed to Failsafe's {@code handleIf}, preferring the
+     * {@link CheckedPredicate} variant when configured, falling back to adapting the
+     * {@link Predicate} variant, and finally to {@link #DEFAULT_CONDITION}.
+     */
+    private CheckedPredicate<? extends Throwable> resolvedCondition() {
+        if (conditionChecked != null) {
+            return conditionChecked;
+        }
+        return toChecked(condition != null ? condition : DEFAULT_CONDITION);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <T> CheckedPredicate<T> toChecked(Predicate<? extends T> p) {
+        // Predicate.test does not declare checked exceptions, so a method reference is
+        // assignable to CheckedPredicate. Raw-type round-trip is needed to drop the
+        // bounded wildcard.
+        final Predicate raw = p;
+        return raw::test;
     }
 
     public R apply(CheckedSupplier<R> action) {
