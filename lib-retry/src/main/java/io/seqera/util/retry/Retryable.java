@@ -27,7 +27,6 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 
 import dev.failsafe.Failsafe;
 import dev.failsafe.FailsafeException;
@@ -36,6 +35,7 @@ import dev.failsafe.RetryPolicyBuilder;
 import dev.failsafe.event.EventListener;
 import dev.failsafe.event.ExecutionAttemptedEvent;
 import dev.failsafe.event.ExecutionCompletedEvent;
+import dev.failsafe.function.CheckedPredicate;
 import dev.failsafe.function.CheckedSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -257,13 +257,13 @@ public class Retryable<R> {
     public static final Duration DEFAULT_MAX_DELAY = Duration.ofSeconds(30);
     public static final int DEFAULT_MAX_ATTEMPTS = 5;
     public static final double DEFAULT_JITTER = 0.25d;
-    public static final Predicate<? extends Throwable> DEFAULT_CONDITION = e -> e instanceof IOException;
+    public static final CheckedPredicate<? extends Throwable> DEFAULT_CONDITION = e -> e instanceof IOException;
     public static final double DEFAULT_MULTIPLIER = 2.0;
 
     private Config config;
-    private Predicate<? extends Throwable> condition;
+    private CheckedPredicate<? extends Throwable> condition;
     private Consumer<Event<R>> retryEvent;
-    private Predicate<R> handleResult;
+    private CheckedPredicate<R> handleResult;
 
     public Retryable<R> withConfig(Config config) {
         this.config = new ConfigImpl(config);
@@ -274,12 +274,12 @@ public class Retryable<R> {
         return config;
     }
 
-    public Retryable<R> retryCondition(Predicate<? extends Throwable> cond) {
+    public Retryable<R> retryCondition(CheckedPredicate<? extends Throwable> cond) {
         this.condition = cond;
         return this;
     }
 
-    public Retryable<R> retryIf(Predicate<R> predicate) {
+    public Retryable<R> retryIf(CheckedPredicate<R> predicate) {
         this.handleResult = predicate;
         return this;
     }
@@ -294,7 +294,7 @@ public class Retryable<R> {
             @Override
             public void accept(ExecutionAttemptedEvent<R> event) throws Throwable {
                 if (retryEvent != null) {
-                    retryEvent.accept(new Event<>("Retry", event.getAttemptCount(), event.getLastResult(), event.getLastFailure()));
+                    retryEvent.accept(new Event<>("Retry", event.getAttemptCount(), event.getLastResult(), event.getLastException()));
                 }
                 // close the http response
                 if (event.getLastResult() instanceof HttpResponse<?>) {
@@ -307,7 +307,7 @@ public class Retryable<R> {
             @Override
             public void accept(ExecutionCompletedEvent<R> event) throws Throwable {
                 if (retryEvent != null) {
-                    retryEvent.accept(new Event<>("Failure", event.getAttemptCount(), event.getResult(), event.getFailure()));
+                    retryEvent.accept(new Event<>("Failure", event.getAttemptCount(), event.getResult(), event.getException()));
                 }
             }
         };
