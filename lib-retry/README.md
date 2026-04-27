@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-retry:2.0.1'
+    implementation 'io.seqera:lib-retry:3.0.0'
 }
 ```
 

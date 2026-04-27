@@ -1,5 +1,11 @@
 # lib-httpx changelog
 
+3.0.0 - 27 Apr 2026
+- BREAKING: Bump `dev.failsafe:failsafe` from 3.1.0 to 3.3.2
+- BREAKING: Change `HxConfig.Builder.retryCondition` and `withRetryCondition` parameter type from `java.util.function.Predicate` to `dev.failsafe.function.CheckedPredicate`
+- BREAKING: Change `HxConfig.getRetryCondition()` return type from `Predicate` to `CheckedPredicate`
+- Aligns with lib-retry 3.0.0 which also moves to `CheckedPredicate`
+
 2.2.0 - 22 Feb 2026
 - Add multi-tenant JWT auth support for HxClient
 
