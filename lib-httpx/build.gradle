@@ -25,7 +25,7 @@ version = "${project.file('VERSION').text.trim()}"
 dependencies {
     api project(':lib-retry')
     implementation 'com.google.code.gson:gson:2.10.1'
-    implementation 'dev.failsafe:failsafe:3.1.0'
+    implementation 'dev.failsafe:failsafe:3.3.2'
     
     testImplementation 'com.github.tomakehurst:wiremock:3.0.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
