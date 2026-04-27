@@ -22,9 +22,9 @@ import java.time.Duration;
 import java.util.Set;
 import java.util.function.Predicate;
 
-import dev.failsafe.function.CheckedPredicate;
 import io.seqera.http.auth.AuthenticationCallback;
 import io.seqera.util.retry.Retryable;
+import io.seqera.util.retry.ThrowingPredicate;
 
 /**
  * Configuration class for {@link HxClient} that defines retry behavior and JWT token settings.
@@ -76,7 +76,7 @@ public class HxConfig implements Retryable.Config {
     private double multiplier = 2.0;
 
     private Predicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
-    private CheckedPredicate<? extends Throwable> retryConditionChecked;
+    private ThrowingPredicate<? extends Throwable> retryConditionThrowing;
 
     private Set<Integer> retryStatusCodes = Set.of(429, 500, 502, 503, 504);
 
@@ -126,14 +126,14 @@ public class HxConfig implements Retryable.Config {
     }
 
     /**
-     * Returns the {@link CheckedPredicate}-based retry condition, if one was configured.
+     * Returns the {@link ThrowingPredicate}-based retry condition, if one was configured.
      * Returns {@code null} when only the {@link Predicate}-based condition is set; consumers
      * that want a unified view should fall back to {@link #getRetryCondition()}.
      *
-     * @return the configured CheckedPredicate retry condition, or null if none is set
+     * @return the configured throwing retry condition, or null if none is set
      */
-    public CheckedPredicate<? extends Throwable> getRetryConditionChecked() {
-        return retryConditionChecked;
+    public ThrowingPredicate<? extends Throwable> getRetryConditionThrowing() {
+        return retryConditionThrowing;
     }
 
     public String getJwtToken() {
@@ -190,7 +190,7 @@ public class HxConfig implements Retryable.Config {
         private double jitter = 0.25d;
         private double multiplier = 2.0;
         private Predicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
-        private CheckedPredicate<? extends Throwable> retryConditionChecked;
+        private ThrowingPredicate<? extends Throwable> retryConditionThrowing;
         private Set<Integer> retryStatusCodes = Set.of(429, 500, 502, 503, 504);
         private String bearerToken;
         private String refreshToken;
@@ -313,15 +313,18 @@ public class HxConfig implements Retryable.Config {
         }
 
         /**
-         * Sets the retry condition using a {@link CheckedPredicate}, which allows the predicate
+         * Sets the retry condition using a {@link ThrowingPredicate}, which allows the predicate
          * body to throw checked exceptions. When set, this takes precedence over any
          * {@link #retryCondition(Predicate)} value.
          *
-         * @param condition the checked predicate to determine if a throwable should trigger a retry
+         * <p>{@link ThrowingPredicate} is a Seqera-owned type so the underlying retry engine
+         * stays an internal implementation detail of this library.
+         *
+         * @param condition the throwing predicate to determine if a throwable should trigger a retry
          * @return this builder instance for method chaining
          */
-        public Builder retryConditionChecked(CheckedPredicate<? extends Throwable> condition) {
-            this.retryConditionChecked = condition;
+        public Builder retryConditionThrowing(ThrowingPredicate<? extends Throwable> condition) {
+            this.retryConditionThrowing = condition;
             return this;
         }
 
@@ -675,7 +678,7 @@ public class HxConfig implements Retryable.Config {
             config.jitter = this.jitter;
             config.multiplier = this.multiplier;
             config.retryCondition = this.retryCondition;
-            config.retryConditionChecked = this.retryConditionChecked;
+            config.retryConditionThrowing = this.retryConditionThrowing;
             config.retryStatusCodes = this.retryStatusCodes;
             config.jwtToken = this.bearerToken;
             config.refreshToken = this.refreshToken;

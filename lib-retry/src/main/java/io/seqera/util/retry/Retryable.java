@@ -263,10 +263,10 @@ public class Retryable<R> {
 
     private Config config;
     private Predicate<? extends Throwable> condition;
-    private CheckedPredicate<? extends Throwable> conditionChecked;
+    private ThrowingPredicate<? extends Throwable> conditionThrowing;
     private Consumer<Event<R>> retryEvent;
     private Predicate<R> handleResult;
-    private CheckedPredicate<R> handleResultChecked;
+    private ThrowingPredicate<R> handleResultThrowing;
 
     public Retryable<R> withConfig(Config config) {
         this.config = new ConfigImpl(config);
@@ -283,15 +283,18 @@ public class Retryable<R> {
     }
 
     /**
-     * Sets the retry condition using a {@link CheckedPredicate}, which allows the predicate
+     * Sets the retry condition using a {@link ThrowingPredicate}, which allows the predicate
      * body to throw checked exceptions. When set, this takes precedence over any
      * {@link #retryCondition(Predicate)} value.
      *
-     * @param cond the checked predicate to determine if a throwable should trigger a retry
+     * <p>{@link ThrowingPredicate} is a Seqera-owned type so the underlying retry engine
+     * stays an internal implementation detail of this library.
+     *
+     * @param cond the throwing predicate to determine if a throwable should trigger a retry
      * @return this Retryable instance for method chaining
      */
-    public Retryable<R> retryConditionChecked(CheckedPredicate<? extends Throwable> cond) {
-        this.conditionChecked = cond;
+    public Retryable<R> retryConditionThrowing(ThrowingPredicate<? extends Throwable> cond) {
+        this.conditionThrowing = cond;
         return this;
     }
 
@@ -301,15 +304,18 @@ public class Retryable<R> {
     }
 
     /**
-     * Sets the result-based retry predicate using a {@link CheckedPredicate}, which allows the
-     * predicate body to throw checked exceptions. When set, this takes precedence over any
-     * {@link #retryIf(Predicate)} value.
+     * Sets the result-based retry predicate using a {@link ThrowingPredicate}, which allows
+     * the predicate body to throw checked exceptions. When set, this takes precedence over
+     * any {@link #retryIf(Predicate)} value.
      *
-     * @param predicate the checked predicate to determine if a result should trigger a retry
+     * <p>{@link ThrowingPredicate} is a Seqera-owned type so the underlying retry engine
+     * stays an internal implementation detail of this library.
+     *
+     * @param predicate the throwing predicate to determine if a result should trigger a retry
      * @return this Retryable instance for method chaining
      */
-    public Retryable<R> retryIfChecked(CheckedPredicate<R> predicate) {
-        this.handleResultChecked = predicate;
+    public Retryable<R> retryIfThrowing(ThrowingPredicate<R> predicate) {
+        this.handleResultThrowing = predicate;
         return this;
     }
 
@@ -349,8 +355,8 @@ public class Retryable<R> {
                 .onRetry(retry0)
                 .onFailure(failure0);
 
-        if (handleResultChecked != null) {
-            policy.handleResultIf(handleResultChecked);
+        if (handleResultThrowing != null) {
+            policy.handleResultIf(toChecked(handleResultThrowing));
         } else if (handleResult != null) {
             policy.handleResultIf(toChecked(handleResult));
         }
@@ -358,13 +364,13 @@ public class Retryable<R> {
     }
 
     /**
-     * Resolves the throwable predicate passed to Failsafe's {@code handleIf}, preferring the
-     * {@link CheckedPredicate} variant when configured, falling back to adapting the
-     * {@link Predicate} variant, and finally to {@link #DEFAULT_CONDITION}.
+     * Resolves the throwable predicate passed to the retry engine's {@code handleIf},
+     * preferring the {@link ThrowingPredicate} variant when configured, otherwise adapting
+     * the {@link Predicate} variant or {@link #DEFAULT_CONDITION}.
      */
     private CheckedPredicate<? extends Throwable> resolvedCondition() {
-        if (conditionChecked != null) {
-            return conditionChecked;
+        if (conditionThrowing != null) {
+            return toChecked(conditionThrowing);
         }
         return toChecked(condition != null ? condition : DEFAULT_CONDITION);
     }
@@ -375,6 +381,15 @@ public class Retryable<R> {
         // assignable to CheckedPredicate. Raw-type round-trip is needed to drop the
         // bounded wildcard.
         final Predicate raw = p;
+        return raw::test;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <T> CheckedPredicate<T> toChecked(ThrowingPredicate<? extends T> p) {
+        // ThrowingPredicate has the exact same SAM contract as failsafe's CheckedPredicate
+        // (boolean test(T) throws Throwable), so a method reference is directly assignable.
+        // The raw-type round-trip is only needed to drop the bounded wildcard.
+        final ThrowingPredicate raw = p;
         return raw::test;
     }
 

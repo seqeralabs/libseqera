@@ -474,8 +474,8 @@ public class HxClient {
         final boolean[] tokenRefreshed = {false};
 
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config);
-        if (config.getRetryConditionChecked() != null) {
-            retry.retryConditionChecked(config.getRetryConditionChecked());
+        if (config.getRetryConditionThrowing() != null) {
+            retry.retryConditionThrowing(config.getRetryConditionThrowing());
         } else {
             retry.retryCondition(config.getRetryCondition());
         }
@@ -550,8 +550,8 @@ public class HxClient {
         final boolean[] tokenRefreshed = {false};
 
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config);
-        if (config.getRetryConditionChecked() != null) {
-            retry.retryConditionChecked(config.getRetryConditionChecked());
+        if (config.getRetryConditionThrowing() != null) {
+            retry.retryConditionThrowing(config.getRetryConditionThrowing());
         } else {
             retry.retryCondition(config.getRetryCondition());
         }

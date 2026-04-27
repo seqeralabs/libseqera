@@ -2,7 +2,9 @@
 
 2.1.0 - 27 Apr 2026
 - Bump `dev.failsafe:failsafe` from 3.1.0 to 3.3.2 (fixes a transitive security vulnerability)
-- Add `retryConditionChecked(CheckedPredicate)` and `retryIfChecked(CheckedPredicate)` so predicate bodies can throw checked exceptions (new since failsafe 3.2.1). When set, these take precedence over the corresponding `Predicate`-based setter
+- Introduce `io.seqera.util.retry.ThrowingPredicate` — a Seqera-owned functional interface for predicates whose body can throw any `Throwable`, including checked exceptions
+- Add `retryConditionThrowing(ThrowingPredicate)` and `retryIfThrowing(ThrowingPredicate)` so predicate bodies can throw checked exceptions. When set, these take precedence over the corresponding `Predicate`-based setter
+- The new public API does not expose any `dev.failsafe.*` types — failsafe stays a fully internal implementation detail of this library
 - Existing `retryCondition(Predicate)`, `retryIf(Predicate)` and `DEFAULT_CONDITION` keep their `java.util.function.Predicate` types — fully backward compatible
 - Internal: replaced removed `getLastFailure()` / `getFailure()` calls with `getLastException()` / `getException()` on Failsafe event objects
 
