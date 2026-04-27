@@ -20,8 +20,8 @@ package io.seqera.http;
 import java.net.CookiePolicy;
 import java.time.Duration;
 import java.util.Set;
-import java.util.function.Predicate;
 
+import dev.failsafe.function.CheckedPredicate;
 import io.seqera.http.auth.AuthenticationCallback;
 import io.seqera.util.retry.Retryable;
 
@@ -66,7 +66,7 @@ import io.seqera.util.retry.Retryable;
  */
 public class HxConfig implements Retryable.Config {
 
-    private static final Predicate<? extends Throwable> DEFAULT_RETRY_COND = throwable -> throwable instanceof java.io.IOException;
+    private static final CheckedPredicate<? extends Throwable> DEFAULT_RETRY_COND = throwable -> throwable instanceof java.io.IOException;
 
     private Duration delay = Duration.ofMillis(500);
     private Duration maxDelay = Duration.ofSeconds(30);
@@ -74,7 +74,7 @@ public class HxConfig implements Retryable.Config {
     private double jitter = 0.25d;
     private double multiplier = 2.0;
 
-    private Predicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
+    private CheckedPredicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
 
     private Set<Integer> retryStatusCodes = Set.of(429, 500, 502, 503, 504);
 
@@ -119,7 +119,7 @@ public class HxConfig implements Retryable.Config {
         return retryStatusCodes;
     }
 
-    public Predicate<? extends Throwable> getRetryCondition() {
+    public CheckedPredicate<? extends Throwable> getRetryCondition() {
         return retryCondition;
     }
 
@@ -176,7 +176,7 @@ public class HxConfig implements Retryable.Config {
         private int maxAttempts = 5;
         private double jitter = 0.25d;
         private double multiplier = 2.0;
-        private Predicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
+        private CheckedPredicate<? extends Throwable> retryCondition = DEFAULT_RETRY_COND;
         private Set<Integer> retryStatusCodes = Set.of(429, 500, 502, 503, 504);
         private String bearerToken;
         private String refreshToken;
@@ -293,16 +293,16 @@ public class HxConfig implements Retryable.Config {
          * @param condition the condition to determine if an exception should trigger a retry
          * @return this builder instance for method chaining
          */
-        public Builder retryCondition(Predicate<? extends Throwable> condition) {
+        public Builder retryCondition(CheckedPredicate<? extends Throwable> condition) {
             this.retryCondition = condition;
             return this;
         }
-        
+
         /**
-         * @deprecated Use {@link #retryCondition(Predicate)} instead. This method will be removed in a future version.
+         * @deprecated Use {@link #retryCondition(CheckedPredicate)} instead. This method will be removed in a future version.
          */
         @Deprecated(since = "2.1.0", forRemoval = true)
-        public Builder withRetryCondition(Predicate<? extends Throwable> condition) {
+        public Builder withRetryCondition(CheckedPredicate<? extends Throwable> condition) {
             this.retryCondition = condition;
             return this;
         }
