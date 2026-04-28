@@ -36,6 +36,7 @@ import dev.failsafe.RetryPolicyBuilder;
 import dev.failsafe.event.EventListener;
 import dev.failsafe.event.ExecutionAttemptedEvent;
 import dev.failsafe.event.ExecutionCompletedEvent;
+import dev.failsafe.function.CheckedPredicate;
 import dev.failsafe.function.CheckedSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -294,7 +295,7 @@ public class Retryable<R> {
             @Override
             public void accept(ExecutionAttemptedEvent<R> event) throws Throwable {
                 if (retryEvent != null) {
-                    retryEvent.accept(new Event<>("Retry", event.getAttemptCount(), event.getLastResult(), event.getLastFailure()));
+                    retryEvent.accept(new Event<>("Retry", event.getAttemptCount(), event.getLastResult(), event.getLastException()));
                 }
                 // close the http response
                 if (event.getLastResult() instanceof HttpResponse<?>) {
@@ -307,23 +308,32 @@ public class Retryable<R> {
             @Override
             public void accept(ExecutionCompletedEvent<R> event) throws Throwable {
                 if (retryEvent != null) {
-                    retryEvent.accept(new Event<>("Failure", event.getAttemptCount(), event.getResult(), event.getFailure()));
+                    retryEvent.accept(new Event<>("Failure", event.getAttemptCount(), event.getResult(), event.getException()));
                 }
             }
         };
 
         final RetryPolicyBuilder<R> policy = RetryPolicy.<R>builder()
-                .handleIf(condition != null ? condition : DEFAULT_CONDITION)
+                .handleIf(toChecked(condition != null ? condition : DEFAULT_CONDITION))
                 .withBackoff(config.getDelayAsDuration(), config.getMaxDelayAsDuration(), config.getMultiplier())
                 .withMaxAttempts(config.getMaxAttempts())
                 .withJitter(config.getJitter())
                 .onRetry(retry0)
                 .onFailure(failure0);
-        
+
         if (handleResult != null) {
-            policy.handleResultIf(handleResult);
+            policy.handleResultIf(handleResult::test);
         }
         return policy.build();
+    }
+
+    // Adapt a java.util.function.Predicate to failsafe's CheckedPredicate, which
+    // RetryPolicyBuilder.handleIf has required since failsafe 3.2.1. Keeping the
+    // public API on Predicate avoids breaking downstream callers.
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static CheckedPredicate<Throwable> toChecked(Predicate<? extends Throwable> p) {
+        Predicate raw = p;
+        return raw::test;
     }
 
     public R apply(CheckedSupplier<R> action) {
