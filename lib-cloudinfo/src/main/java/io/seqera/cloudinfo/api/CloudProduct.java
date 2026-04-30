@@ -39,6 +39,19 @@ public class CloudProduct {
     private List<String> zones;
     private List<CloudPrice> spotPrice;
     private ProductAttributes attributes;
+    /**
+     * Capability features advertised for this instance type by the CloudInfo backend
+     * (e.g. {@code "SCHED"}, {@code "NVME"}, {@code "GPU"}, plus a family-type token).
+     *
+     * <p>Consumers typically map these strings onto a domain-specific enum (such as
+     * the platform's {@code Feature} enum on {@code InstanceType}). Unrecognised
+     * tokens are dropped silently by consumers.
+     *
+     * <p>{@code null} means the data source did not populate features (the field is
+     * legacy / not yet returned by the backend version queried). An empty list
+     * explicitly means "no features advertised".
+     */
+    private List<String> features;
 
     public CloudProduct() {
     }
@@ -139,6 +152,14 @@ public class CloudProduct {
         this.attributes = attributes;
     }
 
+    public List<String> getFeatures() {
+        return features;
+    }
+
+    public void setFeatures(List<String> features) {
+        this.features = features;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -155,13 +176,14 @@ public class CloudProduct {
                 Objects.equals(onDemandPrice, that.onDemandPrice) &&
                 Objects.equals(zones, that.zones) &&
                 Objects.equals(spotPrice, that.spotPrice) &&
-                Objects.equals(attributes, that.attributes);
+                Objects.equals(attributes, that.attributes) &&
+                Objects.equals(features, that.features);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(type, category, cpusPerVm, memPerVm, gpusPerVm, currentGen,
-                ntwPerf, ntwPerfCategory, onDemandPrice, zones, spotPrice, attributes);
+                ntwPerf, ntwPerfCategory, onDemandPrice, zones, spotPrice, attributes, features);
     }
 
     @Override
@@ -177,6 +199,7 @@ public class CloudProduct {
                 ", onDemandPrice=" + onDemandPrice +
                 ", zones=" + zones +
                 ", spotPrice=" + spotPrice +
-                ", attributes=" + attributes + "]";
+                ", attributes=" + attributes +
+                ", features=" + features + "]";
     }
 }

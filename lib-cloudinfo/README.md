@@ -78,7 +78,7 @@ CloudInfoClient client = CloudInfoClient.builder()
 | Class | Description |
 |-------|-------------|
 | `CloudRegion` | Region identifier and name |
-| `CloudProduct` | Compute instance type with CPU, memory, GPU, and pricing |
+| `CloudProduct` | Compute instance type with CPU, memory, GPU, pricing, and per-product capability features (`SCHED`, `NVME`, `GPU`, family-type, etc.) |
 | `CloudPrice` | Spot price for a specific zone |
 | `CloudResponse` | API response wrapper containing products |
 | `ProductAttributes` | Additional product attributes |

@@ -1,8 +1,9 @@
 # lib-cloudinfo changelog
 
-1.1.0 - 21 Apr 2026
+1.1.0 - unreleased
 - Add ProductsQuery options object with sched and nvme filters
 - Add getProducts(provider, region, ProductsQuery) overload on CloudInfoClient to expose the sched/nvme query parameters introduced in seqeralabs/cloudinfo#48
+- Add CloudProduct.features (List<String>) carrying the per-product capability tokens advertised by the CloudInfo backend (e.g. SCHED, NVME, GPU, family-type). Consumers map these strings onto a domain-specific enum; null preserves backward compatibility for older backend versions that do not populate the field.
 
 1.0.0 - 22 Jan 2026
 - Initial release of lib-cloudinfo module
