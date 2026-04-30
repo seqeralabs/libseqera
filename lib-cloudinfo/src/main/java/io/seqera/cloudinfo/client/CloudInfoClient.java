@@ -27,6 +27,7 @@ import java.util.List;
 import io.seqera.cloudinfo.api.CloudProduct;
 import io.seqera.cloudinfo.api.CloudRegion;
 import io.seqera.cloudinfo.api.CloudResponse;
+import io.seqera.cloudinfo.api.ProductsQuery;
 import io.seqera.http.HxClient;
 import io.seqera.serde.jackson.JacksonEncodingStrategy;
 import org.slf4j.Logger;
@@ -151,12 +152,31 @@ public class CloudInfoClient {
      * @throws CloudInfoException if the request fails
      */
     public List<CloudProduct> getProducts(String provider, String region) {
+        return getProducts(provider, region, null);
+    }
+
+    /**
+     * Gets the list of compute products for a cloud provider and region, applying
+     * the optional filters in {@code query}.
+     *
+     * <p>When {@code query} is {@code null} or has no flags set, the request is
+     * equivalent to {@link #getProducts(String, String)} and all products are
+     * returned. Unknown filters for a provider are ignored server-side.
+     *
+     * @param provider the cloud provider identifier (e.g., "amazon", "google", "azure")
+     * @param region the region identifier (e.g., "us-east-1", "europe-west1")
+     * @param query optional filters to apply to the request; may be {@code null}
+     * @return list of compute products with pricing
+     * @throws CloudInfoException if the request fails
+     */
+    public List<CloudProduct> getProducts(String provider, String region, ProductsQuery query) {
         String path = String.format("/api/v1/providers/%s/services/compute/regions/%s/products", provider, region);
-        log.trace("CloudInfo products: {}", path);
+        String url = endpoint + path + buildQueryString(query);
+        log.trace("CloudInfo products: {}", url);
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint + path))
+                    .uri(URI.create(url))
                     .GET()
                     .timeout(Duration.ofSeconds(60))
                     .build();
@@ -177,6 +197,20 @@ public class CloudInfoClient {
             throw new CloudInfoException(
                     String.format("Failed to fetch products for provider=%s, region=%s", provider, region), e);
         }
+    }
+
+    private static String buildQueryString(ProductsQuery query) {
+        if (query == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        if (query.isSched()) {
+            sb.append(sb.length() == 0 ? '?' : '&').append("sched=true");
+        }
+        if (query.isNvme()) {
+            sb.append(sb.length() == 0 ? '?' : '&').append("nvme=true");
+        }
+        return sb.toString();
     }
 
     /**
