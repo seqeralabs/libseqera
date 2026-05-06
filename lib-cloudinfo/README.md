@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-cloudinfo:1.0.0'
+    implementation 'io.seqera:lib-cloudinfo:1.1.0'
 }
 ```
 
@@ -39,6 +39,22 @@ List<String> regionIds = client.getRegionIds("amazon");
 List<CloudProduct> products = client.getProducts("amazon", "us-east-1");
 ```
 
+### Filtering Products
+
+Pass a `ProductsQuery` to restrict the products endpoint to instance families
+with Scheduler support (`sched=true`) or NVMe local storage (`nvme=true`).
+Filters are applied server-side and can be combined; providers without filter
+config entries return all products unfiltered.
+
+```java
+ProductsQuery query = ProductsQuery.builder()
+    .sched(true)
+    .nvme(true)
+    .build();
+
+List<CloudProduct> products = client.getProducts("amazon", "us-east-1", query);
+```
+
 ### Custom Configuration
 
 ```java
@@ -62,10 +78,11 @@ CloudInfoClient client = CloudInfoClient.builder()
 | Class | Description |
 |-------|-------------|
 | `CloudRegion` | Region identifier and name |
-| `CloudProduct` | Compute instance type with CPU, memory, GPU, and pricing |
+| `CloudProduct` | Compute instance type with CPU, memory, GPU, pricing, and per-product capability features (`SCHED`, `NVME`, `GPU`, family-type, etc.) |
 | `CloudPrice` | Spot price for a specific zone |
 | `CloudResponse` | API response wrapper containing products |
 | `ProductAttributes` | Additional product attributes |
+| `ProductsQuery` | Optional filters (`sched`, `nvme`) for the products endpoint |
 
 ## Dependencies
 
