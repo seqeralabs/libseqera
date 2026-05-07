@@ -17,11 +17,20 @@
 
 package io.seqera.cloudinfo.api;
 
+import java.util.Objects;
+
 /**
  * Optional query parameters for the Cloudinfo products endpoint.
  *
  * <p>Each flag is applied server-side; unset flags (the default) leave the
  * corresponding filter disabled and all products are returned.
+ *
+ * <p>Implements value-based {@link #equals(Object)} and {@link #hashCode()} so
+ * instances can be used as map keys / set members and so consumers can rely on
+ * a deterministic hash for caching. When new filter fields are added, update
+ * both methods to include them — {@code ProductsQueryTest} guards this with a
+ * reflection-based check that fails if any declared field is missing from the
+ * hash.
  *
  * <p>Usage example:
  * <pre>{@code
@@ -59,6 +68,24 @@ public class ProductsQuery {
      */
     public boolean isNvme() {
         return nvme;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof ProductsQuery)) return false;
+        ProductsQuery that = (ProductsQuery) o;
+        return sched == that.sched && nvme == that.nvme;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(sched, nvme);
+    }
+
+    @Override
+    public String toString() {
+        return "ProductsQuery{sched=" + sched + ", nvme=" + nvme + '}';
     }
 
     /**
