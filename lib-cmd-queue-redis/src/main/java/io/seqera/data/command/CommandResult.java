@@ -52,6 +52,28 @@ public record CommandResult<R>(
     }
 
     /**
+     * Signal that the handler has re-submitted this command to another queue
+     * (for example, by calling {@code otherQueue.submit(...)} directly) and the
+     * source message should be acknowledged without any state transition. The
+     * persisted {@link CommandState} stays in RUNNING until a handler on the
+     * destination queue produces a terminal result.
+     *
+     * <p>Use this when a command's lifecycle should continue on a different
+     * queue — typically one with a different claim-timeout, e.g. moving from a
+     * slow lifecycle queue (crash-safe for synchronous AWS calls) to a fast
+     * monitor queue (low detection lag for status polling) once the initial
+     * synchronous work has completed.</p>
+     *
+     * <p>The handler is responsible for the re-submit itself. Ordering matters:
+     * submit to the destination <i>before</i> returning this result, so that if
+     * the process crashes between the two the source message is redelivered and
+     * re-runs the handler (which must be idempotent).</p>
+     */
+    public static <R> CommandResult<R> handedOff() {
+        return new CommandResult<>(CommandStatus.HANDED_OFF, null, null);
+    }
+
+    /**
      * Create a cancelled result.
      */
     public static <R> CommandResult<R> cancelled() {

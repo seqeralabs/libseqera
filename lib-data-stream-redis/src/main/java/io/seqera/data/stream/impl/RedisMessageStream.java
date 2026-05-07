@@ -22,14 +22,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import io.micronaut.context.annotation.Requires;
-import io.seqera.activator.redis.RedisActivator;
 import io.seqera.data.stream.MessageConsumer;
 import io.seqera.data.stream.MessageStream;
 import io.seqera.random.LongRndKey;
-import jakarta.annotation.PostConstruct;
-import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -69,14 +64,14 @@ import redis.clients.jedis.resps.StreamEntry;
  *   <li>Acknowledge and delete the message upon successful processing</li>
  * </ol>
  *
- * <p>This class is automatically activated when the 'redis' environment is active
- * and requires a configured {@link JedisPool} for Redis connectivity.
+ * <p>This class is a plain Java class — it carries no bean annotations so it
+ * can be instantiated directly with {@code new RedisMessageStream(pool, config)}.
+ * For Micronaut-managed wiring see {@link DefaultRedisMessageStream}, which
+ * produces one bean per {@link RedisStreamConfig} bean via {@code @EachBean}.</p>
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  */
-@Requires(bean = RedisActivator.class)
-@Singleton
 public class RedisMessageStream implements MessageStream<String> {
 
     private static final Logger log = LoggerFactory.getLogger(RedisMessageStream.class);
@@ -85,13 +80,9 @@ public class RedisMessageStream implements MessageStream<String> {
 
     private static final String DATA_FIELD = "data";
 
-    @Inject
-    private JedisPool pool;
-
-    @Inject
-    private RedisStreamConfig config;
-
-    private String consumerName;
+    private final JedisPool pool;
+    private final RedisStreamConfig config;
+    private final String consumerName;
 
     /**
      * Tracks the last claimed message position per stream for round-robin claiming.
@@ -100,9 +91,15 @@ public class RedisMessageStream implements MessageStream<String> {
      */
     private final Map<String, StreamEntryID> lastClaimCursor = new ConcurrentHashMap<>();
 
-    @PostConstruct
-    private void create() {
-        consumerName = "consumer-" + LongRndKey.rndLong();
+    /**
+     * Construct a {@code RedisMessageStream} with the given Jedis pool and
+     * config. Applications can either call this constructor directly or rely
+     * on {@link DefaultRedisMessageStream} for Micronaut-managed wiring.
+     */
+    public RedisMessageStream(JedisPool pool, RedisStreamConfig config) {
+        this.pool = pool;
+        this.config = config;
+        this.consumerName = "consumer-" + LongRndKey.rndLong();
         log.info("Creating Redis message stream - consumer={}", consumerName);
     }
 
@@ -142,6 +139,11 @@ public class RedisMessageStream implements MessageStream<String> {
 
     /**
      * {@inheritDoc}
+     *
+     * <p>When the consumer returns {@code true}, the XACK/XDEL of the current
+     * message and every XADD queued via {@link TxContext#offer} run in a
+     * single {@code MULTI/EXEC} — giving an atomic hand-off to other streams
+     * on the same Redis instance (or same slot on Redis Cluster).</p>
      */
     @Override
     public boolean consume(String streamId, MessageConsumer<String> consumer) {
@@ -152,23 +154,34 @@ public class RedisMessageStream implements MessageStream<String> {
             if (entry == null) {
                 entry = readMessage(jedis, streamId);
             }
-            if (entry != null && consumer.accept(msg = entry.getFields().get(DATA_FIELD))) {
-                final var tx = jedis.multi();
-                // acknowledge the entry has been processed so that it cannot be claimed anymore
-                tx.xack(streamId, config.getDefaultConsumerGroupName(), entry.getID());
-                final var delta = System.currentTimeMillis() - begin;
-                if (delta > config.getConsumerWarnTimeoutMillis()) {
-                    log.warn("Redis message stream - consume processing took {} - offending entry={}; message={}",
-                            Duration.ofMillis(delta), entry.getID(), msg);
-                }
-                // this remove permanently the entry from the stream
-                tx.xdel(streamId, entry.getID());
-                tx.exec();
-                return true;
-            }
-            else {
+            if (entry == null) {
                 return false;
             }
+            msg = entry.getFields().get(DATA_FIELD);
+
+            // Side-effect offers the consumer may queue run inside the same
+            // MULTI that acknowledges the source message. TxContextCollector
+            // allocates its list lazily so the common "no offers" path stays
+            // allocation-free.
+            final var ctx = new TxContextCollector();
+
+            if (!consumer.accept(msg, ctx)) {
+                return false;
+            }
+
+            final var tx = jedis.multi();
+            tx.xack(streamId, config.getDefaultConsumerGroupName(), entry.getID());
+            tx.xdel(streamId, entry.getID());
+            for (var o : ctx.collected()) {
+                tx.xadd(o.streamId(), StreamEntryID.NEW_ENTRY, Map.of(DATA_FIELD, o.payload()));
+            }
+            final var delta = System.currentTimeMillis() - begin;
+            if (delta > config.getConsumerWarnTimeoutMillis()) {
+                log.warn("Redis message stream - consume processing took {} - offending entry={}; message={}",
+                        Duration.ofMillis(delta), entry.getID(), msg);
+            }
+            tx.exec();
+            return true;
         }
     }
 

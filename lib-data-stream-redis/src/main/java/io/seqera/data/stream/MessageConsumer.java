@@ -100,34 +100,16 @@ public interface MessageConsumer<T> {
      * for processing. The implementation should handle the message according to its
      * business logic and return an appropriate acknowledgment status.</p>
      *
-     * <p>Processing guidelines:</p>
-     * <ul>
-     *   <li><strong>Idempotent:</strong> Should handle duplicate messages gracefully</li>
-     *   <li><strong>Fast:</strong> Avoid long-running operations that block other messages</li>
-     *   <li><strong>Exception Safe:</strong> Handle exceptions appropriately, don't let them propagate</li>
-     *   <li><strong>Logging:</strong> Log important events for debugging and monitoring</li>
-     * </ul>
-     *
-     * <p>Return value meaning:</p>
-     * <ul>
-     *   <li><strong>{@code true}:</strong> Message was successfully processed and should be acknowledged.
-     *       The message will be marked as consumed and will not be delivered to other consumers.</li>
-     *   <li><strong>{@code false}:</strong> Message was not processed successfully or was rejected.
-     *       The message remains available for consumption by other consumers or for retry.</li>
-     * </ul>
-     *
-     * <p>Common scenarios for returning {@code false}:</p>
-     * <ul>
-     *   <li>Temporary downstream service unavailability</li>
-     *   <li>Message doesn't match consumer's processing criteria</li>
-     *   <li>Resource constraints (memory, connections, etc.)</li>
-     *   <li>Backpressure from downstream systems</li>
-     * </ul>
+     * <p>The provided {@link TxContext} lets the consumer queue additional
+     * messages to be delivered to other streams <i>atomically</i> with the
+     * acknowledgment of the current message — used for cross-stream hand-off.
+     * Consumers that don't need this behaviour can ignore {@code ctx}.</p>
      *
      * @param message the message to be processed; may be null depending on stream implementation
+     * @param ctx     side-effect collector for atomic cross-stream offers; never null
      * @return {@code true} if the message was successfully processed and should be acknowledged,
      *         {@code false} if the message was not processed and should remain available
      */
-    boolean accept(T message);
+    boolean accept(T message, TxContext<T> ctx);
 
 }

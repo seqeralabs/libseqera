@@ -88,6 +88,21 @@ public interface CommandService {
     <P> Command<P> toCommand(CommandState state, CommandRegistration<P, ?> registration);
 
     /**
+     * Register a peer service as the destination for
+     * {@link CommandResult#handedOff()} results. Must be called before
+     * {@link #start()}. Peer must share the same stream backend (and, on
+     * Redis Cluster, the same slot) so the atomicity guarantee of
+     * {@code TxContext} holds.
+     */
+    void handoffTo(CommandService target);
+
+    /**
+     * The stream identifier of this service's queue — needed by a peer
+     * service when offering a hand-off message via {@code TxContext}.
+     */
+    String queueStreamName();
+
+    /**
      * Start consuming commands from the queue.
      * Must be called AFTER all handlers are registered to avoid race conditions
      * where messages are processed before handlers are available.
