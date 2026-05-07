@@ -1,5 +1,8 @@
 # lib-cloudinfo changelog
 
+1.1.2 - 7 May 2026
+- Add value-based equals, hashCode and toString to ProductsQuery so instances built from the same flags compare equal and can be used safely as map keys / cache keys (PR #66).
+
 1.1.1 - 7 May 2026
 - Re-release of 1.1.0 to capture the CloudProduct.features change that was committed after the 1.1.0 release commit on PR #61 and therefore missing from the 1.1.0 artifact.
 
