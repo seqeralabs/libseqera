@@ -240,24 +240,35 @@ public abstract class AbstractMessageStream<M> implements Closeable {
      *      The result of the consumer {@link MessageConsumer} operation.
      */
     protected boolean processMessage(String msg, MessageConsumer<M> consumer, AtomicInteger count) {
-        return processMessage(msg, consumer, count, null);
-    }
-
-    /**
-     * Deserialize and dispatch one message, optionally reporting the consumer outcome
-     * into {@code status} so the calling loop can distinguish "no message" from
-     * "message rejected by consumer".
-     */
-    boolean processMessage(String msg, MessageConsumer<M> consumer, AtomicInteger count, ConsumerStatus status) {
         count.incrementAndGet();
         final M decoded = encoder.decode(msg);
         log.trace("Message stream - receiving message={}; decoded={}", msg, decoded);
-        final boolean accepted = consumer.accept(decoded);
-        if (status != null) {
-            status.processed = true;
-            status.failed = !accepted;
+        return consumer.accept(decoded);
+    }
+
+    /**
+     * Run one consume cycle for the given stream and record the outcome on the
+     * {@link StreamMetrics} handle. The outcome is derived from the {@code count}
+     * delta (was the consumer lambda invoked?) and the return value of
+     * {@link MessageStream#consume}.
+     */
+    private void consumeOne(String streamId, MessageConsumer<M> consumer, AtomicInteger count) {
+        final long sample = metrics.startSample();
+        final int countBefore = count.get();
+        Outcome outcome = Outcome.EMPTY;
+        try {
+            final boolean accepted = stream.consume(streamId, (String msg) -> processMessage(msg, consumer, count));
+            if (count.get() != countBefore) {
+                outcome = accepted ? Outcome.PROCESSED : Outcome.FAILED;
+            }
         }
-        return accepted;
+        catch (Throwable t) {
+            outcome = Outcome.ERRORED;
+            throw t;
+        }
+        finally {
+            metrics.recordOutcome(sample, streamId, outcome);
+        }
     }
 
     /**
@@ -271,22 +282,7 @@ public abstract class AbstractMessageStream<M> implements Closeable {
                 for (Map.Entry<String, MessageConsumer<M>> entry : listeners.entrySet()) {
                     final var streamId = entry.getKey();
                     final var consumer = entry.getValue();
-                    final long sample = metrics.startSample();
-                    final var status = new ConsumerStatus();
-                    Outcome outcome = Outcome.EMPTY;
-                    try {
-                        stream.consume(streamId, (String msg) -> processMessage(msg, consumer, count, status));
-                        if (!status.processed)      outcome = Outcome.EMPTY;
-                        else if (status.failed)     outcome = Outcome.FAILED;
-                        else                        outcome = Outcome.PROCESSED;
-                    }
-                    catch (Throwable t) {
-                        outcome = Outcome.ERRORED;
-                        throw t;
-                    }
-                    finally {
-                        metrics.recordOutcome(sample, streamId, outcome);
-                    }
+                    consumeOne(streamId, consumer, count);
                 }
                 // reset the attempt count because no error has been thrown
                 attempt.reset();
