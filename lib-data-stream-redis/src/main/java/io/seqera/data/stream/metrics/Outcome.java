@@ -15,9 +15,13 @@
  *
  */
 
-package io.seqera.data.stream;
+package io.seqera.data.stream.metrics;
 
-enum Outcome {
+/**
+ * Outcome of a single consume cycle. Surfaces as the {@code outcome} tag on the
+ * {@code seqera.stream.messages} counter and {@code seqera.stream.processing} timer.
+ */
+public enum Outcome {
     /** Consumer.accept returned true; message was acknowledged and removed. */
     PROCESSED("processed"),
     /** Consumer.accept returned false; message remains available for redelivery. */
@@ -29,11 +33,7 @@ enum Outcome {
 
     private final String tag;
 
-    Outcome(String tag) {
-        this.tag = tag;
-    }
+    Outcome(String tag) { this.tag = tag; }
 
-    String tag() {
-        return tag;
-    }
+    public String tag() { return tag; }
 }

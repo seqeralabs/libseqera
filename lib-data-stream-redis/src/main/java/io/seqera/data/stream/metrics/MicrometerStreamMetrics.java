@@ -15,7 +15,7 @@
  *
  */
 
-package io.seqera.data.stream;
+package io.seqera.data.stream.metrics;
 
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,29 +30,36 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 
 /**
- * Micrometer-backed {@link StreamMetrics}. Created only when a non-null
- * {@code MeterRegistry} is supplied to {@link AbstractMessageStream}.
+ * Micrometer-backed {@link StreamMetrics}. Constructed explicitly by consumers that
+ * have {@code io.micrometer:micrometer-core} on their runtime classpath.
  *
- * <p>This class is the only place in the library where Micrometer types appear
- * outside test sources. The {@code compileOnly} dependency on
- * {@code io.micrometer:micrometer-core} therefore does not impose a runtime
- * dependency on consumers that don't supply a registry: this class is never
- * loaded in that case.</p>
+ * <p>This class is the only main-source class in the library that references
+ * Micrometer types. It is intentionally not referenced from {@code AbstractMessageStream}
+ * so that the library remains loadable on classpaths without Micrometer (consumers
+ * that don't need metrics use {@link NoopStreamMetrics#INSTANCE}).</p>
+ *
+ * <p>Published meters (all tagged with {@code stream=<streamName>} and
+ * {@code stream_id=<streamId>}):
+ * <ul>
+ *   <li>{@code seqera.stream.entries} (Gauge) — current backlog</li>
+ *   <li>{@code seqera.stream.messages} (Counter; tag {@code outcome=processed|failed|errored})</li>
+ *   <li>{@code seqera.stream.processing} (Timer with percentile histogram; same outcome tag)</li>
+ * </ul>
  */
-final class MicrometerStreamMetrics implements StreamMetrics {
+public final class MicrometerStreamMetrics implements StreamMetrics {
 
-    static final String METRIC_BACKLOG    = "seqera.stream.entries";
-    static final String METRIC_MESSAGES   = "seqera.stream.messages";
-    static final String METRIC_PROCESSING = "seqera.stream.processing";
+    public static final String METRIC_BACKLOG    = "seqera.stream.entries";
+    public static final String METRIC_MESSAGES   = "seqera.stream.messages";
+    public static final String METRIC_PROCESSING = "seqera.stream.processing";
 
     private final MeterRegistry registry;
     private final String streamName;
-    // Strong references to gauge value-suppliers. Micrometer's Gauge holds the source object
-    // through a WeakReference, so without this map the supplier lambda would be eligible for
-    // GC the moment bindBacklog returns and the gauge would start reporting NaN.
+    // Strong references to gauge value-suppliers. Micrometer's Gauge holds the source
+    // object through a WeakReference; without this map the supplier lambda would be
+    // GC-eligible the moment bindBacklog returns and the gauge would report NaN.
     private final ConcurrentMap<String, IntSupplier> backlogSuppliers = new ConcurrentHashMap<>();
 
-    MicrometerStreamMetrics(MeterRegistry registry, String streamName) {
+    public MicrometerStreamMetrics(MeterRegistry registry, String streamName) {
         this.registry = registry;
         this.streamName = streamName;
     }

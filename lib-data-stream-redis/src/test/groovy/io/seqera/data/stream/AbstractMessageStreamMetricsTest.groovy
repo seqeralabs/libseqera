@@ -43,7 +43,7 @@ class AbstractMessageStreamMetricsTest extends Specification {
         given:
         def registry = new SimpleMeterRegistry()
         def target = new LocalMessageStream()
-        def stream = new TestStream(target, registry)
+        def stream = TestStream.withRegistry(target, registry)
         def streamId = "stream-${LongRndKey.rndHex()}"
         def queue = new LinkedBlockingQueue()
 
@@ -73,7 +73,7 @@ class AbstractMessageStreamMetricsTest extends Specification {
         given:
         def registry = new SimpleMeterRegistry()
         def target = new LocalMessageStream()
-        def stream = new TestStream(target, registry)
+        def stream = TestStream.withRegistry(target, registry)
         def streamId = "stream-${LongRndKey.rndHex()}"
         def seen = new AtomicInteger()
 
@@ -111,7 +111,7 @@ class AbstractMessageStreamMetricsTest extends Specification {
         given:
         def registry = new SimpleMeterRegistry()
         def target = new LocalMessageStream()
-        def stream = new TestStream(target, registry)
+        def stream = TestStream.withRegistry(target, registry)
         def streamId = "stream-${LongRndKey.rndHex()}"
         def attempts = new AtomicInteger()
 

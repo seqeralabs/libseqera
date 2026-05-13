@@ -23,8 +23,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import io.micronaut.core.annotation.Nullable;
+import io.seqera.data.stream.metrics.NoopStreamMetrics;
+import io.seqera.data.stream.metrics.Outcome;
+import io.seqera.data.stream.metrics.StreamMetrics;
 import io.seqera.serde.encode.StringEncodingStrategy;
 import io.seqera.util.retry.ExponentialAttempt;
 import org.slf4j.Logger;
@@ -115,35 +117,29 @@ public abstract class AbstractMessageStream<M> implements Closeable {
 
     /**
      * Constructs a new stream without metrics instrumentation. Behavior is identical
-     * to passing {@code null} to {@link #AbstractMessageStream(MessageStream, MeterRegistry)}.
+     * to passing {@link NoopStreamMetrics#INSTANCE} to {@link #AbstractMessageStream(MessageStream, StreamMetrics)}.
      */
     protected AbstractMessageStream(MessageStream<String> target) {
-        this(target, null);
+        this(target, NoopStreamMetrics.INSTANCE);
     }
 
     /**
-     * Constructs a new stream, optionally instrumented with Micrometer metrics.
+     * Constructs a new stream, optionally instrumented through a {@link StreamMetrics} handle.
      *
-     * <p>When {@code registry} is non-null, the following meters are registered (all
-     * tagged with {@code stream=<name()>} and {@code stream_id=<streamId>}):
-     * <ul>
-     *   <li>{@code seqera.stream.entries} (Gauge) - current stream backlog</li>
-     *   <li>{@code seqera.stream.messages} (Counter, tag {@code outcome=processed|failed|errored}) - total messages</li>
-     *   <li>{@code seqera.stream.processing} (Timer, tag {@code outcome=processed|failed|errored}) - per-entry latency distribution</li>
-     * </ul>
+     * <p>To publish Micrometer metrics, pass an instance of
+     * {@code io.seqera.data.stream.metrics.MicrometerStreamMetrics}. To opt out,
+     * pass {@link NoopStreamMetrics#INSTANCE} (or {@code null}, which is treated as no-op).
      *
-     * <p>When {@code registry} is {@code null}, no meters are registered and there is
-     * no runtime dependency on {@code micrometer-core}.
+     * <p>This class never references {@code io.micrometer.core.instrument.MeterRegistry}
+     * directly, so it is loadable on classpaths without {@code micrometer-core}.
      *
-     * @param target   the underlying {@link MessageStream} implementation
-     * @param registry the {@link MeterRegistry} to publish to, or {@code null} to disable instrumentation
+     * @param target  the underlying {@link MessageStream} implementation
+     * @param metrics the {@link StreamMetrics} handle, or {@code null} for no-op
      */
-    protected AbstractMessageStream(MessageStream<String> target, @Nullable MeterRegistry registry) {
+    protected AbstractMessageStream(MessageStream<String> target, @Nullable StreamMetrics metrics) {
         this.encoder = createEncodingStrategy();
         this.stream = target;
-        this.metrics = (registry != null)
-                ? new MicrometerStreamMetrics(registry, name())
-                : NoopStreamMetrics.INSTANCE;
+        this.metrics = (metrics != null) ? metrics : NoopStreamMetrics.INSTANCE;
         this.name0 = name() + "-thread-" + count.getAndIncrement();
     }
 

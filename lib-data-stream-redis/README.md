@@ -17,18 +17,27 @@ As of version 1.3.0, this library no longer requires Groovy as a runtime depende
 ## Metrics (optional)
 
 `AbstractMessageStream` can publish [Micrometer](https://micrometer.io/) metrics when a
-`MeterRegistry` is supplied to the constructor. Micrometer is a `compileOnly` dependency:
-consumers that don't opt in have no runtime requirement on `micrometer-core`.
+`StreamMetrics` handle is supplied to the constructor. Micrometer is a `compileOnly`
+dependency: consumers that don't opt in have no runtime requirement on `micrometer-core`.
 
 ```groovy
+import io.seqera.data.stream.metrics.MicrometerStreamMetrics
+
 class MyStream extends AbstractMessageStream<MyEvent> {
     @Inject
     MyStream(MessageStream<String> target, @Nullable MeterRegistry registry) {
-        super(target, registry)   // pass null (or use the 1-arg ctor) to disable metrics
+        super(target, registry != null
+                ? new MicrometerStreamMetrics(registry, 'my-stream')
+                : null)
     }
     // ...
 }
 ```
+
+The `StreamMetrics` interface is the neutral seam; `AbstractMessageStream` itself never
+references `MeterRegistry`, so subclasses that don't want metrics (using the 1-arg
+constructor) can be loaded and instantiated even when `micrometer-core` is absent from
+the classpath.
 
 When enabled, the following meters are published (all tagged with `stream` = subclass
 `name()` and `stream_id` = the actual Redis key):
