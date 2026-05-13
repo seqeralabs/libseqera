@@ -28,5 +28,15 @@ public interface RangeProvider {
 
     void add(String key, String member, double score);
 
+    /**
+     * Add {@code member} with {@code score} to the sorted set at {@code key}.
+     * If {@code member} already exists, only update its score when the new
+     * score is strictly less than the current one. Always adds new members.
+     *
+     * @return {@code true} if added or updated, {@code false} if an earlier
+     *         (or equal) score was kept
+     */
+    boolean addIfLess(String key, String member, double score);
+
     List<String> getRange(String key, double min, double max, int count, boolean remove);
 }

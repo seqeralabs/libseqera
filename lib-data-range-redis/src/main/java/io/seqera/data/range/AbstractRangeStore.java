@@ -42,6 +42,11 @@ public abstract class AbstractRangeStore implements RangeStore {
     }
 
     @Override
+    public boolean addIfLess(String name, double score) {
+        return delegate.addIfLess(getKey(), name, score);
+    }
+
+    @Override
     public List<String> getRange(double min, double max, int count) {
         return getRange(min, max, count, true);
     }

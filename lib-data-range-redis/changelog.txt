@@ -1,5 +1,11 @@
 # lib-data-range-redis changelog
 
+1.1.0 - 09 May 2026
+- Add `addIfLess(member, score)` to RangeStore / RangeProvider — atomic "add or update if new score is strictly less" semantics
+- Implement on RedisRangeProvider via native `ZADD ... LT CH`
+- Implement on LocalRangeProvider via in-memory check
+- Useful for "deadline only moves earlier" scheduling where re-adds during sustained activity must not push entries past their refresh window
+
 1.0.0 - 14 Jan 2025
 - Initial release of lib-data-range-redis extracted from Wave project
 - Implement RangeStore interface for time-based range storage

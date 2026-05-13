@@ -113,4 +113,32 @@ class RedisRangeProviderTest extends Specification implements RedisTestContainer
         provider.getRange('bar', 1,10, 10, true) == []
     }
 
+    def 'addIfLess should add new members and only lower scores of existing ones'() {
+        when: 'first add — member is absent'
+        def r1 = provider.addIfLess('addIfLess', 'x', 100)
+        then:
+        r1
+        provider.getRange('addIfLess', 0, 1000, 10, false) == ['x']
+
+        when: 'attempt to push score forward'
+        def r2 = provider.addIfLess('addIfLess', 'x', 200)
+        then: 'kept at 100, returns false'
+        !r2
+        provider.getRange('addIfLess', 100, 100, 10, false) == ['x']
+        provider.getRange('addIfLess', 200, 200, 10, false) == []
+
+        when: 'lower score wins, returns true'
+        def r3 = provider.addIfLess('addIfLess', 'x', 50)
+        then:
+        r3
+        provider.getRange('addIfLess', 50, 50, 10, false) == ['x']
+        provider.getRange('addIfLess', 100, 100, 10, false) == []
+
+        when: 'equal score is treated as not strictly less, returns false'
+        def r4 = provider.addIfLess('addIfLess', 'x', 50)
+        then:
+        !r4
+        provider.getRange('addIfLess', 50, 50, 10, false) == ['x']
+    }
+
 }
