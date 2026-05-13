@@ -23,6 +23,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micronaut.core.annotation.Nullable;
 import io.seqera.serde.encode.StringEncodingStrategy;
 import io.seqera.util.retry.ExponentialAttempt;
 import org.slf4j.Logger;
@@ -105,13 +107,43 @@ public abstract class AbstractMessageStream<M> implements Closeable {
 
     private final MessageStream<String> stream;
 
+    private final StreamMetrics metrics;
+
     private Thread thread;
 
     private final String name0;
 
+    /**
+     * Constructs a new stream without metrics instrumentation. Behavior is identical
+     * to passing {@code null} to {@link #AbstractMessageStream(MessageStream, MeterRegistry)}.
+     */
     protected AbstractMessageStream(MessageStream<String> target) {
+        this(target, null);
+    }
+
+    /**
+     * Constructs a new stream, optionally instrumented with Micrometer metrics.
+     *
+     * <p>When {@code registry} is non-null, the following meters are registered (all
+     * tagged with {@code stream=<name()>} and {@code stream_id=<streamId>}):
+     * <ul>
+     *   <li>{@code seqera.stream.entries} (Gauge) - current stream backlog</li>
+     *   <li>{@code seqera.stream.messages} (Counter, tag {@code outcome=processed|failed|errored}) - total messages</li>
+     *   <li>{@code seqera.stream.processing} (Timer, tag {@code outcome=processed|failed|errored}) - per-entry latency distribution</li>
+     * </ul>
+     *
+     * <p>When {@code registry} is {@code null}, no meters are registered and there is
+     * no runtime dependency on {@code micrometer-core}.
+     *
+     * @param target   the underlying {@link MessageStream} implementation
+     * @param registry the {@link MeterRegistry} to publish to, or {@code null} to disable instrumentation
+     */
+    protected AbstractMessageStream(MessageStream<String> target, @Nullable MeterRegistry registry) {
         this.encoder = createEncodingStrategy();
         this.stream = target;
+        this.metrics = (registry != null)
+                ? new MicrometerStreamMetrics(registry, name())
+                : NoopStreamMetrics.INSTANCE;
         this.name0 = name() + "-thread-" + count.getAndIncrement();
     }
 
@@ -188,6 +220,8 @@ public abstract class AbstractMessageStream<M> implements Closeable {
             stream.init(streamId);
             // then add the consumer to the listeners
             listeners.put(streamId, consumer);
+            // bind the backlog gauge for this stream id (no-op when metrics disabled)
+            metrics.bindBacklog(streamId, () -> stream.length(streamId));
             // finally start the listener thread
             if (thread == null) {
                 thread = createListenerThread();
@@ -210,10 +244,24 @@ public abstract class AbstractMessageStream<M> implements Closeable {
      *      The result of the consumer {@link MessageConsumer} operation.
      */
     protected boolean processMessage(String msg, MessageConsumer<M> consumer, AtomicInteger count) {
+        return processMessage(msg, consumer, count, null);
+    }
+
+    /**
+     * Deserialize and dispatch one message, optionally reporting the consumer outcome
+     * into {@code status} so the calling loop can distinguish "no message" from
+     * "message rejected by consumer".
+     */
+    boolean processMessage(String msg, MessageConsumer<M> consumer, AtomicInteger count, ConsumerStatus status) {
         count.incrementAndGet();
         final M decoded = encoder.decode(msg);
         log.trace("Message stream - receiving message={}; decoded={}", msg, decoded);
-        return consumer.accept(decoded);
+        final boolean accepted = consumer.accept(decoded);
+        if (status != null) {
+            status.processed = true;
+            status.failed = !accepted;
+        }
+        return accepted;
     }
 
     /**
@@ -227,7 +275,22 @@ public abstract class AbstractMessageStream<M> implements Closeable {
                 for (Map.Entry<String, MessageConsumer<M>> entry : listeners.entrySet()) {
                     final var streamId = entry.getKey();
                     final var consumer = entry.getValue();
-                    stream.consume(streamId, (String msg) -> processMessage(msg, consumer, count));
+                    final long sample = metrics.startSample();
+                    final var status = new ConsumerStatus();
+                    Outcome outcome = Outcome.EMPTY;
+                    try {
+                        stream.consume(streamId, (String msg) -> processMessage(msg, consumer, count, status));
+                        if (!status.processed)      outcome = Outcome.EMPTY;
+                        else if (status.failed)     outcome = Outcome.FAILED;
+                        else                        outcome = Outcome.PROCESSED;
+                    }
+                    catch (Throwable t) {
+                        outcome = Outcome.ERRORED;
+                        throw t;
+                    }
+                    finally {
+                        metrics.recordOutcome(sample, streamId, outcome);
+                    }
                 }
                 // reset the attempt count because no error has been thrown
                 attempt.reset();

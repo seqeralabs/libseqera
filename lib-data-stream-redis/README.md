@@ -8,11 +8,39 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-data-stream-redis:1.3.0'
+    implementation 'io.seqera:lib-data-stream-redis:1.4.0'
 }
 ```
 
 As of version 1.3.0, this library no longer requires Groovy as a runtime dependency.
+
+## Metrics (optional)
+
+`AbstractMessageStream` can publish [Micrometer](https://micrometer.io/) metrics when a
+`MeterRegistry` is supplied to the constructor. Micrometer is a `compileOnly` dependency:
+consumers that don't opt in have no runtime requirement on `micrometer-core`.
+
+```groovy
+class MyStream extends AbstractMessageStream<MyEvent> {
+    @Inject
+    MyStream(MessageStream<String> target, @Nullable MeterRegistry registry) {
+        super(target, registry)   // pass null (or use the 1-arg ctor) to disable metrics
+    }
+    // ...
+}
+```
+
+When enabled, the following meters are published (all tagged with `stream` = subclass
+`name()` and `stream_id` = the actual Redis key):
+
+| Meter | Type | Tags | Description |
+|---|---|---|---|
+| `seqera.stream.entries` | Gauge | `stream`, `stream_id` | Current stream backlog |
+| `seqera.stream.messages` | Counter | `stream`, `stream_id`, `outcome` | Messages processed (`outcome` ∈ `processed`/`failed`/`errored`) |
+| `seqera.stream.processing` | Timer | `stream`, `stream_id`, `outcome` | Per-entry latency with percentile histogram (p25/p50/p75/p95/p99) |
+
+To segregate metrics by application in multi-service deployments, set a common tag at the
+`MeterRegistry` boundary (e.g. `micronaut.metrics.tags.application: <name>` in Micronaut).
 
 ## Usage
 
