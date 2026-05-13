@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-data-range-redis:1.0.0'
+    implementation 'io.seqera:lib-data-range-redis:1.1.0'
 }
 ```
 
@@ -87,10 +87,22 @@ class ScheduledTaskService implements Runnable {
 
 ### Key Methods
 
-- `add(String member, double score)` - Add an entry with a timestamp score
+- `add(String member, double score)` - Add an entry with a timestamp score (overwrites the existing score if the member is already present)
+- `addIfLess(String member, double score)` - Add the entry, or update its score only when the new score is strictly less than the current one; returns `true` if applied, `false` if an earlier-or-equal score was kept. Atomic on Redis via `ZADD ... LT CH`
 - `getRange(double min, double max, int count)` - Retrieve entries within a score range
 
 The score typically represents epoch seconds, making it easy to schedule entries for future processing.
+
+#### When to use `addIfLess`
+
+Use `addIfLess` when the score represents a **deadline that should only move earlier**. Typical case: a member is scheduled for processing at time `T`, and sustained activity keeps re-adding it. With `add`, every re-add pushes the deadline forward and the entry may never fall inside the polled window. With `addIfLess`, the earliest scheduled time wins and re-adds during activity cannot defer it.
+
+```groovy
+// Schedule a task no later than `deadline`; concurrent re-adds cannot push it past that point.
+store.addIfLess(taskId, deadline.epochSecond)
+```
+
+Prefer plain `add` when the latest score should win (e.g. refresh/heartbeat semantics).
 
 ## Configuration
 

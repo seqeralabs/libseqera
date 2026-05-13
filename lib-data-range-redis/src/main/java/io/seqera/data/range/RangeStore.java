@@ -28,5 +28,19 @@ public interface RangeStore {
 
     void add(String member, double score);
 
+    /**
+     * Add {@code member} with {@code score}; if {@code member} already exists,
+     * only update its score when the new score is strictly less than the
+     * current one. New members are always added. Atomic on Redis-backed
+     * implementations (native {@code ZADD ... LT CH}).
+     *
+     * <p>Useful for "deadline only moves earlier" scheduling semantics where
+     * sustained activity must not push a scheduled entry forward.
+     *
+     * @return {@code true} if added or updated, {@code false} if an earlier
+     *         (or equal) score was kept
+     */
+    boolean addIfLess(String member, double score);
+
     List<String> getRange(double min, double max, int count);
 }
