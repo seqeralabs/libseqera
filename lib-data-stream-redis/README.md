@@ -55,8 +55,8 @@ The `outcome` tag takes one of three values:
 - `failed` — the consumer returned `false`; the message remains available for redelivery.
 - `errored` — an unhandled exception escaped the consumer or the underlying stream implementation.
 
-Empty polls (no message available) are recorded internally but **not** counted in
-`seqera.stream.messages_total` and do **not** contribute to the timer, keeping the timer's
+Empty polls (no message available) are **ignored** — they do not increment
+`seqera.stream.messages_total` and do not contribute to the timer, keeping the timer's
 `_count`/`_sum`/`_max` aligned with "an entry was processed".
 
 In a Prometheus scrape (`micronaut-micrometer-registry-prometheus`), dots in meter names

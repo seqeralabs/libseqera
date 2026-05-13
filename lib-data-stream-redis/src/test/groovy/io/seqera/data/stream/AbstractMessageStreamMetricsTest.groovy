@@ -142,7 +142,7 @@ class AbstractMessageStreamMetricsTest extends Specification {
         stream.close()
     }
 
-    def 'should register no meters when registry is null'() {
+    def 'should register no meters when using the no-op 1-arg constructor'() {
         given:
         // 1-arg constructor → no metrics
         def target = new LocalMessageStream()

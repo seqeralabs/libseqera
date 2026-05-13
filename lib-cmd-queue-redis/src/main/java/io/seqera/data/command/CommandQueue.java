@@ -20,6 +20,7 @@ import io.micronaut.core.annotation.Nullable;
 import io.seqera.data.stream.AbstractMessageStream;
 import io.seqera.data.stream.MessageConsumer;
 import io.seqera.data.stream.MessageStream;
+import io.seqera.data.stream.metrics.NoopStreamMetrics;
 import io.seqera.data.stream.metrics.StreamMetrics;
 import io.seqera.serde.encode.StringEncodingStrategy;
 import io.seqera.serde.moshi.MoshiEncodeStrategy;
@@ -51,7 +52,8 @@ public abstract class CommandQueue extends AbstractMessageStream<CommandMsg> {
      */
     public CommandQueue(MessageStream<String> target, @Nullable StreamMetrics metrics) {
         super(target, metrics);
-        log.info("Created command queue - name={}; metrics={}", name(), metrics != null ? metrics.getClass().getSimpleName() : "none");
+        log.info("Created command queue - name={}; metrics={}",
+                name(), metrics != null && !(metrics instanceof NoopStreamMetrics) ? "enabled" : "disabled");
     }
 
     @Override

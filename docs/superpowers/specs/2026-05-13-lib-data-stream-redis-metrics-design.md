@@ -109,10 +109,10 @@ Package `io.seqera.data.stream`:
   Micrometer-typed concrete class only loads if a consumer explicitly
   constructs it.
 
-- **`ConsumerStatus`** (package-private) — small mutable holder used to
-  bubble the `consumer.accept(...)` return value back out of the
-  `stream.consume(...)` lambda so the loop can distinguish "no message" from
-  "consumer returned false". See §5.3.
+No additional types are needed in the `io.seqera.data.stream` package: the
+existing `processMessage` already increments the shared `AtomicInteger count`
+on every invocation, so the polling loop can read that counter before and
+after `stream.consume(...)` to derive the outcome — see §5.3.
 
 ### 4.2 Classloader-safety: why `AbstractMessageStream` does not take `MeterRegistry`
 
@@ -220,27 +220,34 @@ No leak risk.
 
 ### 5.3 `processMessages` — time + count each cycle
 
-The current inner loop:
+The current inner loop body:
 
 ```java
 stream.consume(streamId, (String msg) -> processMessage(msg, consumer, count));
 ```
 
-becomes:
+is extracted into a private `consumeOne(streamId, consumer, count)` helper so
+the polling loop reads as it did before the metrics work:
 
 ```java
 for (Map.Entry<String, MessageConsumer<M>> entry : listeners.entrySet()) {
-    final var streamId = entry.getKey();
-    final var consumer = entry.getValue();
+    consumeOne(entry.getKey(), entry.getValue(), count);
+}
+```
+
+The helper records the per-cycle outcome:
+
+```java
+private void consumeOne(String streamId, MessageConsumer<M> consumer, AtomicInteger count) {
     final long sample = metrics.startSample();
-    final var status = new ConsumerStatus();
+    final int countBefore = count.get();
     Outcome outcome = Outcome.EMPTY;
     try {
-        stream.consume(streamId,
-                msg -> processMessage(msg, consumer, count, status));
-        if (!status.processed)        outcome = Outcome.EMPTY;
-        else if (status.failed)       outcome = Outcome.FAILED;
-        else                          outcome = Outcome.PROCESSED;
+        final boolean accepted = stream.consume(streamId,
+                (String msg) -> processMessage(msg, consumer, count));
+        if (count.get() != countBefore) {
+            outcome = accepted ? Outcome.PROCESSED : Outcome.FAILED;
+        }
     }
     catch (Throwable t) {
         outcome = Outcome.ERRORED;       // exception escaped consumer / impl
@@ -252,20 +259,39 @@ for (Map.Entry<String, MessageConsumer<M>> entry : listeners.entrySet()) {
 }
 ```
 
-`ConsumerStatus` is a package-private mutable holder (`boolean processed`,
-`boolean failed`). The new `processMessage(msg, consumer, count, status)`
-overload sets `status.processed = true` and `status.failed = !accepted` after
-calling `consumer.accept(decoded)`. The original 3-arg `processMessage`
-remains as a `protected` method delegating to the new one with
-`status = null`, preserving subclass compatibility.
+**Outcome detection.** The original 3-arg `processMessage` already increments
+the shared `AtomicInteger count` on every invocation (it's been doing this
+since before the metrics work — the outer loop uses `count.get() == 0` to
+decide whether to sleep). That gives the polling loop a free side channel
+for distinguishing "no message available" from "message available but
+consumer returned false":
 
-This separation is necessary because the abstract layer cannot otherwise
-distinguish "no message available" from "message available but consumer
-returned false" — both surface as `stream.consume(...) == false`.
+| `count` delta | `stream.consume(...)` returned | outcome |
+|---|---|---|
+| 0 (lambda never ran)   | `false`                | `EMPTY`     |
+| >0                     | `true`                 | `PROCESSED` |
+| >0                     | `false`                | `FAILED`    |
+| (any — caught above)   | `Throwable`            | `ERRORED`   |
+
+No additional holder class or 4-arg overload is needed: `processMessage`'s
+signature is unchanged, and there is no `ConsumerStatus` type. (An earlier
+draft of this spec proposed both — they were dropped during implementation
+when it became clear that the existing `count` AtomicInteger carried enough
+signal on its own.)
 
 `outcome` is given a default value of `Outcome.EMPTY` at declaration to
 satisfy Java's definite-assignment analysis (the `try` block could throw
 before reaching any assignment).
+
+**Side-effect: `LocalMessageStream` consumer exceptions now classify as
+`FAILED` rather than `EMPTY`.** `LocalMessageStream.consume` catches consumer
+exceptions internally, logs at debug, and returns `false`. With the
+count-delta logic, the lambda *did* run (count was incremented before the
+throw), so the outcome is `FAILED`, not `EMPTY`. That matches user
+expectation better than the holder-based design would have. `RedisMessageStream`
+propagates consumer exceptions, so on Redis the same scenario surfaces as
+`ERRORED`. This difference is inherent to the underlying impls (pre-existing,
+not introduced by metrics) and is called out in the library README.
 
 ### 5.4 No changes to `MessageStream` interface or its implementations
 
@@ -487,11 +513,13 @@ update as Wave/Sched.
 
 ## 12. Resolved during implementation
 
-1. **Tri-state outcome distinction** — resolved with a package-private
-   `ConsumerStatus` mutable holder threaded through a new 4-arg overload of
-   `processMessage`. The original 3-arg `protected` method is preserved as
-   a thin delegate that passes `status = null`, keeping subclass
-   compatibility.
+1. **Tri-state outcome distinction** — resolved by reading the existing
+   `AtomicInteger count` before and after `stream.consume(...)`. The original
+   3-arg `processMessage` already increments `count` on every invocation
+   (used by the outer loop to decide whether to sleep), so the polling loop
+   gets the "did the lambda run?" signal for free. No additional holder class
+   or 4-arg `processMessage` overload was needed. See §5.3 for the truth
+   table.
 2. **Classloader safety** — the original plan (`MeterRegistry` in
    `AbstractMessageStream`'s constructor, relying on HotSpot lazy
    resolution) was shown to be unsafe under reflection. Replaced with the

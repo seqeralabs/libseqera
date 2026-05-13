@@ -28,6 +28,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Micrometer-backed {@link StreamMetrics}. Constructed explicitly by consumers that
@@ -48,6 +50,8 @@ import io.micrometer.core.instrument.Timer;
  */
 public final class MicrometerStreamMetrics implements StreamMetrics {
 
+    private static final Logger log = LoggerFactory.getLogger(MicrometerStreamMetrics.class);
+
     public static final String METRIC_BACKLOG    = "seqera.stream.entries";
     public static final String METRIC_MESSAGES   = "seqera.stream.messages";
     public static final String METRIC_PROCESSING = "seqera.stream.processing";
@@ -66,7 +70,14 @@ public final class MicrometerStreamMetrics implements StreamMetrics {
 
     @Override
     public void bindBacklog(String streamId, IntSupplier lengthSupplier) {
-        backlogSuppliers.put(streamId, lengthSupplier);
+        // Micrometer caches gauges by (name + tags), so a second register(...) call
+        // returns the originally-registered gauge — still bound to the first supplier.
+        // Skip duplicates explicitly so the silent failure mode is obvious.
+        if (backlogSuppliers.putIfAbsent(streamId, lengthSupplier) != null) {
+            log.warn("Backlog gauge already bound for stream={} stream_id={} — ignoring duplicate bind",
+                    streamName, streamId);
+            return;
+        }
         Gauge.builder(METRIC_BACKLOG, lengthSupplier, (ToDoubleFunction<IntSupplier>) IntSupplier::getAsInt)
                 .description("Current number of entries available on the stream")
                 .tag("stream", streamName)
