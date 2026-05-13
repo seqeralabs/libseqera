@@ -19,6 +19,9 @@ package io.seqera.data.stream
 
 import java.time.Duration
 
+import io.micrometer.core.instrument.MeterRegistry
+import io.seqera.data.stream.metrics.MicrometerStreamMetrics
+import io.seqera.data.stream.metrics.StreamMetrics
 import io.seqera.serde.encode.StringEncodingStrategy
 import groovy.json.JsonBuilder
 import groovy.json.JsonSlurper
@@ -31,6 +34,14 @@ class TestStream extends AbstractMessageStream<TestMessage> {
 
     TestStream(MessageStream<String> target) {
         super(target)
+    }
+
+    TestStream(MessageStream<String> target, StreamMetrics metrics) {
+        super(target, metrics)
+    }
+
+    static TestStream withRegistry(MessageStream<String> target, MeterRegistry registry) {
+        return new TestStream(target, new MicrometerStreamMetrics(registry, 'test-stream'))
     }
 
     @Override

@@ -8,11 +8,105 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-data-stream-redis:1.3.0'
+    implementation 'io.seqera:lib-data-stream-redis:1.4.0'
 }
 ```
 
 As of version 1.3.0, this library no longer requires Groovy as a runtime dependency.
+
+## Metrics (optional)
+
+`AbstractMessageStream` can publish [Micrometer](https://micrometer.io/) metrics when a
+`StreamMetrics` handle is supplied to the constructor. Micrometer is a `compileOnly`
+dependency: consumers that don't opt in have no runtime requirement on `micrometer-core`.
+
+```groovy
+import io.seqera.data.stream.metrics.MicrometerStreamMetrics
+
+class MyStream extends AbstractMessageStream<MyEvent> {
+    @Inject
+    MyStream(MessageStream<String> target, @Nullable MeterRegistry registry) {
+        super(target, registry != null
+                ? new MicrometerStreamMetrics(registry, 'my-stream')
+                : null)
+    }
+    // ...
+}
+```
+
+The `StreamMetrics` interface is the neutral seam; `AbstractMessageStream` itself never
+references `MeterRegistry`, so subclasses that don't want metrics (using the 1-arg
+constructor) can be loaded and instantiated even when `micrometer-core` is absent from
+the classpath.
+
+When enabled, the following meters are published. All meters carry the base tags
+`stream` (the subclass `name()`, e.g. `cmd-queue`) and `stream_id` (the actual Redis
+stream key, e.g. `cmd-queue/v1`).
+
+| Meter | Type | Additional tags | Unit | Description |
+|---|---|---|---|---|
+| `seqera.stream.entries` | Gauge | — | entries | Current stream backlog (Redis `XLEN`, polled at scrape time). |
+| `seqera.stream.messages` | Counter | `outcome` | messages | Total messages processed per outcome. |
+| `seqera.stream.processing` | Timer | `outcome` | seconds | Per-entry processing time. Includes the full lifecycle from the underlying `stream.consume(...)` entry through the consumer's `accept` and the Redis acknowledge/delete. Published as a Prometheus histogram (with buckets) so quantiles can be aggregated server-side across replicas via `histogram_quantile()`. |
+
+The `outcome` tag takes one of three values:
+
+- `processed` — the consumer returned `true`; the message was acknowledged and removed from the stream.
+- `failed` — the consumer returned `false`; the message remains available for redelivery.
+- `errored` — an unhandled exception escaped the consumer or the underlying stream implementation.
+
+Empty polls (no message available) are **ignored** — they do not increment
+`seqera.stream.messages_total` and do not contribute to the timer, keeping the timer's
+`_count`/`_sum`/`_max` aligned with "an entry was processed".
+
+In a Prometheus scrape (`micronaut-micrometer-registry-prometheus`), dots in meter names
+are translated to underscores. A typical scrape output looks like:
+
+```bash
+$ curl -s http://localhost:7070/prometheus | grep '^seqera_stream'
+seqera_stream_entries{stream="cmd-queue",stream_id="cmd-queue/v1"} 0.0
+seqera_stream_messages_total{outcome="processed",stream="cmd-queue",stream_id="cmd-queue/v1"} 3.0
+seqera_stream_messages_total{outcome="failed",stream="cmd-queue",stream_id="cmd-queue/v1"} 17.0
+seqera_stream_processing_seconds_count{outcome="processed",stream="cmd-queue",stream_id="cmd-queue/v1"} 3
+seqera_stream_processing_seconds_sum{outcome="processed",stream="cmd-queue",stream_id="cmd-queue/v1"} 0.158618375
+seqera_stream_processing_seconds_max{outcome="processed",stream="cmd-queue",stream_id="cmd-queue/v1"} 0.120260875
+seqera_stream_processing_seconds_bucket{outcome="processed",stream="cmd-queue",stream_id="cmd-queue/v1",le="0.001048576"} 0
+# … and the rest of the histogram buckets, with le=… up to +Inf
+```
+
+### Useful PromQL queries
+
+```promql
+# throughput (messages/sec, by stream)
+rate(seqera_stream_messages_total{outcome="processed"}[1m])
+
+# error rate (messages/sec, failed + errored)
+rate(seqera_stream_messages_total{outcome=~"failed|errored"}[1m])
+
+# error ratio
+  sum by (stream) (rate(seqera_stream_messages_total{outcome=~"failed|errored"}[5m]))
+/ sum by (stream) (rate(seqera_stream_messages_total[5m]))
+
+# percentile latencies (server-side aggregation across replicas)
+histogram_quantile(0.25, sum by (le, stream) (rate(seqera_stream_processing_seconds_bucket{outcome="processed"}[5m])))  # q1
+histogram_quantile(0.50, sum by (le, stream) (rate(seqera_stream_processing_seconds_bucket{outcome="processed"}[5m])))  # median
+histogram_quantile(0.75, sum by (le, stream) (rate(seqera_stream_processing_seconds_bucket{outcome="processed"}[5m])))  # q3
+histogram_quantile(0.95, sum by (le, stream) (rate(seqera_stream_processing_seconds_bucket{outcome="processed"}[5m])))  # p95
+
+# mean latency
+  rate(seqera_stream_processing_seconds_sum{outcome="processed"}[5m])
+/ rate(seqera_stream_processing_seconds_count{outcome="processed"}[5m])
+
+# max latency (rolling, exposed directly)
+seqera_stream_processing_seconds_max{outcome="processed"}
+
+# current backlog
+seqera_stream_entries
+```
+
+To segregate metrics by application in multi-service deployments, set a common tag at the
+`MeterRegistry` boundary (e.g. `micronaut.metrics.tags.application: <name>` in Micronaut).
+Every metric in the JVM — including these — will then carry an `application` tag.
 
 ## Usage
 
