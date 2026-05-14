@@ -1,5 +1,8 @@
 # lib-serde-jackson changelog
 
+1.0.2 - 14 May 2026
+- Avoid embedding raw JSON value in decode-error message
+
 1.0.1 - 6 Jan 2026
 - Ignore unknown properties during JSON deserialization
 

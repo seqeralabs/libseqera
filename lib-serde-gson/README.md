@@ -6,7 +6,7 @@ Gson-based JSON serialization library implementing the lib-serde `StringEncoding
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-serde-gson:1.0.0'
+    implementation 'io.seqera:lib-serde-gson:1.0.1'
 }
 ```
 
