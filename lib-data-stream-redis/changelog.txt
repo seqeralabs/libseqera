@@ -1,5 +1,13 @@
 # lib-data-stream-redis changelog
 
+1.5.0 - 14 May 2026
+- BREAKING (observability): rename Outcome.FAILED -> Outcome.ACTIVE; metric tag value
+  outcome="failed" is now outcome="active". The Java API is source-compatible, but any
+  downstream dashboard or alert filtering on outcome="failed" will silently return no
+  data after upgrade and must be updated. Real failures are unchanged: outcome="errored".
+- The rename clarifies that consumer-returns-false means "work still in progress, keep
+  for redelivery" rather than a failure.
+
 1.4.0 - 13 May 2026
 - Add optional Micrometer instrumentation (backlog gauge, processed counter, processing-time Timer)
 - New backward-compatible constructor: AbstractMessageStream(MessageStream, StreamMetrics)
