@@ -107,7 +107,7 @@ class AbstractMessageStreamMetricsTest extends Specification {
         stream.close()
     }
 
-    def 'should count consumer-rejected message as failed'() {
+    def 'should count consumer-rejected message as active'() {
         given:
         def registry = new SimpleMeterRegistry()
         def target = new LocalMessageStream()
@@ -126,15 +126,15 @@ class AbstractMessageStreamMetricsTest extends Specification {
         new PollingConditions(timeout: 8).eventually {
             assert attempts.get() >= 2
 
-            def failed = registry.find('seqera.stream.messages')
-                    .tag('outcome', 'failed')
+            def active = registry.find('seqera.stream.messages')
+                    .tag('outcome', 'active')
                     .tag('stream_id', streamId)
                     .counter()
             def processed = registry.find('seqera.stream.messages')
                     .tag('outcome', 'processed')
                     .tag('stream_id', streamId)
                     .counter()
-            assert failed?.count() >= 1.0d
+            assert active?.count() >= 1.0d
             assert processed?.count() >= 1.0d
         }
 

@@ -52,7 +52,7 @@ stream key, e.g. `cmd-queue/v1`).
 The `outcome` tag takes one of three values:
 
 - `processed` — the consumer returned `true`; the message was acknowledged and removed from the stream.
-- `failed` — the consumer returned `false`; the message remains available for redelivery.
+- `active` — the consumer returned `false`; the message remains available for redelivery (work still in progress, not a failure).
 - `errored` — an unhandled exception escaped the consumer or the underlying stream implementation.
 
 Empty polls (no message available) are **ignored** — they do not increment
@@ -66,7 +66,7 @@ are translated to underscores. A typical scrape output looks like:
 $ curl -s http://localhost:7070/prometheus | grep '^seqera_stream'
 seqera_stream_entries{stream="cmd-queue",stream_id="cmd-queue/v1"} 0.0
 seqera_stream_messages_total{outcome="processed",stream="cmd-queue",stream_id="cmd-queue/v1"} 3.0
-seqera_stream_messages_total{outcome="failed",stream="cmd-queue",stream_id="cmd-queue/v1"} 17.0
+seqera_stream_messages_total{outcome="active",stream="cmd-queue",stream_id="cmd-queue/v1"} 17.0
 seqera_stream_processing_seconds_count{outcome="processed",stream="cmd-queue",stream_id="cmd-queue/v1"} 3
 seqera_stream_processing_seconds_sum{outcome="processed",stream="cmd-queue",stream_id="cmd-queue/v1"} 0.158618375
 seqera_stream_processing_seconds_max{outcome="processed",stream="cmd-queue",stream_id="cmd-queue/v1"} 0.120260875
@@ -80,12 +80,15 @@ seqera_stream_processing_seconds_bucket{outcome="processed",stream="cmd-queue",s
 # throughput (messages/sec, by stream)
 rate(seqera_stream_messages_total{outcome="processed"}[1m])
 
-# error rate (messages/sec, failed + errored)
-rate(seqera_stream_messages_total{outcome=~"failed|errored"}[1m])
+# error rate (messages/sec)
+rate(seqera_stream_messages_total{outcome="errored"}[1m])
 
 # error ratio
-  sum by (stream) (rate(seqera_stream_messages_total{outcome=~"failed|errored"}[5m]))
+  sum by (stream) (rate(seqera_stream_messages_total{outcome="errored"}[5m]))
 / sum by (stream) (rate(seqera_stream_messages_total[5m]))
+
+# active-redelivery rate (in-progress polls, not failures)
+rate(seqera_stream_messages_total{outcome="active"}[1m])
 
 # percentile latencies (server-side aggregation across replicas)
 histogram_quantile(0.25, sum by (le, stream) (rate(seqera_stream_processing_seconds_bucket{outcome="processed"}[5m])))  # q1

@@ -259,7 +259,7 @@ public abstract class AbstractMessageStream<M> implements Closeable {
         try {
             final boolean accepted = stream.consume(streamId, (String msg) -> processMessage(msg, consumer, count));
             if (count.get() != countBefore) {
-                outcome = accepted ? Outcome.PROCESSED : Outcome.FAILED;
+                outcome = accepted ? Outcome.PROCESSED : Outcome.ACTIVE;
             }
         }
         catch (Throwable t) {

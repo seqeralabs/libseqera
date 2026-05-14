@@ -25,7 +25,7 @@ public enum Outcome {
     /** Consumer.accept returned true; message was acknowledged and removed. */
     PROCESSED("processed"),
     /** Consumer.accept returned false; message remains available for redelivery. */
-    FAILED("failed"),
+    ACTIVE("active"),
     /** Exception escaped the consumer or the underlying stream implementation. */
     ERRORED("errored"),
     /** Poll found no message available. Not counted or timed. */

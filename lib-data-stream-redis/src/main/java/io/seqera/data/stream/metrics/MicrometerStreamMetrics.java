@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
  * {@code stream_id=<streamId>}):
  * <ul>
  *   <li>{@code seqera.stream.entries} (Gauge) — current backlog</li>
- *   <li>{@code seqera.stream.messages} (Counter; tag {@code outcome=processed|failed|errored})</li>
+ *   <li>{@code seqera.stream.messages} (Counter; tag {@code outcome=processed|active|errored})</li>
  *   <li>{@code seqera.stream.processing} (Timer with percentile histogram; same outcome tag)</li>
  * </ul>
  */
