@@ -133,7 +133,7 @@ public abstract class JacksonEncodingStrategy<V> implements StringEncodingStrate
         try {
             return objectMapper.readValue(value, objectMapper.constructType(type));
         } catch (Exception e) {
-            throw new RuntimeException("Failed to decode JSON: " + value, e);
+            throw new RuntimeException("Failed to decode JSON: " + e.getMessage(), e);
         }
     }
 }
