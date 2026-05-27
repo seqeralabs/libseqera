@@ -334,12 +334,9 @@ public class Retryable<R> {
             }
         };
 
-        final Duration initialDelay = config.getDelayAsDuration();
-        final Duration maxDelay = config.getMaxDelayAsDuration();
-        final double multiplier = config.getMultiplier();
-
         final RetryPolicyBuilder<R> policy = RetryPolicy.<R>builder()
                 .handleIf(toChecked(condition != null ? condition : DEFAULT_CONDITION))
+                .withBackoff(config.getDelayAsDuration(), config.getMaxDelayAsDuration(), config.getMultiplier())
                 .withMaxAttempts(config.getMaxAttempts())
                 .withJitter(config.getJitter())
                 .onRetry(retry0)
@@ -349,11 +346,11 @@ public class Retryable<R> {
             // The hint (e.g. HTTP Retry-After) is a lower bound: we never wait less than the
             // server asked, and never less than the scheduled exponential backoff. The result
             // is capped by maxDelay to honor the local config contract. Failsafe still applies
-            // jitter on top of the value returned here.
-            //
-            // Note: withDelayFn replaces withBackoff entirely (they're mutually exclusive in
-            // Failsafe), so we must compute the exponential backoff manually here — when the
-            // hint resolves to null, the lambda still returns a value derived from the schedule.
+            // jitter on top of the value returned here, and uses withDelayFn in preference to
+            // the withBackoff schedule when both are set.
+            final Duration initialDelay = config.getDelayAsDuration();
+            final Duration maxDelay = config.getMaxDelayAsDuration();
+            final double multiplier = config.getMultiplier();
             policy.withDelayFn(ctx -> {
                 final Duration backoff = computeBackoff(initialDelay, maxDelay, multiplier, ctx.getAttemptCount());
                 Duration hint = null;
@@ -368,9 +365,6 @@ public class Retryable<R> {
                 Duration base = (hint != null && hint.compareTo(backoff) > 0) ? hint : backoff;
                 return base.compareTo(maxDelay) > 0 ? maxDelay : base;
             });
-        }
-        else {
-            policy.withBackoff(initialDelay, maxDelay, multiplier);
         }
 
         if (handleResult != null) {
