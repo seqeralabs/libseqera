@@ -27,8 +27,10 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
+import dev.failsafe.ExecutionContext;
 import dev.failsafe.Failsafe;
 import dev.failsafe.FailsafeException;
 import dev.failsafe.RetryPolicy;
@@ -265,6 +267,7 @@ public class Retryable<R> {
     private Predicate<? extends Throwable> condition;
     private Consumer<Event<R>> retryEvent;
     private Predicate<R> handleResult;
+    private Function<R, Duration> delayHint;
 
     public Retryable<R> withConfig(Config config) {
         this.config = new ConfigImpl(config);
@@ -287,6 +290,25 @@ public class Retryable<R> {
 
     public Retryable<R> onRetry(Consumer<Event<R>> event) {
         this.retryEvent = event;
+        return this;
+    }
+
+    /**
+     * Registers a function that extracts a per-attempt delay hint from the last result.
+     *
+     * <p>When set, the delay before the next retry is {@code max(scheduled_backoff, hint)},
+     * capped by the configured {@code maxDelay}. Jitter is still applied on top. This is the
+     * mechanism used to honor server-supplied {@code Retry-After} headers for HTTP 429/503
+     * responses while not retrying any sooner than the local backoff schedule would.
+     *
+     * <p>The function may return {@code null} (or throw, which is logged and ignored) for
+     * attempts where no hint is available; in that case the regular backoff applies.
+     *
+     * @param fn extractor returning a lower-bound delay derived from the just-failed result
+     * @return this builder
+     */
+    public Retryable<R> retryDelayHint(Function<R, Duration> fn) {
+        this.delayHint = fn;
         return this;
     }
 
@@ -321,10 +343,71 @@ public class Retryable<R> {
                 .onRetry(retry0)
                 .onFailure(failure0);
 
+        if (delayHint != null) {
+            // Failsafe uses withDelayFn in preference to the withBackoff schedule when both are
+            // set, and still applies jitter on top. See computeRetryDelay for the semantics.
+            final Duration initialDelay = config.getDelayAsDuration();
+            final Duration maxDelay = config.getMaxDelayAsDuration();
+            final double multiplier = config.getMultiplier();
+            policy.withDelayFn(ctx -> computeRetryDelay(ctx, initialDelay, maxDelay, multiplier, delayHint));
+        }
+
         if (handleResult != null) {
             policy.handleResultIf(handleResult::test);
         }
         return policy.build();
+    }
+
+    /**
+     * Computes the next retry delay as {@code min(maxDelay, max(scheduledBackoff, hint))}.
+     *
+     * <p>The hint extracted from the just-failed result (e.g. an HTTP {@code Retry-After}
+     * header) acts as a strict lower bound — never wait less than the server asked. The
+     * scheduled exponential backoff is the alternative lower bound — never wait less than the
+     * normal retry schedule. The configured {@code maxDelay} caps both. If the extractor
+     * returns {@code null} (or throws, which is logged and treated as null), the result
+     * falls back to the scheduled backoff.
+     */
+    private static <R> Duration computeRetryDelay(
+            ExecutionContext<R> ctx,
+            Duration initialDelay,
+            Duration maxDelay,
+            double multiplier,
+            Function<R, Duration> delayHint) {
+        final Duration backoff = computeBackoff(initialDelay, maxDelay, multiplier, ctx.getAttemptCount());
+        Duration hint = null;
+        final R last = ctx.getLastResult();
+        if (last != null) {
+            try {
+                hint = delayHint.apply(last);
+            } catch (Exception e) {
+                log.debug("Retry delay hint extractor failed", e);
+            }
+        }
+        final Duration base = (hint != null && hint.compareTo(backoff) > 0) ? hint : backoff;
+        return base.compareTo(maxDelay) > 0 ? maxDelay : base;
+    }
+
+    /**
+     * Computes the scheduled exponential backoff for the next retry attempt, mirroring the
+     * Failsafe {@code withBackoff} semantics: {@code initial * multiplier^(attempt-1)}, capped
+     * by {@code maxDelay}. Used when a custom {@code withDelayFn} is installed and needs to
+     * combine the schedule with an external hint.
+     *
+     * @param initial   the initial delay (first retry uses this exact value)
+     * @param maxDelay  the upper bound for any single retry delay
+     * @param factor    the exponential growth factor
+     * @param attempt   1-based count of failed attempts so far (= index of the upcoming retry)
+     */
+    private static Duration computeBackoff(Duration initial, Duration maxDelay, double factor, int attempt) {
+        if (attempt <= 1) {
+            return initial;
+        }
+        final double millis = initial.toMillis() * Math.pow(factor, attempt - 1);
+        if (millis >= maxDelay.toMillis()) {
+            return maxDelay;
+        }
+        return Duration.ofMillis((long) millis);
     }
 
     // Adapt a java.util.function.Predicate to failsafe's CheckedPredicate, which
