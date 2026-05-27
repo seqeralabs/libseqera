@@ -670,6 +670,7 @@ public class HxClient {
             return Duration.ofSeconds(secs);
         }
         catch (NumberFormatException e) {
+            log.debug("Ignoring unparseable Retry-After header: {}", header);
             return null;
         }
     }
