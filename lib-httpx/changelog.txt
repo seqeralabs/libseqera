@@ -1,5 +1,10 @@
 # lib-httpx changelog
 
+2.3.0 - 27 May 2026
+- Honor server-supplied Retry-After header (delta-seconds) on retried HTTP responses
+- Debug-log unparseable Retry-After header values
+- Requires lib-retry >= 2.1.0 for the retryDelayHint API
+
 2.2.0 - 22 Feb 2026
 - Add multi-tenant JWT auth support for HxClient
 

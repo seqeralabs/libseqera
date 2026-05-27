@@ -1,5 +1,10 @@
 # lib-retry changelog
 
+2.1.0 - 27 May 2026
+- Add Retryable.retryDelayHint to let callers override the computed backoff
+  delay with a server-supplied value (e.g. Retry-After header)
+- Extract computeRetryDelay helper for readability (no behavior change)
+
 2.0.1 - 22 Mar 2026
 - Expose failsafe as api dependency for transitive access by consumers [c2c01ae]
 
