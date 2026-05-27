@@ -144,9 +144,12 @@ class HxClientRetryIntegrationTest extends Specification {
 
     def 'should retry on 429 rate limit'() {
         given:
+        // Cap maxDelay so the server-supplied Retry-After: 1 is bounded — this test verifies
+        // the retry mechanic in general, not Retry-After honoring (covered separately below).
         def config = HxConfig.newBuilder()
                 .withMaxAttempts(3)
                 .withDelay(Duration.ofMillis(100))
+                .withMaxDelay(Duration.ofMillis(200))
                 .build()
         def client = HxClient.newBuilder().config(config).build()
 
@@ -414,5 +417,145 @@ class HxClientRetryIntegrationTest extends Specification {
 
         and: 'all 3 attempts should be made'
         wireMockServer.verify(3, getRequestedFor(urlEqualTo('/api/persistent-io-error-async')))
+    }
+
+    def 'should honour Retry-After header on 429 as a delay lower bound'() {
+        given: 'fast backoff (50ms) but server requests a 1s wait via Retry-After'
+        def config = HxConfig.newBuilder()
+                .withMaxAttempts(3)
+                .withDelay(Duration.ofMillis(50))
+                .withMaxDelay(Duration.ofSeconds(5))
+                .build()
+        def client = HxClient.newBuilder().config(config).build()
+
+        and: 'server returns 429 with Retry-After: 1, then 200'
+        wireMockServer.stubFor(get(urlEqualTo('/api/rate-limited'))
+                .inScenario('retry-after')
+                .whenScenarioStateIs('Started')
+                .willReturn(aResponse()
+                        .withStatus(429)
+                        .withHeader('Retry-After', '1')
+                        .withBody('{"type":"TOO_MANY_REQUESTS"}'))
+                .willSetStateTo('hint-honored'))
+
+        wireMockServer.stubFor(get(urlEqualTo('/api/rate-limited'))
+                .inScenario('retry-after')
+                .whenScenarioStateIs('hint-honored')
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withBody('OK')))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/rate-limited"))
+                .GET()
+                .build()
+
+        when:
+        def t0 = System.currentTimeMillis()
+        def response = client.send(request, HttpResponse.BodyHandlers.ofString())
+        def elapsed = System.currentTimeMillis() - t0
+
+        then:
+        response.statusCode() == 200
+        response.body() == 'OK'
+
+        and: '2 attempts were made'
+        wireMockServer.verify(2, getRequestedFor(urlEqualTo('/api/rate-limited')))
+
+        and: 'the retry honoured Retry-After (~1s), not the 50ms backoff (allow 25% jitter)'
+        elapsed >= 750
+    }
+
+    def 'async send honours Retry-After header on 429'() {
+        given: 'fast backoff but server requests a 1s wait via Retry-After'
+        def config = HxConfig.newBuilder()
+                .withMaxAttempts(3)
+                .withDelay(Duration.ofMillis(50))
+                .withMaxDelay(Duration.ofSeconds(5))
+                .build()
+        def client = HxClient.newBuilder().config(config).build()
+
+        and: 'server returns 429 with Retry-After: 1, then 200'
+        wireMockServer.stubFor(get(urlEqualTo('/api/rate-limited-async'))
+                .inScenario('retry-after-async')
+                .whenScenarioStateIs('Started')
+                .willReturn(aResponse()
+                        .withStatus(429)
+                        .withHeader('Retry-After', '1')
+                        .withBody('Too Many Requests'))
+                .willSetStateTo('hint-honored'))
+
+        wireMockServer.stubFor(get(urlEqualTo('/api/rate-limited-async'))
+                .inScenario('retry-after-async')
+                .whenScenarioStateIs('hint-honored')
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withBody('OK')))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/rate-limited-async"))
+                .GET()
+                .build()
+
+        when:
+        def t0 = System.currentTimeMillis()
+        def response = client.sendAsync(request, HttpResponse.BodyHandlers.ofString()).get()
+        def elapsed = System.currentTimeMillis() - t0
+
+        then:
+        response.statusCode() == 200
+        response.body() == 'OK'
+
+        and: '2 attempts were made'
+        wireMockServer.verify(2, getRequestedFor(urlEqualTo('/api/rate-limited-async')))
+
+        and: 'the async retry honoured Retry-After (~1s ± 25% jitter), not the 50ms backoff'
+        elapsed >= 750
+    }
+
+    def 'Retry-After is capped by the configured maxDelay'() {
+        given: 'maxDelay (300ms) much smaller than the server-supplied Retry-After (10s)'
+        def config = HxConfig.newBuilder()
+                .withMaxAttempts(2)
+                .withDelay(Duration.ofMillis(50))
+                .withMaxDelay(Duration.ofMillis(300))
+                .build()
+        def client = HxClient.newBuilder().config(config).build()
+
+        and: 'server returns 429 with an aggressive Retry-After'
+        wireMockServer.stubFor(get(urlEqualTo('/api/rate-limited-capped'))
+                .inScenario('retry-after-capped')
+                .whenScenarioStateIs('Started')
+                .willReturn(aResponse()
+                        .withStatus(429)
+                        .withHeader('Retry-After', '10')   // 10s — far exceeds maxDelay
+                        .withBody('Too Many Requests'))
+                .willSetStateTo('done'))
+
+        wireMockServer.stubFor(get(urlEqualTo('/api/rate-limited-capped'))
+                .inScenario('retry-after-capped')
+                .whenScenarioStateIs('done')
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withBody('OK')))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/rate-limited-capped"))
+                .GET()
+                .build()
+
+        when:
+        def t0 = System.currentTimeMillis()
+        def response = client.send(request, HttpResponse.BodyHandlers.ofString())
+        def elapsed = System.currentTimeMillis() - t0
+
+        then:
+        response.statusCode() == 200
+
+        and: 'wait was bounded by maxDelay (300ms ± 25% jitter), never the 10s hint'
+        elapsed < 2000
     }
 }
