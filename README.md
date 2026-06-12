@@ -25,6 +25,7 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-jedis-pool](lib-jedis-pool/)** - JedisPool factory with Micrometer metrics integration
 - **[lib-lock](lib-lock/)** - Distributed lock interface abstraction
 - **[lib-lock-redis](lib-lock-redis/)** - Redis-based distributed locking with Micronaut integration
+- **[lib-node-id-redis](lib-node-id-redis/)** - Distributed node-ordinal assignment (Redis-backed with local fallback) for seeding collision-free ID generators
 - **[lib-pairing](lib-pairing/)** - Credential federation library for secure RSA key exchange between services
 
 ### Messaging & Data Libraries

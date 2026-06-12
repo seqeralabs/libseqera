@@ -1,0 +1,11 @@
+# lib-node-id-redis changelog
+
+1.0.0 - 12 Jun 2026
+- Initial release of lib-node-id-redis extracted from Sched project
+- Add NodeId interface exposing a unique node ordinal and the node-ID space capacity
+- Add RedisNodeId assigning ordinals from a shared Redis counter via an atomic Lua script
+- Wrap the stored counter modulo capacity so it never grows toward INCR overflow
+- Namespace the counter key by the Micronaut application name
+- Fall back to a random ordinal when Redis is unreachable so startup never blocks
+- Add LocalNodeId in-memory implementation for single-instance deployments
+- Use RedisActivator marker interface for conditional bean loading
