@@ -1,0 +1,8 @@
+# lib-util-tsid changelog
+
+1.0.0 - 12 Jun 2026
+- Initial release of lib-util-tsid extracted from Sched project
+- Add TsidNodeConfigurer eager bean seeding the TSID Creator node ID at startup
+- Set tsidcreator.node system property from the coordinated NodeId ordinal
+- Set tsidcreator.node.count when the NodeId capacity differs from the TSID default (1024)
+- Integrate with lib-node-id-redis for distributed node-ordinal assignment
