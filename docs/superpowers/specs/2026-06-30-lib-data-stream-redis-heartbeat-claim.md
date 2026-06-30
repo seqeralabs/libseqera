@@ -114,6 +114,86 @@ that thread (it may be the caller's listener thread or a downstream worker), and
 forcibly interrupting a partially-completed cloud operation is unsafe. The guard only
 governs *message ownership*; killing a runaway handler is the consumer's concern.
 
+### 4.2 Worked example
+
+Numbers: `claim-timeout = 60s`, `heartbeat-interval = 20s` (= 60/3). Two pods, A and B,
+share the consumer group.
+
+The single rule to keep in mind: the heartbeat runs **only between "`accept()` entered"
+and "`accept()` returned".** `accept()` behaves two different ways, and that one rule
+produces every case below:
+
+- **Blocking work** — `accept()` stays on the stack for minutes (e.g. inside a provider
+  `launchInstances` call). *This is the case wrongly reclaimed today.*
+- **A quick poll** — `accept()` checks status, returns `false` in milliseconds, and the
+  command waits for its next turn. *This is the cadence we must not disturb.*
+
+**Scenario A — today, no heartbeat (the bug):**
+
+```
+T=0      Pod A reads msg-1, calls accept() → blocks inside launchInstances (~5 min)
+T=0–60   msg-1 sits un-acked in Pod A's pending list; idle clock climbs 0 → 60s
+T=60     Pod B runs XAUTOCLAIM(idle>60s) → msg-1 matches → Pod B steals it,
+         calls accept() → a SECOND launchInstances starts   ← duplicate
+T=120    steal again … churn
+```
+
+`XAUTOCLAIM` saw "idle 60s" and assumed Pod A died. Pod A was alive, just slow.
+
+**Scenario B — with heartbeat, same blocking handler:**
+
+```
+T=0      Pod A reads msg-1 → put in inFlight map → calls accept() (blocking)
+T=20     heartbeat tick: XCLAIM msg-1 to self, idle reset → 0
+T=40     heartbeat tick: idle reset → 0
+T=60     heartbeat tick: idle reset → 0   (Pod B's XAUTOCLAIM never sees idle>60s)
+ ...     every 20s while accept() runs
+T=300    accept() returns true → remove from inFlight → XACK + XDEL. Done, exactly once.
+```
+
+idle never reaches 60s, so Pod B can't steal it. No duplicate.
+
+**Scenario C — with heartbeat, a normal RUNNING poll (cadence preserved):**
+
+A command that is *waiting* (cluster still creating, capacity not ready) returns `false`
+fast, before the first heartbeat tick:
+
+```
+T=0      Pod A reads msg-2 → inFlight → accept() runs 50ms, returns false (not ready)
+T=0.05   removed from inFlight → NOT acked → idle clock starts climbing
+         (heartbeat never fired — accept() finished well before the 20s tick)
+T=0.05–60  msg-2 just sits idle. Nobody touches it. This is the intended wait.
+T=60     XAUTOCLAIM(idle>60s) → msg-2 re-polled → accept() 50ms → still not ready → false
+T=120    … re-polled every ~60s until the command can finally run
+```
+
+Because the lease **stopped the instant `accept()` returned**, idle is free to climb and
+the normal 60s re-poll happens exactly as before. The heartbeat is invisible here — it
+only matters when `accept()` runs longer than one tick.
+
+**Scenario D — Pod A dies mid-execution:**
+
+```
+T=0      Pod A reads msg-1 → accept() blocks
+T=20     heartbeat tick → idle reset
+T=35     Pod A's JVM dies — the heartbeat thread dies with it, no more resets
+T=35–95  nobody resets idle; it climbs 0 → 60s
+T=95     Pod B's XAUTOCLAIM(idle>60s) → claims msg-1 → reprocesses. Correct failover.
+```
+
+A dead pod cannot heartbeat, so its messages *do* get reclaimed after `claim-timeout` —
+exactly what we still want.
+
+| `accept()` does… | heartbeat fires? | result |
+|---|---|---|
+| blocks for minutes (alive) | yes, every 20s | kept owned → no false steal (B) |
+| returns fast, command waiting | no (returns before first tick) | idle climbs → normal 60s re-poll (C) |
+| blocks, then pod dies | stops when the JVM dies | idle climbs → reclaimed at 60s (D) |
+| blocks past `max-processing-time` | stops on purpose (§4.1) | idle climbs → reclaimed; hung handler released |
+
+The heartbeat turns "idle for 60s" from *"assume dead"* into *"the owner actually
+stopped working or heartbeating."*
+
 ## 5. Implementation
 
 All changes are confined to `RedisMessageStream` plus three additive `default` methods
