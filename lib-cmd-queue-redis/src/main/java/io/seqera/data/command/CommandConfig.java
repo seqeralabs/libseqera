@@ -37,12 +37,39 @@ public interface CommandConfig {
     }
 
     /**
-     * Timeout for synchronous command execution.
-     * If execute() takes longer than this, the command is marked as RUNNING
-     * and checkStatus() will be called on subsequent queue deliveries.
+     * @deprecated No longer consulted. Command handlers now run to completion on a bounded worker
+     * pool (see {@link CommandHandler#execute}); there is no synchronous execution timeout. Retained
+     * only for source/binary backward compatibility. Will be removed in a future major release.
      */
+    @Deprecated
     default Duration executeTimeout() {
         return Duration.ofSeconds(1);
+    }
+
+    /**
+     * Number of worker threads used to execute command handlers concurrently, off the queue poll
+     * thread. Also caps the number of commands executing at once per replica.
+     */
+    default int commandPoolSize() {
+        return 10;
+    }
+
+    /**
+     * Bounded capacity of the worker pool queue. When full, newly delivered commands are left in the
+     * message queue (not acknowledged) and retried on a later delivery, providing backpressure.
+     */
+    default int commandPoolQueueSize() {
+        return 100;
+    }
+
+    /**
+     * Time-to-live of the per-command single-runner lock. While the holding replica is alive the
+     * lock is auto-renewed (watchdog) so it is effectively held for the whole execution; if the
+     * replica dies, the lock expires after this duration and another replica can take over. Set it
+     * comfortably larger than any expected JVM pause or Redis partition.
+     */
+    default Duration commandLockDuration() {
+        return Duration.ofMinutes(1);
     }
 
     /**

@@ -39,6 +39,12 @@ dependencies {
     // State store
     implementation project(':lib-data-store-state-redis')
 
+    // Distributed lock (single-runner guarantee for async command execution)
+    implementation project(':lib-lock')
+    implementation project(':lib-lock-redis')
+    implementation project(':lib-activator')
+    implementation 'redis.clients:jedis:5.1.4'
+
     // Utilities (includes type resolution)
     implementation project(':lib-lang')
 

@@ -33,11 +33,16 @@ public interface CommandHandler<P, R> {
 
     /**
      * Execute the command and return a result.
-     * This method is executed asynchronously via an executor service.
-     * If execution takes longer than 1 second, the command is marked as RUNNING and
-     * {@link #checkStatus} will be called periodically to check completion.
-     * For long-running commands, return {@link CommandResult#running()} to indicate
-     * the operation is in progress.
+     *
+     * <p>This method runs on a bounded worker pool, off the queue poll thread, and may block for as
+     * long as needed — the command is marked {@code RUNNING} for its whole duration and no timeout is
+     * applied. There are two supported patterns:
+     * <ul>
+     *   <li><b>In-process:</b> do the work and return a terminal {@link CommandResult}
+     *       ({@code success}/{@code failure}). No {@link #checkStatus} override is needed.</li>
+     *   <li><b>External job:</b> kick off external work, return {@link CommandResult#running()}, and
+     *       override {@link #checkStatus} to poll for completion on subsequent deliveries.</li>
+     * </ul>
      *
      * @param command The command to execute
      * @return The result of the execution
