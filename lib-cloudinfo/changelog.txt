@@ -1,5 +1,13 @@
 # lib-cloudinfo changelog
 
+1.2.0 - 2 Jul 2026
+- Add a unified features filter to ProductsQuery: ProductsQuery.Builder.features(List<String>) is serialised as ?features=a,b,c (capability tokens AND-intersected server-side), matching the seqeralabs/cloudinfo #61 contract. The legacy sched/nvme boolean filters keep working (the backend treats them as ?features=sched / ?features=ssd).
+- Add a families filter to ProductsQuery: ProductsQuery.Builder.families(List<String>) is serialised as ?families=m5d,c5.large to filter products by machine-family or instance-type name.
+- Add CloudInfoClient.getFamilies(provider) and getFamilies(provider, List<String> features) for the /families endpoint, returning the sorted distinct machine families (optionally filtered by capability features). Backed by the new FamiliesResponse model.
+- Add CloudProduct.family carrying the machine-family name now returned by the backend; null on legacy responses that do not populate it.
+- Surface the /families 400 "invalid feature" response: CloudInfoException.getValidCapabilities() exposes the server-provided list of accepted feature tokens, parsed via the new ErrorResponse model.
+- Correct and expand the CloudProduct.features documentation to the actual lowercase token vocabulary (ssd, gpu, arm, x86, burst, hibernation, sched) plus GPU vendor (nvidia, amd, habana) and model tokens (a100, tesla-a100, radeon-pro-v520, ...) introduced in seqeralabs/cloudinfo #54 and #61.
+
 1.1.2 - 7 May 2026
 - Add value-based equals, hashCode and toString to ProductsQuery so instances built from the same flags compare equal and can be used safely as map keys / cache keys (PR #66).
 

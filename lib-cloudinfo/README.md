@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-cloudinfo:1.1.2'
+    implementation 'io.seqera:lib-cloudinfo:1.2.0'
 }
 ```
 
@@ -41,19 +41,48 @@ List<CloudProduct> products = client.getProducts("amazon", "us-east-1");
 
 ### Filtering Products
 
-Pass a `ProductsQuery` to restrict the products endpoint to instance families
-with Scheduler support (`sched=true`) or NVMe local storage (`nvme=true`).
-Filters are applied server-side and can be combined; providers without filter
-config entries return all products unfiltered.
+Pass a `ProductsQuery` to filter the products endpoint. Filters are applied
+server-side and compose with AND semantics; providers without matching data
+return an empty result for that filter.
+
+- `features(List<String>)` — keep only products whose capability features
+  contain **all** the given lowercase tokens. Serialised as `?features=a,b,c`.
+  The vocabulary is `ssd`, `gpu`, `arm`, `x86`, `burst`, `hibernation`, `sched`,
+  plus GPU vendor tokens (`nvidia`, `amd`, `habana`) and model tokens
+  (`a100`, `tesla-a100`, `radeon-pro-v520`, …).
+- `families(List<String>)` — keep only products in the given machine families
+  or matching the given instance-type names. Serialised as
+  `?families=m5d,c5.large`.
+- `sched(boolean)` / `nvme(boolean)` — the original boolean filters, retained
+  for backward compatibility (`sched=true` ≡ `features=sched`, `nvme=true` ≡
+  `features=ssd`). Prefer `features(...)` for new code.
 
 ```java
 ProductsQuery query = ProductsQuery.builder()
-    .sched(true)
-    .nvme(true)
+    .features(List.of("gpu", "nvidia"))   // NVIDIA GPU instances only
+    .families(List.of("p4d"))             // ...within the p4d family
     .build();
 
 List<CloudProduct> products = client.getProducts("amazon", "us-east-1", query);
 ```
+
+### Machine Families
+
+Fetch the machine families available for a provider, optionally restricted to
+those that have at least one product carrying all the requested capability
+features:
+
+```java
+// All families for the provider
+List<String> families = client.getFamilies("amazon");
+
+// Only families with an NVIDIA GPU product
+List<String> gpuFamilies = client.getFamilies("amazon", List.of("gpu", "nvidia"));
+```
+
+An unknown or non-lowercase feature token is rejected by the backend with
+HTTP 400; the resulting `CloudInfoException` exposes the accepted tokens via
+`getValidCapabilities()`.
 
 ### Custom Configuration
 
@@ -78,11 +107,13 @@ CloudInfoClient client = CloudInfoClient.builder()
 | Class | Description |
 |-------|-------------|
 | `CloudRegion` | Region identifier and name |
-| `CloudProduct` | Compute instance type with CPU, memory, GPU, pricing, and per-product capability features (`SCHED`, `NVME`, `GPU`, family-type, etc.) |
+| `CloudProduct` | Compute instance type with CPU, memory, GPU, pricing, machine `family`, and per-product capability `features` (lowercase tokens: `ssd`, `gpu`, `arm`, `x86`, `burst`, `hibernation`, `sched`, GPU vendor/model, …) |
 | `CloudPrice` | Spot price for a specific zone |
 | `CloudResponse` | API response wrapper containing products |
+| `FamiliesResponse` | Response wrapper for the `/families` endpoint |
 | `ProductAttributes` | Additional product attributes |
-| `ProductsQuery` | Optional filters (`sched`, `nvme`) for the products endpoint |
+| `ProductsQuery` | Optional filters (`features`, `families`, plus legacy `sched`, `nvme`) for the products endpoint |
+| `ErrorResponse` | Parsed API error body (`error`, `validCapabilities`) |
 
 ## Dependencies
 
