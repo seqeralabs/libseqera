@@ -17,6 +17,8 @@
 
 package io.seqera.cloudinfo.client;
 
+import java.util.List;
+
 /**
  * Exception thrown when a Cloudinfo API request fails.
  *
@@ -26,17 +28,41 @@ public class CloudInfoException extends RuntimeException {
 
     private final int statusCode;
 
+    /**
+     * The set of accepted feature tokens reported by the server on a
+     * {@code /families} 400 response ({@code validCapabilities}), or {@code null}
+     * when the failure carried no such list.
+     */
+    private final List<String> validCapabilities;
+
     public CloudInfoException(String message, int statusCode) {
+        this(message, statusCode, null);
+    }
+
+    public CloudInfoException(String message, int statusCode, List<String> validCapabilities) {
         super(message);
         this.statusCode = statusCode;
+        this.validCapabilities = validCapabilities == null ? null : List.copyOf(validCapabilities);
     }
 
     public CloudInfoException(String message, Throwable cause) {
         super(message, cause);
         this.statusCode = -1;
+        this.validCapabilities = null;
     }
 
     public int getStatusCode() {
         return statusCode;
+    }
+
+    /**
+     * The accepted feature tokens the server reported alongside a 400 rejection
+     * of an invalid {@code features} filter on the {@code /families} endpoint.
+     *
+     * @return an immutable list of valid capability tokens, or {@code null} when
+     *         the error did not include one
+     */
+    public List<String> getValidCapabilities() {
+        return validCapabilities;
     }
 }

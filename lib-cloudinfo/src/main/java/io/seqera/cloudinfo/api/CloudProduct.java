@@ -28,6 +28,18 @@ import java.util.Objects;
 public class CloudProduct {
 
     private String type;
+    /**
+     * Machine family this instance type belongs to — the provider-specific
+     * grouping above individual sizes (e.g. {@code m5d} for {@code m5d.large},
+     * {@code n2} for {@code n2-highcpu-32}, {@code DSv3} for
+     * {@code Standard_D2s_v3}). Used by the CloudInfo {@code /families} endpoint
+     * and the {@code families} query filter.
+     *
+     * <p>{@code null} when the backend does not populate it — a legacy response
+     * predating the field, or a provider whose adapter does not set it (the
+     * service then falls back to the dot-prefix of {@link #type} server-side).
+     */
+    private String family;
     private String category;
     private Integer cpusPerVm;
     private Float memPerVm;
@@ -40,16 +52,32 @@ public class CloudProduct {
     private List<CloudPrice> spotPrice;
     private ProductAttributes attributes;
     /**
-     * Capability features advertised for this instance type by the CloudInfo backend
-     * (e.g. {@code "SCHED"}, {@code "NVME"}, {@code "GPU"}, plus a family-type token).
+     * Capability feature tokens advertised for this instance type by the CloudInfo
+     * backend, as a flat, additive array of <b>lowercase</b> tokens. The vocabulary
+     * (as of cloudinfo PR&nbsp;#61) is:
      *
-     * <p>Consumers typically map these strings onto a domain-specific enum (such as
-     * the platform's {@code Feature} enum on {@code InstanceType}). Unrecognised
-     * tokens are dropped silently by consumers.
+     * <ul>
+     *   <li>Tier-1 capabilities derived from the cloud-provider APIs:
+     *       {@code ssd}, {@code gpu}, {@code arm}, {@code x86}, {@code burst},
+     *       {@code hibernation}.</li>
+     *   <li>{@code sched} — Seqera Scheduler eligibility (curated; AWS only).</li>
+     *   <li>For accelerated instance types, GPU vendor tokens
+     *       ({@code nvidia}, {@code amd}, {@code habana}) and open-ended GPU model
+     *       tokens (e.g. {@code a100}, {@code tesla-a100}, {@code radeon-pro-v520},
+     *       {@code gaudi-hl-205}) — emitted by AWS and GCP; Azure reports only
+     *       {@code gpu}.</li>
+     * </ul>
      *
-     * <p>{@code null} means the data source did not populate features (the field is
-     * legacy / not yet returned by the backend version queried). An empty list
-     * explicitly means "no features advertised".
+     * <p>The local-storage capability is the provider-neutral {@code ssd} (on AWS it
+     * is presented over NVMe, hence the legacy {@code nvme} filter alias). Consumers
+     * typically map these tokens onto a domain-specific enum (such as the platform's
+     * {@code Feature} enum on {@code InstanceType}) and silently drop unrecognised
+     * ones. The same tokens are the accepted values of the {@code features} filter on
+     * {@link ProductsQuery} and of the CloudInfo {@code /families} endpoint.
+     *
+     * <p>{@code null} means the data source did not populate features (a legacy
+     * backend that predates the field). Current backends always emit a
+     * (possibly empty) array; an empty list explicitly means "no features advertised".
      */
     private List<String> features;
 
@@ -62,6 +90,14 @@ public class CloudProduct {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public String getFamily() {
+        return family;
+    }
+
+    public void setFamily(String family) {
+        this.family = family;
     }
 
     public String getCategory() {
@@ -166,6 +202,7 @@ public class CloudProduct {
         if (o == null || getClass() != o.getClass()) return false;
         CloudProduct that = (CloudProduct) o;
         return Objects.equals(type, that.type) &&
+                Objects.equals(family, that.family) &&
                 Objects.equals(category, that.category) &&
                 Objects.equals(cpusPerVm, that.cpusPerVm) &&
                 Objects.equals(memPerVm, that.memPerVm) &&
@@ -182,13 +219,14 @@ public class CloudProduct {
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, category, cpusPerVm, memPerVm, gpusPerVm, currentGen,
+        return Objects.hash(type, family, category, cpusPerVm, memPerVm, gpusPerVm, currentGen,
                 ntwPerf, ntwPerfCategory, onDemandPrice, zones, spotPrice, attributes, features);
     }
 
     @Override
     public String toString() {
         return "CloudProduct[type=" + type +
+                ", family=" + family +
                 ", category=" + category +
                 ", cpusPerVm=" + cpusPerVm +
                 ", memPerVm=" + memPerVm +

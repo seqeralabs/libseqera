@@ -42,6 +42,24 @@ class ProductsQueryTest extends Specification {
                 ProductsQuery.builder().nvme(false).build()
     }
 
+    def 'equals returns false when features differ'() {
+        expect:
+        ProductsQuery.builder().features(['gpu']).build() !=
+                ProductsQuery.builder().features(['gpu', 'nvidia']).build()
+    }
+
+    def 'equals returns false when families differ'() {
+        expect:
+        ProductsQuery.builder().families(['m5d']).build() !=
+                ProductsQuery.builder().families(['c5']).build()
+    }
+
+    def 'equals returns true for instances with identical features and families'() {
+        expect:
+        ProductsQuery.builder().features(['gpu', 'nvidia']).families(['p4d']).build() ==
+                ProductsQuery.builder().features(['gpu', 'nvidia']).families(['p4d']).build()
+    }
+
     def 'hashCode is consistent with equals'() {
         given:
         def a = ProductsQuery.builder().sched(true).nvme(false).build()
@@ -97,6 +115,9 @@ class ProductsQueryTest extends Specification {
         }
         if (type == String) {
             return currentValue == null ? 'X' : currentValue + 'X'
+        }
+        if (List.isAssignableFrom(type)) {
+            return currentValue == null ? ['X'] : (currentValue + 'X')
         }
         // Extend as ProductsQuery grows. Fail loudly if a new type appears.
         throw new IllegalStateException(
