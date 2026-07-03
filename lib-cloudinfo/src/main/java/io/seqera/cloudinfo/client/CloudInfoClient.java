@@ -222,17 +222,14 @@ public class CloudInfoClient {
     }
 
     /**
-     * Gets the machine families for a cloud provider, optionally restricted to
-     * those having at least one product with all of the given capability features.
+     * Gets the machine families for a provider, restricted to those having at
+     * least one product with all the given capability features. Tokens must be
+     * lowercase; an unknown or non-lowercase token yields HTTP 400, surfaced as a
+     * CloudInfoException whose getValidCapabilities() lists the accepted tokens.
      *
-     * <p>The feature tokens must be lowercase (see {@link CloudProduct#getFeatures()}
-     * for the vocabulary); the endpoint rejects an unknown or non-lowercase token
-     * with HTTP 400, surfaced here as a {@link CloudInfoException} whose
-     * {@link CloudInfoException#getValidCapabilities()} lists the accepted tokens.
-     *
-     * @param provider the cloud provider identifier (e.g., "amazon", "google", "azure")
-     * @param features capability feature tokens to intersect (AND); may be {@code null} or empty
-     * @return the sorted list of distinct machine-family names matching the query
+     * @param provider the cloud provider identifier (e.g. amazon, google, azure)
+     * @param features capability tokens to intersect (AND); may be null or empty
+     * @return the sorted distinct machine-family names matching the query
      * @throws CloudInfoException if the request fails
      */
     public List<String> getFamilies(String provider, List<String> features) {
@@ -266,9 +263,8 @@ public class CloudInfoClient {
     }
 
     /**
-     * Builds a {@link CloudInfoException} for a non-200 families response,
-     * enriching it with the server's {@code error} message and
-     * {@code validCapabilities} list when the body has that shape.
+     * Builds a CloudInfoException for a non-200 families response, adding the
+     * server's error message and validCapabilities when the body has that shape.
      */
     private static CloudInfoException familiesError(String provider, HttpResponse<String> response) {
         int status = response.statusCode();
@@ -305,10 +301,7 @@ public class CloudInfoClient {
         return sb.toString();
     }
 
-    /**
-     * Builds the query string for the families endpoint: {@code ?features=a,b,c}
-     * when {@code features} is non-empty, otherwise an empty string.
-     */
+    /** Builds ?features=a,b,c for the families endpoint, or an empty string. */
     private static String buildFeaturesQueryString(List<String> features) {
         StringBuilder sb = new StringBuilder();
         appendCsvParam(sb, "features", features);

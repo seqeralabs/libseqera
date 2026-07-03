@@ -29,15 +29,9 @@ public class CloudProduct {
 
     private String type;
     /**
-     * Machine family this instance type belongs to — the provider-specific
-     * grouping above individual sizes (e.g. {@code m5d} for {@code m5d.large},
-     * {@code n2} for {@code n2-highcpu-32}, {@code DSv3} for
-     * {@code Standard_D2s_v3}). Used by the CloudInfo {@code /families} endpoint
-     * and the {@code families} query filter.
-     *
-     * <p>{@code null} when the backend does not populate it — a legacy response
-     * predating the field, or a provider whose adapter does not set it (the
-     * service then falls back to the dot-prefix of {@link #type} server-side).
+     * Machine family this instance type belongs to (e.g. m5d for m5d.large).
+     * Used by the /families endpoint and the families query filter. Null when
+     * the backend does not populate it (legacy responses).
      */
     private String family;
     private String category;
@@ -52,32 +46,15 @@ public class CloudProduct {
     private List<CloudPrice> spotPrice;
     private ProductAttributes attributes;
     /**
-     * Capability feature tokens advertised for this instance type by the CloudInfo
-     * backend, as a flat, additive array of <b>lowercase</b> tokens. The vocabulary
-     * (as of cloudinfo PR&nbsp;#61) is:
+     * Capability feature tokens for this instance type, as a flat list of
+     * lowercase tokens: ssd, gpu, arm, x86, burst, hibernation, sched, plus GPU
+     * vendor tokens (nvidia, amd, habana) and model tokens (a100, tesla-a100, ...).
+     * These are also the accepted values of the features filter on ProductsQuery
+     * and the /families endpoint. Consumers usually map them onto their own enum
+     * and drop unrecognised tokens.
      *
-     * <ul>
-     *   <li>Tier-1 capabilities derived from the cloud-provider APIs:
-     *       {@code ssd}, {@code gpu}, {@code arm}, {@code x86}, {@code burst},
-     *       {@code hibernation}.</li>
-     *   <li>{@code sched} — Seqera Scheduler eligibility (curated; AWS only).</li>
-     *   <li>For accelerated instance types, GPU vendor tokens
-     *       ({@code nvidia}, {@code amd}, {@code habana}) and open-ended GPU model
-     *       tokens (e.g. {@code a100}, {@code tesla-a100}, {@code radeon-pro-v520},
-     *       {@code gaudi-hl-205}) — emitted by AWS and GCP; Azure reports only
-     *       {@code gpu}.</li>
-     * </ul>
-     *
-     * <p>The local-storage capability is the provider-neutral {@code ssd} (on AWS it
-     * is presented over NVMe, hence the legacy {@code nvme} filter alias). Consumers
-     * typically map these tokens onto a domain-specific enum (such as the platform's
-     * {@code Feature} enum on {@code InstanceType}) and silently drop unrecognised
-     * ones. The same tokens are the accepted values of the {@code features} filter on
-     * {@link ProductsQuery} and of the CloudInfo {@code /families} endpoint.
-     *
-     * <p>{@code null} means the data source did not populate features (a legacy
-     * backend that predates the field). Current backends always emit a
-     * (possibly empty) array; an empty list explicitly means "no features advertised".
+     * Null means the backend did not populate features (legacy); an empty list
+     * means none advertised.
      */
     private List<String> features;
 

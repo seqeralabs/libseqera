@@ -29,9 +29,8 @@ public class CloudInfoException extends RuntimeException {
     private final int statusCode;
 
     /**
-     * The set of accepted feature tokens reported by the server on a
-     * {@code /families} 400 response ({@code validCapabilities}), or {@code null}
-     * when the failure carried no such list.
+     * Accepted feature tokens reported by the server on a /families 400 response,
+     * or null when the failure carried no such list.
      */
     private final List<String> validCapabilities;
 
@@ -56,11 +55,9 @@ public class CloudInfoException extends RuntimeException {
     }
 
     /**
-     * The accepted feature tokens the server reported alongside a 400 rejection
-     * of an invalid {@code features} filter on the {@code /families} endpoint.
+     * The accepted feature tokens reported on a /families 400 rejection.
      *
-     * @return an immutable list of valid capability tokens, or {@code null} when
-     *         the error did not include one
+     * @return an immutable list of valid tokens, or null when none was included
      */
     public List<String> getValidCapabilities() {
         return validCapabilities;

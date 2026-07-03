@@ -21,14 +21,9 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Model for a Cloudinfo API error body.
- *
- * <p>The {@code /families} endpoint returns this shape with HTTP 400 when a
- * requested {@code features} token is unknown or not lowercase, e.g.
- * <pre>{@code {"error": "unknown feature \"bogus\"", "validCapabilities": ["arm", "gpu", "ssd"]}}</pre>
- * where {@code validCapabilities} is the set of accepted feature tokens for the
- * provider. Endpoints that do not produce this shape simply leave the fields
- * {@code null} after decoding.
+ * Cloudinfo API error body. The /families endpoint returns it with HTTP 400 when
+ * a requested feature token is unknown or not lowercase; validCapabilities then
+ * lists the accepted tokens. Both fields are null for other error shapes.
  */
 public class ErrorResponse {
 

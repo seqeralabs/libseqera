@@ -21,11 +21,8 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Model for the Cloudinfo {@code /families} endpoint response.
- *
- * <p>Wraps the sorted, distinct list of machine-family names for a provider,
- * optionally filtered by capability feature via the {@code features} query
- * parameter.
+ * Response model for the Cloudinfo /families endpoint: the sorted, distinct
+ * machine-family names for a provider, optionally filtered by feature.
  */
 public class FamiliesResponse {
 
