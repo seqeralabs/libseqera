@@ -28,6 +28,12 @@ import java.util.Objects;
 public class CloudProduct {
 
     private String type;
+    /**
+     * Machine family this instance type belongs to (e.g. m5d for m5d.large).
+     * Used by the /families endpoint and the families query filter. Null when
+     * the backend does not populate it (legacy responses).
+     */
+    private String family;
     private String category;
     private Integer cpusPerVm;
     private Float memPerVm;
@@ -40,16 +46,15 @@ public class CloudProduct {
     private List<CloudPrice> spotPrice;
     private ProductAttributes attributes;
     /**
-     * Capability features advertised for this instance type by the CloudInfo backend
-     * (e.g. {@code "SCHED"}, {@code "NVME"}, {@code "GPU"}, plus a family-type token).
+     * Capability feature tokens for this instance type, as a flat list of
+     * lowercase tokens: ssd, gpu, arm, x86, burst, hibernation, sched, plus GPU
+     * vendor tokens (nvidia, amd, habana) and model tokens (a100, tesla-a100, ...).
+     * These are also the accepted values of the features filter on ProductsQuery
+     * and the /families endpoint. Consumers usually map them onto their own enum
+     * and drop unrecognised tokens.
      *
-     * <p>Consumers typically map these strings onto a domain-specific enum (such as
-     * the platform's {@code Feature} enum on {@code InstanceType}). Unrecognised
-     * tokens are dropped silently by consumers.
-     *
-     * <p>{@code null} means the data source did not populate features (the field is
-     * legacy / not yet returned by the backend version queried). An empty list
-     * explicitly means "no features advertised".
+     * Null means the backend did not populate features (legacy); an empty list
+     * means none advertised.
      */
     private List<String> features;
 
@@ -62,6 +67,14 @@ public class CloudProduct {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public String getFamily() {
+        return family;
+    }
+
+    public void setFamily(String family) {
+        this.family = family;
     }
 
     public String getCategory() {
@@ -166,6 +179,7 @@ public class CloudProduct {
         if (o == null || getClass() != o.getClass()) return false;
         CloudProduct that = (CloudProduct) o;
         return Objects.equals(type, that.type) &&
+                Objects.equals(family, that.family) &&
                 Objects.equals(category, that.category) &&
                 Objects.equals(cpusPerVm, that.cpusPerVm) &&
                 Objects.equals(memPerVm, that.memPerVm) &&
@@ -182,13 +196,14 @@ public class CloudProduct {
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, category, cpusPerVm, memPerVm, gpusPerVm, currentGen,
+        return Objects.hash(type, family, category, cpusPerVm, memPerVm, gpusPerVm, currentGen,
                 ntwPerf, ntwPerfCategory, onDemandPrice, zones, spotPrice, attributes, features);
     }
 
     @Override
     public String toString() {
         return "CloudProduct[type=" + type +
+                ", family=" + family +
                 ", category=" + category +
                 ", cpusPerVm=" + cpusPerVm +
                 ", memPerVm=" + memPerVm +

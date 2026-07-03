@@ -25,19 +25,21 @@ class CloudProductTest extends Specification {
     private static final JacksonEncodingStrategy<CloudProduct> ENCODER =
             new JacksonEncodingStrategy<CloudProduct>() {}
 
-    def 'features field round-trips through Jackson serialisation'() {
+    def 'features and family round-trip through Jackson serialisation'() {
         given:
         def product = new CloudProduct()
-        product.type = 'm5d.large'
-        product.features = ['SCHED', 'NVME', 'family-type:general-purpose']
+        product.type = 'p4d.24xlarge'
+        product.family = 'p4d'
+        product.features = ['a100', 'gpu', 'nvidia', 'sched', 'ssd', 'x86']
 
         when:
         def json = ENCODER.encode(product)
         def decoded = ENCODER.decode(json)
 
         then:
-        decoded.type == 'm5d.large'
-        decoded.features == ['SCHED', 'NVME', 'family-type:general-purpose']
+        decoded.type == 'p4d.24xlarge'
+        decoded.family == 'p4d'
+        decoded.features == ['a100', 'gpu', 'nvidia', 'sched', 'ssd', 'x86']
     }
 
     def 'features field defaults to null on a freshly-constructed product'() {
@@ -62,14 +64,41 @@ class CloudProductTest extends Specification {
 
     def 'equals and hashCode include features'() {
         given:
-        def a = new CloudProduct(type: 'm5.large', features: ['SCHED'])
-        def b = new CloudProduct(type: 'm5.large', features: ['SCHED'])
-        def c = new CloudProduct(type: 'm5.large', features: ['SCHED', 'NVME'])
+        def a = new CloudProduct(type: 'm5.large', features: ['sched'])
+        def b = new CloudProduct(type: 'm5.large', features: ['sched'])
+        def c = new CloudProduct(type: 'm5.large', features: ['sched', 'ssd'])
 
         expect:
         a == b
         a.hashCode() == b.hashCode()
         a != c
+    }
+
+    def 'equals and hashCode include family'() {
+        given:
+        def a = new CloudProduct(type: 'm5d.large', family: 'm5d')
+        def b = new CloudProduct(type: 'm5d.large', family: 'm5d')
+        def c = new CloudProduct(type: 'm5d.large', family: 'm5')
+
+        expect:
+        a == b
+        a.hashCode() == b.hashCode()
+        a != c
+    }
+
+    def 'family defaults to null and an absent wire field deserialises to null'() {
+        given: 'a JSON document without the family field'
+        def json = '{"type":"m5.large","features":["ssd"]}'
+
+        when:
+        def fresh = new CloudProduct()
+        def decoded = ENCODER.decode(json)
+
+        then:
+        fresh.family == null
+        decoded.type == 'm5.large'
+        decoded.family == null
+        decoded.features == ['ssd']
     }
 
     def 'features absent in the wire format deserialises to null'() {
