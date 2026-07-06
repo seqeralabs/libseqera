@@ -17,6 +17,7 @@
 
 package io.seqera.cloudinfo.client
 
+import io.seqera.cloudinfo.api.AcceleratorFeatures
 import io.seqera.cloudinfo.api.ProductsQuery
 import spock.lang.Specification
 import spock.lang.Shared
@@ -96,6 +97,18 @@ class CloudInfoClientTest extends Specification {
         filtered.size() <= all.size()
         def allTypes = all*.type as Set
         filtered.every { allTypes.contains(it.type) }
+    }
+
+    def 'should filter FPGA products and classify them with AcceleratorFeatures'() {
+        given:
+        def query = ProductsQuery.builder().features([AcceleratorFeatures.TOKEN_FPGA]).build()
+
+        when:
+        def fpga = client.getProducts('amazon', 'us-east-1', query)
+
+        then:
+        fpga.size() > 0
+        fpga.every { AcceleratorFeatures.hasFpga(it.features) }
     }
 
     def 'should return all products for a provider without a sched allowlist'() {
