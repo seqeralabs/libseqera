@@ -69,21 +69,23 @@ public class LocalCountProvider implements CountProvider {
     public boolean tryAcquire(String key, long value, long limit, long ttlSeconds) {
         validate(value, limit);
         // Lock-free compare-and-set loop: read the current value, check the ceiling, and only then
-        // attempt the increment; retry if another thread changed the value in between. The
-        // side-effect (the return decision) lives outside the CAS attempt, so it is computed exactly
-        // once per outcome — unlike a captured flag inside an updateAndGet remap, which the JDK may
-        // re-run under contention. The ttlSeconds argument does not apply to the in-memory store
-        // (entries live for the process lifetime); it is accepted for parity with the Redis impl.
+        // attempt the increment; retry if another thread changed the value in between. The loop is
+        // bounded — it returns on the two outcomes below (over-limit, or a successful CAS) and only
+        // retries when the CAS loses a race, which means another thread just made progress (the
+        // standard lock-free retry idiom, as used internally by AtomicLong.updateAndGet). The
+        // return decision lives outside the CAS attempt, so it is computed exactly once per outcome.
+        // The ttlSeconds argument does not apply to the in-memory store (entries live for the
+        // process lifetime); it is accepted for parity with the Redis impl.
         final AtomicLong counter = store.computeIfAbsent(key, k -> new AtomicLong());
-        for (;;) {
+        while (true) {
             final long current = counter.get();
             if (current + value > limit) {
                 log.trace("* tryAcquire key={} value={} limit={} admitted=false", key, value, limit);
-                return false;                                  // reject: leave unchanged
+                return false;                                  // exit: reject, counter unchanged
             }
             if (counter.compareAndSet(current, current + value)) {
                 log.trace("* tryAcquire key={} value={} limit={} admitted=true", key, value, limit);
-                return true;                                   // admit: reserved
+                return true;                                   // exit: admit, vcpus reserved
             }
             // lost the race — another thread updated the counter; re-read and retry
         }
