@@ -115,4 +115,26 @@ class DefaultCountStoreTest extends Specification {
         and:
         store.get('y') == -5
     }
+
+    def 'tryAcquire enforces the limit through the prefixed store' () {
+        given:
+        def store = applicationContext.getBean(DefaultCountStore, Qualifiers.byName('tasks'))
+
+        expect:
+        store.tryAcquire('q', 6, 8, 0)
+        !store.tryAcquire('q', 4, 8, 0)
+        store.tryAcquire('q', 2, 8, 0)
+        store.get('q') == 8
+    }
+
+    def 'tryAcquire is isolated by store prefix' () {
+        given:
+        def tasks = applicationContext.getBean(DefaultCountStore, Qualifiers.byName('tasks'))
+        def builds = applicationContext.getBean(DefaultCountStore, Qualifiers.byName('builds'))
+
+        expect: 'the same key under different prefixes has independent budgets'
+        tasks.tryAcquire('shared', 8, 8, 0)
+        !tasks.tryAcquire('shared', 1, 8, 0)
+        builds.tryAcquire('shared', 8, 8, 0)
+    }
 }

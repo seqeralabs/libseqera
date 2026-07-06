@@ -64,4 +64,35 @@ public class LocalCountProvider implements CountProvider {
         store.remove(key);
         log.trace("* clear key={}", key);
     }
+
+    @Override
+    public boolean tryAcquire(String key, long value, long limit, long ttlSeconds) {
+        validate(value, limit);
+        // Lock-free compare-and-set loop: read the current value, check the ceiling, and only then
+        // attempt the increment; retry if another thread changed the value in between. The
+        // side-effect (the return decision) lives outside the CAS attempt, so it is computed exactly
+        // once per outcome — unlike a captured flag inside an updateAndGet remap, which the JDK may
+        // re-run under contention. The ttlSeconds argument does not apply to the in-memory store
+        // (entries live for the process lifetime); it is accepted for parity with the Redis impl.
+        final AtomicLong counter = store.computeIfAbsent(key, k -> new AtomicLong());
+        for (;;) {
+            final long current = counter.get();
+            if (current + value > limit) {
+                log.trace("* tryAcquire key={} value={} limit={} admitted=false", key, value, limit);
+                return false;                                  // reject: leave unchanged
+            }
+            if (counter.compareAndSet(current, current + value)) {
+                log.trace("* tryAcquire key={} value={} limit={} admitted=true", key, value, limit);
+                return true;                                   // admit: reserved
+            }
+            // lost the race — another thread updated the counter; re-read and retry
+        }
+    }
+
+    private static void validate(long value, long limit) {
+        if (value < 0)
+            throw new IllegalArgumentException("tryAcquire value must be non-negative, got " + value);
+        if (limit < 0)
+            throw new IllegalArgumentException("tryAcquire limit must be non-negative, got " + limit);
+    }
 }

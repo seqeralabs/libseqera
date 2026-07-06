@@ -17,6 +17,9 @@
 
 package io.seqera.data.count
 
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+
 import spock.lang.Specification
 
 import io.seqera.data.count.impl.LocalCountProvider
@@ -103,5 +106,75 @@ class LocalCountProviderTest extends Specification {
         provider.decrement('foo', 15) == -3
         and:
         provider.get('foo') == -3
+    }
+
+    def 'tryAcquire admits up to the limit and rejects beyond it' () {
+        given:
+        def provider = new LocalCountProvider()
+
+        expect: 'increments that fit are admitted'
+        provider.tryAcquire('foo', 6, 8, 0)
+        provider.get('foo') == 6
+
+        and: 'an increment that would exceed the limit is rejected, counter unchanged'
+        !provider.tryAcquire('foo', 4, 8, 0)
+        provider.get('foo') == 6
+
+        and: 'an increment that exactly reaches the limit is admitted'
+        provider.tryAcquire('foo', 2, 8, 0)
+        provider.get('foo') == 8
+    }
+
+    def 'tryAcquire keys are independent' () {
+        given:
+        def provider = new LocalCountProvider()
+
+        expect:
+        provider.tryAcquire('foo', 8, 8, 0)
+        !provider.tryAcquire('foo', 1, 8, 0)
+        provider.tryAcquire('bar', 8, 8, 0)
+    }
+
+    def 'tryAcquire rejects negative value or limit' () {
+        given:
+        def provider = new LocalCountProvider()
+
+        when:
+        provider.tryAcquire('foo', -1, 8, 0)
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        provider.tryAcquire('foo', 1, -8, 0)
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def 'tryAcquire admits a zero-value acquire (no-op within limit)' () {
+        given:
+        def provider = new LocalCountProvider()
+
+        expect:
+        provider.tryAcquire('foo', 0, 8, 0)
+        provider.get('foo') == 0
+    }
+
+    def 'concurrent tryAcquire never admits beyond the limit' () {
+        given: 'a limit of 8 and 100 threads each trying to take 1'
+        def provider = new LocalCountProvider()
+        final int limit = 8
+        final int threads = 100
+        final pool = Executors.newFixedThreadPool(16)
+        final tasks = (1..threads).collect { i ->
+            { -> provider.tryAcquire('race', 1, limit, 0) } as Callable<Boolean>
+        }
+
+        when:
+        final results = pool.invokeAll(tasks)*.get()
+        pool.shutdown()
+
+        then: 'exactly `limit` acquires succeed and the counter equals the limit'
+        results.count { it } == limit
+        provider.get('race') == limit
     }
 }

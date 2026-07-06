@@ -67,4 +67,9 @@ public abstract class AbstractCountStore implements CountStore {
     public void clear(String key) {
         delegate.clear(key0(key));
     }
+
+    @Override
+    public boolean tryAcquire(String key, long value, long limit, long ttlSeconds) {
+        return delegate.tryAcquire(key0(key), value, limit, ttlSeconds);
+    }
 }
