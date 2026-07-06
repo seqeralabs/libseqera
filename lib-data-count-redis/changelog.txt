@@ -1,5 +1,11 @@
 # lib-data-count-redis changelog
 
+0.2.0 - 6 Jul 2026
+- Add CountStore.tryAcquire(key, value, limit, ttlSeconds): an atomic bounded check-and-increment that increments the counter only if the result would stay within limit, so concurrent callers (including across processes) can never collectively exceed it. Returns true when admitted, false when the increment would exceed the limit (counter left unchanged).
+- RedisCountProvider implements it via a Lua script (INCRBY, then DECRBY-on-reject when over the limit) executed atomically server-side; the script runs through EVALSHA with a transparent reload on NOSCRIPT, and applies the optional ttlSeconds as a first-create safety-net expiry (not refreshed on later acquires).
+- LocalCountProvider implements it via a lock-free compare-and-set loop; the ttlSeconds argument is not applicable to the in-memory store and is ignored.
+- Validate that value and limit are non-negative.
+
 0.1.0 - 12 Feb 2026
 - Initial release
 - Implement CountStore interface for distributed counters (increment, decrement, get, clear)
