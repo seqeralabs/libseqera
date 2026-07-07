@@ -83,5 +83,6 @@ This is a library collection (`libseqera`) containing reusable components for Se
 Libraries are published to Seqera's private Maven repository on S3 using AWS credentials.
 
 ### Release Management
-- Use `[release]` as prefix in the first line of commit messages to trigger module library releases
-- The release automation will detect this prefix and initiate the publishing process for updated modules
+- Releases run only on pushes to `master` (protected, updated exclusively via merged PRs)
+- To release a module, bump its `VERSION` file in a PR; merging to `master` publishes it
+- `publish.sh` is idempotent — it skips any version already in the repo, so only bumped `VERSION` files are published; no commit-message marker is required
