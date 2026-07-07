@@ -447,10 +447,7 @@ class HxTokenManager {
                     .cookieHandler(cookieManager)
                     .connectTimeout(config.getTokenRefreshTimeout());
             // inherit the proxy configuration of the enclosing HxClient
-            if (config.getProxySelector() != null)
-                refreshClientBuilder.proxy(config.getProxySelector());
-            if (config.getProxyAuthenticator() != null)
-                refreshClientBuilder.authenticator(config.getProxyAuthenticator());
+            config.applyProxySettings(refreshClientBuilder);
             final HttpClient refreshHttpClient = refreshClientBuilder.build();
 
             final String body = "grant_type=refresh_token&refresh_token=" +

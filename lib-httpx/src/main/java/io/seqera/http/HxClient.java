@@ -878,10 +878,7 @@ public class HxClient {
                     .build();
             
             HttpClient.Builder tokenClientBuilder = HttpClient.newBuilder();
-            if (config.getProxySelector() != null)
-                tokenClientBuilder.proxy(config.getProxySelector());
-            if (config.getProxyAuthenticator() != null)
-                tokenClientBuilder.authenticator(config.getProxyAuthenticator());
+            config.applyProxySettings(tokenClientBuilder);
             HttpClient tokenClient = tokenClientBuilder.build();
             HttpResponse<String> tokenResponse = tokenClient.send(tokenRequest, HttpResponse.BodyHandlers.ofString());
             
@@ -1165,11 +1162,9 @@ public class HxClient {
          *
          * <p><strong>Important:</strong> {@link HttpClient} ignores
          * {@link Authenticator#setDefault(Authenticator)} - proxy credentials only take effect
-         * when supplied via this method (or {@link HttpClient.Builder#authenticator(Authenticator)}).
-         * Also note that the JDK strips the Basic scheme from HTTPS CONNECT tunnelling by default
-         * ({@code jdk.http.auth.tunneling.disabledSchemes=Basic} in {@code $JAVA_HOME/conf/net.properties});
-         * clear it with {@code -Djdk.http.auth.tunneling.disabledSchemes=} for Basic proxy
-         * authentication of HTTPS traffic to work.
+         * when supplied via this method. For Basic proxy authentication of HTTPS traffic the JDK's
+         * {@code jdk.http.auth.tunneling.disabledSchemes} property must also be cleared - see
+         * {@link HxProxyConfig} for details.
          *
          * @param proxyAuthenticator the authenticator providing proxy credentials
          * @return this Builder instance
@@ -1430,10 +1425,7 @@ public class HxClient {
                 actualHttpClient = httpClient;
             }
             else {
-                if (proxySelector != null)
-                    httpClientBuilder.proxy(proxySelector);
-                if (proxyAuthenticator != null)
-                    httpClientBuilder.authenticator(proxyAuthenticator);
+                actualConfig.applyProxySettings(httpClientBuilder);
                 actualHttpClient = httpClientBuilder.build();
             }
             return new HxClient(actualHttpClient, actualConfig, tokenStore);

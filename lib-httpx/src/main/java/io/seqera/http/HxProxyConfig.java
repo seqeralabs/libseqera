@@ -162,13 +162,20 @@ public class HxProxyConfig {
      * @return a new ProxySelector reflecting this configuration
      */
     public ProxySelector toProxySelector() {
+        // precompute the proxy lists - select() runs once per outbound request
+        final List<Proxy> direct = List.of(Proxy.NO_PROXY);
+        final List<Proxy> viaHttpProxy = httpProxy != null
+                ? List.of(new Proxy(Proxy.Type.HTTP, httpProxy.address()))
+                : direct;
+        final List<Proxy> viaHttpsProxy = httpsProxy != null
+                ? List.of(new Proxy(Proxy.Type.HTTP, httpsProxy.address()))
+                : direct;
         return new ProxySelector() {
             @Override
             public List<Proxy> select(URI uri) {
-                final ProxyEntry entry = proxyFor(uri);
-                return entry != null
-                        ? List.of(new Proxy(Proxy.Type.HTTP, entry.address()))
-                        : List.of(Proxy.NO_PROXY);
+                if (uri == null || isBypassed(uri.getHost()))
+                    return direct;
+                return "https".equalsIgnoreCase(uri.getScheme()) ? viaHttpsProxy : viaHttpProxy;
             }
 
             @Override
@@ -218,19 +225,6 @@ public class HxProxyConfig {
 
     ProxyEntry getHttpsProxy() {
         return httpsProxy;
-    }
-
-    List<String> getNoProxyHosts() {
-        return noProxyHosts;
-    }
-
-    /**
-     * Determines the proxy to use for the given target URI, or null to connect directly.
-     */
-    ProxyEntry proxyFor(URI uri) {
-        if (uri == null || isBypassed(uri.getHost()))
-            return null;
-        return "https".equalsIgnoreCase(uri.getScheme()) ? httpsProxy : httpProxy;
     }
 
     /**

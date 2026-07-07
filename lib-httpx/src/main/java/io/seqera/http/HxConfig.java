@@ -20,6 +20,7 @@ package io.seqera.http;
 import java.net.Authenticator;
 import java.net.CookiePolicy;
 import java.net.ProxySelector;
+import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -166,6 +167,21 @@ public class HxConfig implements Retryable.Config {
 
     public Authenticator getProxyAuthenticator() {
         return proxyAuthenticator;
+    }
+
+    /**
+     * Applies the configured proxy selector and authenticator, when present, to the given
+     * HTTP client builder. Used for the main {@link HxClient} as well as the internal clients
+     * created for JWT token refresh and anonymous Bearer token retrieval, so that all of them
+     * share the same proxy configuration.
+     *
+     * @param builder the HTTP client builder to configure
+     */
+    void applyProxySettings(HttpClient.Builder builder) {
+        if (proxySelector != null)
+            builder.proxy(proxySelector);
+        if (proxyAuthenticator != null)
+            builder.authenticator(proxyAuthenticator);
     }
 
     /**
@@ -633,12 +649,10 @@ public class HxConfig implements Retryable.Config {
         }
 
         /**
-         * Sets the authenticator used to supply credentials to an authenticating forward proxy.
-         *
-         * <p>Note that {@link java.net.http.HttpClient} ignores {@link Authenticator#setDefault(Authenticator)};
-         * proxy credentials only take effect when the authenticator is supplied explicitly,
-         * which is what this setting does for the main HTTP client and the internal token
-         * refresh clients.
+         * Sets the authenticator used to supply credentials to an authenticating forward proxy,
+         * applied to the main HTTP client and the internal token refresh clients. See
+         * {@link HxProxyConfig} for the {@code Authenticator.setDefault} and Basic-over-HTTPS
+         * tunnelling caveats.
          *
          * @param proxyAuthenticator the authenticator providing proxy credentials, or null for none
          * @return this builder instance for method chaining
