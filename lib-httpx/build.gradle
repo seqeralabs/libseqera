@@ -29,3 +29,10 @@ dependencies {
     testImplementation 'com.github.tomakehurst:wiremock:3.0.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
+
+test {
+    // the JDK strips Basic from HTTPS CONNECT tunnelling by default
+    // (jdk.http.auth.tunneling.disabledSchemes=Basic in $JAVA_HOME/conf/net.properties);
+    // clear it so the proxy authentication integration tests can exercise that path
+    systemProperty 'jdk.http.auth.tunneling.disabledSchemes', ''
+}

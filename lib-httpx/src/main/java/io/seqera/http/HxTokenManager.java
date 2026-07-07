@@ -441,12 +441,17 @@ class HxTokenManager {
             final CookieManager cookieManager = (config.getRefreshCookiePolicy() != null)
                     ? new CookieManager(null, config.getRefreshCookiePolicy())
                     : new CookieManager();
-            final HttpClient refreshHttpClient = HttpClient.newBuilder()
+            final HttpClient.Builder refreshClientBuilder = HttpClient.newBuilder()
                     .version(HttpClient.Version.HTTP_1_1)
                     .followRedirects(HttpClient.Redirect.NORMAL)
                     .cookieHandler(cookieManager)
-                    .connectTimeout(config.getTokenRefreshTimeout())
-                    .build();
+                    .connectTimeout(config.getTokenRefreshTimeout());
+            // inherit the proxy configuration of the enclosing HxClient
+            if (config.getProxySelector() != null)
+                refreshClientBuilder.proxy(config.getProxySelector());
+            if (config.getProxyAuthenticator() != null)
+                refreshClientBuilder.authenticator(config.getProxyAuthenticator());
+            final HttpClient refreshHttpClient = refreshClientBuilder.build();
 
             final String body = "grant_type=refresh_token&refresh_token=" +
                     URLEncoder.encode(auth.refreshToken(), StandardCharsets.UTF_8);
