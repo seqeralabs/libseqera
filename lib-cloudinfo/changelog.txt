@@ -1,5 +1,8 @@
 # lib-cloudinfo changelog
 
+1.2.1 - 7 Jul 2026
+- Narrow the CloudInfoClient "unconfigured provider" integration test to the sched filter only. sched is the sole capability filter with no provider-derived source (a curated allowlist configured only for amazon in the cloudinfo service), so a provider without a sched allowlist (e.g. google) returns all products unfiltered. The nvme→ssd filter is now provider-derived and legitimately narrows results, so it no longer belongs in a "filters are a no-op" assertion. Tracks the seqeralabs/cloudinfo sched passthrough fix (PR #64). No library code change.
+
 1.2.0 - 3 Jul 2026
 - Add a unified features filter to ProductsQuery: ProductsQuery.Builder.features(List<String>) is serialised as ?features=a,b,c (capability tokens AND-intersected server-side), matching the seqeralabs/cloudinfo #61 contract. The legacy sched/nvme boolean filters keep working (the backend treats them as ?features=sched / ?features=ssd).
 - Add a families filter to ProductsQuery: ProductsQuery.Builder.families(List<String>) is serialised as ?families=m5d,c5.large to filter products by machine-family or instance-type name.
