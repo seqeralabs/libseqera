@@ -1,6 +1,6 @@
 # lib-cloudinfo changelog
 
-1.2.1 - 6 Jul 2026
+1.2.2 - 6 Jul 2026
 - Add AcceleratorFeatures: provider-agnostic helpers over the accelerator-related CloudProduct.features tokens (hasGpu, isNvidia, hasFpga) plus the token constants (gpu, nvidia, amd, habana, fpga, xilinx). Centralises classification of CloudInfo-returned accelerator data with the model instead of duplicating it in consumers.
 
 1.2.0 - 3 Jul 2026
