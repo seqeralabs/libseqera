@@ -98,9 +98,14 @@ class CloudInfoClientTest extends Specification {
         filtered.every { allTypes.contains(it.type) }
     }
 
-    def 'should return all products for unconfigured provider when filters set'() {
+    def 'should return all products for a provider without a sched allowlist'() {
         given:
-        def query = ProductsQuery.builder().sched(true).nvme(true).build()
+        // sched is a curated allowlist configured only for amazon; a provider
+        // without one (google) treats the sched filter as unknown/no-op and
+        // returns all products. Only sched behaves this way: derived features
+        // such as nvme/ssd genuinely narrow the result, so they are not asserted
+        // here (see the amazon nvme=true subset test above).
+        def query = ProductsQuery.builder().sched(true).build()
 
         when:
         def all = client.getProducts('google', 'us-central1')
