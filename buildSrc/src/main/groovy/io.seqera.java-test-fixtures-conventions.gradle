@@ -63,4 +63,6 @@ dependencies {
     testFixturesImplementation "org.objenesis:objenesis:3.4"
     testFixturesImplementation "org.spockframework:spock-core:2.3-groovy-4.0"
     testFixturesImplementation "org.spockframework:spock-junit4:2.3-groovy-4.0"
+    // Gradle 9 no longer provides the JUnit Platform launcher automatically
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.5'
 }
