@@ -35,7 +35,7 @@ dependencies {
     implementation "io.micronaut:micronaut-runtime:${micronautCoreVersion}"
 
     testImplementation testFixtures(project(':lib-fixtures-redis'))
-    testImplementation "org.apache.groovy:groovy:4.0.24"
+    testImplementation "org.apache.groovy:groovy:4.0.31"
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
     testImplementation 'org.testcontainers:testcontainers:1.21.4'

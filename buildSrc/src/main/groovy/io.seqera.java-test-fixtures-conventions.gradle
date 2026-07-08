@@ -56,9 +56,9 @@ dependencies {
 
     testFixturesImplementation 'ch.qos.logback:logback-core:1.5.25'
     testFixturesImplementation 'ch.qos.logback:logback-classic:1.5.25'
-    testFixturesImplementation "org.apache.groovy:groovy:4.0.24"
-    testFixturesImplementation "org.apache.groovy:groovy-nio:4.0.24"
-    testFixturesImplementation "org.apache.groovy:groovy-test:4.0.24"
+    testFixturesImplementation "org.apache.groovy:groovy:4.0.31"
+    testFixturesImplementation "org.apache.groovy:groovy-nio:4.0.31"
+    testFixturesImplementation "org.apache.groovy:groovy-test:4.0.31"
     testFixturesImplementation "cglib:cglib-nodep:3.3.0"
     testFixturesImplementation "org.objenesis:objenesis:3.4"
     testFixturesImplementation "org.spockframework:spock-core:2.3-groovy-4.0"

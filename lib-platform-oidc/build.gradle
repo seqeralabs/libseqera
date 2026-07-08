@@ -23,5 +23,5 @@ group = 'io.seqera'
 version = "${project.file('VERSION').text.trim()}"
 
 dependencies {
-    testImplementation "org.apache.groovy:groovy:4.0.24"
+    testImplementation "org.apache.groovy:groovy:4.0.31"
 }
