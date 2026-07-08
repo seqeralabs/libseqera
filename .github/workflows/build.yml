@@ -59,10 +59,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_SEQERA_TOKEN }}
 
       - name: Release
-        # Only release from master, which is protected and updated exclusively via
-        # merged PRs. publish.sh is idempotent (skips versions already in the repo),
-        # so a release happens only when a merged PR bumps a module's VERSION file.
-        if: "github.ref == 'refs/heads/master'"
+        # Release only from master (protected, updated exclusively via merged PRs)
+        # AND when the merge commit is explicitly marked [release]. publish.sh is
+        # idempotent (skips versions already in the repo), so a bumped VERSION file
+        # still gates what actually publishes.
+        if: "github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, '[release]')"
         run: |
           bash publish.sh lib-jedis-lock
           bash publish.sh lib-activator
