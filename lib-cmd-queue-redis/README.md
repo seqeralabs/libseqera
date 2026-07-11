@@ -242,7 +242,8 @@ submit() ──▶ PENDING ──pickup──▶ PROCESSING ─┬─success─�
                                              ├─error────▶ FAILED
                                              └─cancel───▶ CANCELLED
 
-(persisted wire names remain SUBMITTED/RUNNING-compatible: legacy entries still decode)
+(new state persists as PENDING/PROCESSING; legacy SUBMITTED/RUNNING entries still decode.
+Upgrading across this rename requires a single-replica rollout — see changelog 0.6.0.)
 ```
 
 ## Testing

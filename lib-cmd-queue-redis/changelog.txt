@@ -6,8 +6,11 @@
   value is removed.
 - Wire compatibility: new state is serialized with the new names; legacy SUBMITTED/RUNNING
   entries still decode via @JsonAlias, so command state persisted by earlier versions is read
-  correctly. NOTE: during a rolling deploy, pre-0.6.0 replicas cannot read PENDING/PROCESSING
-  written by 0.6.0+ replicas.
+  correctly.
+- MIGRATION: upgrade to 0.6.0 with a SINGLE replica (scale the service to 1 for the duration
+  of the rollout, then scale back up). Do NOT run a mixed pre-0.6.0 / 0.6.0 deployment: a
+  pre-0.6.0 replica cannot deserialize the PENDING/PROCESSING names written by a 0.6.0 replica.
+  A single-replica rollout guarantees the two versions never read the same Redis concurrently.
 - CommandResult.running() is deprecated in favour of CommandResult.processing() (identical
   behaviour); the switch on command status now fails loud on any unexpected value.
 - Source-breaking for downstream references to CommandStatus.SUBMITTED/RUNNING (e.g. sched):
