@@ -17,11 +17,11 @@
 package io.seqera.data.command;
 
 import io.micronaut.core.annotation.Nullable;
-import io.seqera.data.stream.AbstractMessageStream;
-import io.seqera.data.stream.MessageConsumer;
-import io.seqera.data.stream.MessageStream;
-import io.seqera.data.stream.metrics.NoopStreamMetrics;
-import io.seqera.data.stream.metrics.StreamMetrics;
+import io.seqera.data.workqueue.AbstractWorkQueue;
+import io.seqera.data.workqueue.MessageConsumer;
+import io.seqera.data.workqueue.WorkQueue;
+import io.seqera.data.workqueue.metrics.NoopQueueMetrics;
+import io.seqera.data.workqueue.metrics.QueueMetrics;
 import io.seqera.serde.encode.StringEncodingStrategy;
 import io.seqera.serde.moshi.MoshiEncodeStrategy;
 import jakarta.annotation.PreDestroy;
@@ -30,16 +30,16 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Abstract message queue for command processing.
- * Extends AbstractMessageStream to provide async, fire-and-forget command submission.
+ * Extends AbstractWorkQueue to provide async, fire-and-forget command submission.
  *
  * Subclasses must implement {@link #name()} and {@link #pollInterval()}
  * to configure the queue behavior.
  */
-public abstract class CommandQueue extends AbstractMessageStream<CommandMsg> {
+public abstract class CommandQueue extends AbstractWorkQueue<CommandMsg> {
 
     private static final Logger log = LoggerFactory.getLogger(CommandQueue.class);
 
-    public CommandQueue(MessageStream<String> target) {
+    public CommandQueue(WorkQueue<String> target) {
         super(target);
         log.info("Created command queue - name={}", name());
     }
@@ -47,13 +47,13 @@ public abstract class CommandQueue extends AbstractMessageStream<CommandMsg> {
     /**
      * Constructs a command queue with optional metrics instrumentation.
      *
-     * @param target  the underlying {@link MessageStream}
-     * @param metrics the {@link StreamMetrics} to publish to, or {@code null} for no-op
+     * @param target  the underlying {@link WorkQueue}
+     * @param metrics the {@link QueueMetrics} to publish to, or {@code null} for no-op
      */
-    public CommandQueue(MessageStream<String> target, @Nullable StreamMetrics metrics) {
+    public CommandQueue(WorkQueue<String> target, @Nullable QueueMetrics metrics) {
         super(target, metrics);
         log.info("Created command queue - name={}; metrics={}",
-                name(), metrics != null && !(metrics instanceof NoopStreamMetrics) ? "enabled" : "disabled");
+                name(), metrics != null && !(metrics instanceof NoopQueueMetrics) ? "enabled" : "disabled");
     }
 
     @Override

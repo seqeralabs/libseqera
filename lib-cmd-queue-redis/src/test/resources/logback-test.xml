@@ -24,7 +24,7 @@
     </appender>
 
     <logger name="io.seqera.data.command" level="DEBUG"/>
-    <logger name="io.seqera.data.stream" level="TRACE"/>
+    <logger name="io.seqera.data.workqueue" level="TRACE"/>
     <logger name="io.micronaut" level="INFO"/>
     <logger name="org.testcontainers" level="INFO"/>
 

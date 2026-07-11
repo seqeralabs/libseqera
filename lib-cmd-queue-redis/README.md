@@ -121,22 +121,22 @@ commandService.stop();
 ## Metrics (optional)
 
 Since `0.4.0`, `CommandQueue` exposes a second constructor that forwards an optional
-[`StreamMetrics`](https://github.com/seqeralabs/libseqera/tree/master/lib-data-stream-redis)
-handle to the underlying `AbstractMessageStream`. Subclasses that want to publish
-Micrometer metrics construct a `MicrometerStreamMetrics` from a `MeterRegistry` and pass
+[`QueueMetrics`](https://github.com/seqeralabs/libseqera/tree/master/lib-data-workqueue)
+handle to the underlying `AbstractWorkQueue`. Subclasses that want to publish
+Micrometer metrics construct a `MicrometerQueueMetrics` from a `MeterRegistry` and pass
 it through:
 
 ```java
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micronaut.core.annotation.Nullable;
-import io.seqera.data.stream.metrics.MicrometerStreamMetrics;
+import io.seqera.data.workqueue.metrics.MicrometerQueueMetrics;
 
 public class MyCommandQueue extends CommandQueue {
 
     @Inject
-    public MyCommandQueue(MessageStream<String> target, @Nullable MeterRegistry registry) {
+    public MyCommandQueue(WorkQueue<String> target, @Nullable MeterRegistry registry) {
         super(target, registry != null
-                ? new MicrometerStreamMetrics(registry, "my-cmd-queue")
+                ? new MicrometerQueueMetrics(registry, "my-cmd-queue")
                 : null);
     }
 
@@ -146,9 +146,9 @@ public class MyCommandQueue extends CommandQueue {
 ```
 
 The 1-arg constructor is unchanged: existing subclasses continue to compile and run
-with no metrics. See [`lib-data-stream-redis`](../lib-data-stream-redis/README.md) for the
-list of published meters (`seqera.stream.entries`, `seqera.stream.messages`,
-`seqera.stream.processing`) and their tags.
+with no metrics. See [`lib-data-workqueue-redis`](../lib-data-workqueue-redis/README.md) for the
+list of published meters (`seqera.workqueue.entries`, `seqera.workqueue.messages`,
+`seqera.workqueue.processing`) and their tags.
 
 ## Architecture
 
@@ -171,8 +171,8 @@ just transport; the store is the source of truth.
         │                    submit(msg)  │  addConsumer(msg→bool)
    getState/getResult                     ▼
                                   ┌───────────────────┐
-                                  │   CommandQueue    │  AbstractMessageStream
-                                  │  (Redis stream /  │  polls every pollInterval()
+                                  │   CommandQueue    │  AbstractWorkQueue
+                                  │  (Redis queue /   │  polls every pollInterval()
                                   │   in-memory)      │  redelivers un-acked msgs
                                   └───────────────────┘
 ```
@@ -182,7 +182,7 @@ just transport; the store is the source of truth.
 | Component | Role |
 |-----------|------|
 | `CommandService` | Public facade: `submit`, `getState`, `getResult`, `cancel`, `registerHandler`, `start`/`stop`. |
-| `CommandQueue` | Abstract `AbstractMessageStream<CommandMsg>` (from `lib-data-stream-redis`). Carries only `CommandMsg` (id + type), Moshi-encoded. Backed by a Redis stream or an in-memory stream. |
+| `CommandQueue` | Abstract `AbstractWorkQueue<CommandMsg>` (from `lib-data-workqueue-redis`). Carries only `CommandMsg` (id + type), Moshi-encoded. Backed by a Redis work queue or an in-memory queue. |
 | `CommandStateStore` | Abstract `AbstractStateStore<CommandState>` (from `lib-data-store-state-redis`). Holds the full JSON state with a TTL (default 7 days). Backed by Redis or in-memory. |
 | `CommandHandler<P,R>` | User code: `execute()` runs the work; optional `checkStatus()` polls a long-running/external job. |
 | `CommandState` | Persisted record (params + result via `@JsonTypeInfo`, status, timings). The source of truth. |
@@ -225,7 +225,7 @@ cadence. Handler exceptions transition the command to `FAILED` and ack. There is
 per-command timeout and no per-command lock — the handler runs to completion on a
 virtual thread, and the underlying stream's per-message lease guarantees a single
 concurrent runner across replicas (see
-[`lib-data-stream-redis`](../lib-data-stream-redis/README.md)).
+[`lib-data-workqueue-redis`](../lib-data-workqueue-redis/README.md)).
 
 ### Multi-replica behaviour
 

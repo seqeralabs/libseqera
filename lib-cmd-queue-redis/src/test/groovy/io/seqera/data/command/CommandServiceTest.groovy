@@ -31,7 +31,7 @@ import java.time.Instant
 /**
  * End-to-end tests for the CommandService.
  */
-@MicronautTest(packages = ["io.seqera.data.stream"], transactional = false)
+@MicronautTest(packages = ["io.seqera.data.workqueue"], transactional = false)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CommandServiceTest extends Specification implements TestPropertyProvider {
 

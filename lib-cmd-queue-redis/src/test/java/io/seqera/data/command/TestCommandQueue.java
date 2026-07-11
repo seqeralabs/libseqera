@@ -19,7 +19,7 @@ package io.seqera.data.command;
 import java.time.Duration;
 
 import io.micronaut.context.annotation.Factory;
-import io.seqera.data.stream.MessageStream;
+import io.seqera.data.workqueue.WorkQueue;
 import jakarta.inject.Singleton;
 
 /**
@@ -27,7 +27,7 @@ import jakarta.inject.Singleton;
  */
 class TestCommandQueue extends CommandQueue {
 
-    TestCommandQueue(MessageStream<String> target) {
+    TestCommandQueue(WorkQueue<String> target) {
         super(target);
     }
 
@@ -49,7 +49,7 @@ class TestCommandQueue extends CommandQueue {
 class TestCommandQueueFactory {
 
     @Singleton
-    CommandQueue commandQueue(MessageStream<String> target) {
+    CommandQueue commandQueue(WorkQueue<String> target) {
         return new TestCommandQueue(target);
     }
 }

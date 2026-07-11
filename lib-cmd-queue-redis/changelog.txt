@@ -1,5 +1,12 @@
 # lib-cmd-queue-redis changelog
 
+0.7.0 - 11 Jul 2026
+- Adopt the lib-data-workqueue / lib-data-workqueue-redis modules; drop lib-data-stream-redis.
+- MessageStream -> WorkQueue, AbstractMessageStream -> AbstractWorkQueue, StreamMetrics ->
+  QueueMetrics, NoopStreamMetrics -> NoopQueueMetrics; package io.seqera.data.stream.* ->
+  io.seqera.data.workqueue.* (MessageConsumer name unchanged, new package). No behavioural change.
+- Requires lib-data-workqueue 1.0.0+ / lib-data-workqueue-redis 1.0.0+
+
 0.6.0 - 11 Jul 2026
 - Rename CommandStatus.SUBMITTED -> PENDING and RUNNING -> PROCESSING (the latter to avoid
   confusion with a downstream task's own "running" state). The dead, never-persisted PENDING

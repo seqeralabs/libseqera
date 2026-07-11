@@ -17,7 +17,9 @@
 
 plugins {
     id 'io.seqera.java-library-conventions'
-    id 'io.seqera.groovy-library-conventions'
+    id 'groovy'
+    // Micronaut minimal lib
+    // https://micronaut-projects.github.io/micronaut-gradle-plugin/latest/
     id "io.micronaut.minimal.library" version '4.5.3'
 }
 
@@ -25,44 +27,34 @@ group = 'io.seqera'
 version = "${project.file('VERSION').text.trim()}"
 
 dependencies {
-    // Micronaut core
-    implementation "io.micronaut:micronaut-inject:${micronautCoreVersion}"
+    implementation project(':lib-data-workqueue')
+    implementation project(':lib-activator')
+    implementation project(':lib-random')
+    implementation 'redis.clients:jedis:5.1.4'
+
+    implementation "ch.qos.logback:logback-classic:1.5.25"
     implementation "io.micronaut:micronaut-runtime:${micronautCoreVersion}"
 
-    // JSON serialization
-    implementation project(':lib-serde-jackson')
-
-    // Work queue
-    implementation project(':lib-data-workqueue')
-    implementation project(':lib-data-workqueue-redis')
-    implementation project(':lib-serde-moshi')
-
-    // State store
-    implementation project(':lib-data-store-state-redis')
-
-    // Utilities (includes type resolution)
-    implementation project(':lib-lang')
-
-    // TSID for ID generation
-    implementation 'com.github.f4b6a3:tsid-creator:5.2.6'
-
-    // SLF4J logging
-    implementation 'org.slf4j:slf4j-api:2.0.17'
-
-    // Test dependencies
+    // Groovy dependencies only for tests
+    testImplementation "io.micrometer:micrometer-core:1.12.4"
+    testImplementation "org.apache.groovy:groovy:4.0.24"
+    testImplementation "org.apache.groovy:groovy-nio:4.0.24"
+    testImplementation "org.apache.groovy:groovy-templates:4.0.24"
+    testImplementation "org.apache.groovy:groovy-json:4.0.24"
+    testImplementation project(':lib-lang')
+    testImplementation project(':lib-random')
+    testImplementation project(':lib-serde')
+    testImplementation project(':lib-retry')
     testImplementation testFixtures(project(':lib-fixtures-redis'))
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
-    testImplementation 'org.apache.groovy:groovy'
-    testImplementation 'com.github.f4b6a3:tsid-creator:5.2.6'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api'
     testImplementation 'org.testcontainers:testcontainers:1.21.4'
-    testRuntimeOnly 'ch.qos.logback:logback-classic:1.5.25'
 }
 
 test {
     useJUnitPlatform()
 }
+
 
 micronaut {
     version '4.8.3'

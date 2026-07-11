@@ -1,0 +1,22 @@
+# lib-data-workqueue-redis changelog
+
+1.0.0 - 11 Jul 2026
+- Initial release. This module is the Redis split of lib-data-stream-redis 1.6.0, renamed
+  to reflect the reliable work-queue semantics it implements on top of Redis Streams
+  consumer groups (competing consumers, one live owner per key, acknowledgment,
+  visibility-timeout lease with heartbeat renewal, redelivery + dead-owner reclaim).
+- Contains only the Redis implementation and its configuration; the API/SPI, abstract
+  base, local implementation and metrics live in the companion module lib-data-workqueue.
+- Symbol renames vs lib-data-stream-redis:
+    impl.RedisMessageStream -> redis.RedisWorkQueue        (implements WorkQueue<String>;
+                                                            poll -> receive, renew -> renewLease)
+    impl.RedisStreamConfig  -> redis.RedisWorkQueueConfig  (getClaimTimeout -> getVisibilityTimeout,
+                                                            getClaimTimeoutMillis -> getVisibilityTimeoutMillis,
+                                                            config property claim-timeout -> visibility-timeout;
+                                                            getDefaultConsumerGroupName / getHeartbeatInterval /
+                                                            getMaxProcessingTime / getConsumerWarnTimeout kept)
+  Package io.seqera.data.stream.impl -> io.seqera.data.workqueue.redis.
+- The Redis lease renewal still uses XCLAIM ... JUSTID internally; only the SPI method name
+  changed (renewLease).
+- Behaviour is otherwise identical to lib-data-stream-redis 1.6.0.
+- See docs/superpowers/specs/2026-07-11-workqueue-rename-migration.md for the full migration.
