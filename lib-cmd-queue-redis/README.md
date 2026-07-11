@@ -16,7 +16,7 @@ dependencies {
 
 - Fire-and-forget command submission
 - Typed parameters and results with JSON serialization
-- Status transitions: `SUBMITTED` → `RUNNING` → `SUCCEEDED`/`FAILED`/`CANCELLED`
+- Status transitions: `PENDING` → `PROCESSING` → `SUCCEEDED`/`FAILED`/`CANCELLED`
 - Non-blocking, concurrent handler execution on virtual threads (no per-command timeout)
 - Periodic status checking for async commands via in-process re-polling
 - Command cancellation support
@@ -78,7 +78,7 @@ public class AsyncProcessingHandler implements CommandHandler<ProcessingParams, 
     public CommandResult<ProcessingResult> execute(Command<ProcessingParams> command) {
         // Start async job
         externalService.startJob(command.id(), command.params());
-        return CommandResult.running();  // checkStatus() will be called later
+        return CommandResult.processing();  // checkStatus() will be called later
     }
 
     @Override
@@ -86,7 +86,7 @@ public class AsyncProcessingHandler implements CommandHandler<ProcessingParams, 
         var status = externalService.getStatus(command.id());
         if (status.isComplete()) return CommandResult.success(status.getResult());
         if (status.isFailed()) return CommandResult.failure(status.getError());
-        return CommandResult.running();  // Still running, check again later
+        return CommandResult.processing();  // Still processing, check again later
     }
 }
 ```
@@ -194,7 +194,7 @@ implementations (useful for tests and single-node setups).
 
 ### Submit path
 
-`submit()` is fire-and-forget: it persists a `SUBMITTED` `CommandState` to the
+`submit()` is fire-and-forget: it persists a `PENDING` `CommandState` to the
 store, then enqueues a `CommandMsg`, and returns the command id immediately. No
 handler runs on the caller's thread.
 
@@ -214,12 +214,12 @@ For each delivery, `processCommand` loads the state and decides:
 
 1. **State missing or already terminal** → `true`; nothing to do (another replica finished it, or it was cancelled).
 2. **No handler registered** → mark `FAILED`, `true`.
-3. **State is `SUBMITTED`** → run `handler.execute()`. Terminal result → apply, `true`;
-   `running()` → mark `RUNNING`, `false` (re-polled after `pollInterval`).
-4. **State is `RUNNING`** → run `handler.checkStatus()`. Terminal → `true`;
-   `running()` → `false` (re-polled again).
+3. **State is `PENDING`** → run `handler.execute()`. Terminal result → apply, `true`;
+   `processing()` → mark `PROCESSING`, `false` (re-polled after `pollInterval`).
+4. **State is `PROCESSING`** → run `handler.checkStatus()`. Terminal → `true`;
+   `processing()` → `false` (re-polled again).
 
-A quick command finishes in one delivery; a slow or external one flips to `RUNNING`
+A quick command finishes in one delivery; a slow or external one flips to `PROCESSING`
 and is driven to completion by repeated `checkStatus()` calls at `pollInterval`
 cadence. Handler exceptions transition the command to `FAILED` and ack. There is no
 per-command timeout and no per-command lock — the handler runs to completion on a
@@ -238,9 +238,11 @@ so `execute()`/`checkStatus()` should be idempotent.
 ## Command Status Flow
 
 ```
-submit() ──▶ SUBMITTED ──pickup──▶ RUNNING ─┬─success──▶ SUCCEEDED
-                                            ├─error────▶ FAILED
-                                            └─cancel───▶ CANCELLED
+submit() ──▶ PENDING ──pickup──▶ PROCESSING ─┬─success──▶ SUCCEEDED
+                                             ├─error────▶ FAILED
+                                             └─cancel───▶ CANCELLED
+
+(persisted wire names remain SUBMITTED/RUNNING-compatible: legacy entries still decode)
 ```
 
 ## Testing

@@ -158,8 +158,8 @@ class CommandServiceTest extends Specification implements TestPropertyProvider {
         sleep(500)
         def state = commandService.getState(command.id()).orElseThrow()
 
-        then: 'status is RUNNING'
-        state.status() == CommandStatus.RUNNING
+        then: 'status is PROCESSING'
+        state.status() == CommandStatus.PROCESSING
 
         when: 'wait for periodic checker'
         sleep(3000)
@@ -253,7 +253,7 @@ class TestCommandHandler implements CommandHandler<TestParams, TestResult> {
 
         if (params.mode == 'slow') {
             startTime = Instant.now()
-            return CommandResult.running()
+            return CommandResult.processing()
         }
 
         def result = new TestResult('Processed', params.value)
@@ -271,6 +271,6 @@ class TestCommandHandler implements CommandHandler<TestParams, TestResult> {
             }
         }
 
-        return CommandResult.running()
+        return CommandResult.processing()
     }
 }

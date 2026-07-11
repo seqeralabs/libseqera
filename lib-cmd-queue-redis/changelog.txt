@@ -1,5 +1,18 @@
 # lib-cmd-queue-redis changelog
 
+0.6.0 - 11 Jul 2026
+- Rename CommandStatus.SUBMITTED -> PENDING and RUNNING -> PROCESSING (the latter to avoid
+  confusion with a downstream task's own "running" state). The dead, never-persisted PENDING
+  value is removed.
+- Wire compatibility: new state is serialized with the new names; legacy SUBMITTED/RUNNING
+  entries still decode via @JsonAlias, so command state persisted by earlier versions is read
+  correctly. NOTE: during a rolling deploy, pre-0.6.0 replicas cannot read PENDING/PROCESSING
+  written by 0.6.0+ replicas.
+- CommandResult.running() is deprecated in favour of CommandResult.processing() (identical
+  behaviour); the switch on command status now fails loud on any unexpected value.
+- Source-breaking for downstream references to CommandStatus.SUBMITTED/RUNNING (e.g. sched):
+  update to PENDING/PROCESSING. The running() helper remains (deprecated) so handler code compiles.
+
 0.5.0 - 11 Jul 2026
 - Remove executeWithTimeout / the BLOCKING executor / future.get(timeout); execute() and
   checkStatus() now run on the shared worker pool and never block the listener loop.

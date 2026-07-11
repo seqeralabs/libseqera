@@ -35,7 +35,7 @@ public interface CommandHandler<P, R> {
      * Execute the command and return a result.
      * This method runs on a virtual-thread worker (never on the queue dispatcher thread),
      * so it may block for as long as needed without stalling other commands.
-     * For long-running or external work, return {@link CommandResult#running()} to indicate
+     * For long-running or external work, return {@link CommandResult#processing()} to indicate
      * the operation is in progress; {@link #checkStatus} is then called periodically until
      * a terminal result is returned.
      *
@@ -46,15 +46,15 @@ public interface CommandHandler<P, R> {
 
     /**
      * Check the status of a long-running command.
-     * Called periodically for commands in RUNNING state until a terminal status is returned.
+     * Called periodically for commands in PROCESSING state until a terminal status is returned.
      * The command parameter provides typed access to params via {@code command.params()}.
      * The state parameter provides access to timing and status information.
      *
      * @param command The command being checked (provides typed params access)
      * @param state The current command state (timing, status info)
-     * @return The result indicating current status (RUNNING to continue, or terminal status)
+     * @return The result indicating current status (PROCESSING to continue, or terminal status)
      */
     default CommandResult<R> checkStatus(Command<P> command, CommandState state) {
-        return CommandResult.running();
+        return CommandResult.processing();
     }
 }

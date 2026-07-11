@@ -40,9 +40,9 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Processing flow:
  * <ul>
- *   <li>If command is already RUNNING → call checkStatus()</li>
- *   <li>If command is not yet RUNNING → call execute()</li>
- *   <li>If result is RUNNING → mark as RUNNING and return false (re-polled later)</li>
+ *   <li>If command is already PROCESSING → call checkStatus()</li>
+ *   <li>If command is still PENDING → call execute()</li>
+ *   <li>If result is PROCESSING → mark as PROCESSING and return false (re-polled later)</li>
  *   <li>If result is terminal → apply result and return true (message removed from queue)</li>
  * </ul>
  */
@@ -219,9 +219,9 @@ public class CommandServiceImpl implements CommandService {
      *
      * <p>Runs directly on the shared worker pool thread (no timeout, no extra executor):
      * <ol>
-     *   <li>If command is already RUNNING → call {@code checkStatus()} to poll for completion</li>
-     *   <li>If command is not yet RUNNING → call {@code execute()}</li>
-     *   <li>If result status is RUNNING → mark RUNNING and return false (re-polled later)</li>
+     *   <li>If command is already PROCESSING → call {@code checkStatus()} to poll for completion</li>
+     *   <li>If command is still PENDING → call {@code execute()}</li>
+     *   <li>If result status is PROCESSING → mark PROCESSING and return false (re-polled later)</li>
      *   <li>If result status is terminal → update state and return true (done)</li>
      * </ol>
      *
@@ -243,22 +243,22 @@ public class CommandServiceImpl implements CommandService {
         final CommandHandler<P, R> handler = registration.handler();
 
         try {
-            // Branch on the command status. Only SUBMITTED and RUNNING are reachable here
+            // Branch on the command status. Only PENDING and PROCESSING are reachable here
             // (processCommand already acked terminal states); any other value is a bug or a
             // newly-added status and must fail loudly rather than be silently executed. Both
             // execute() and checkStatus() run on the shared worker pool, so a slow handler
             // does not block the loop.
             final CommandResult<R> result = switch (state.status()) {
-                case SUBMITTED -> handler.execute(command);
-                case RUNNING -> handler.checkStatus(command, state);
+                case PENDING -> handler.execute(command);
+                case PROCESSING -> handler.checkStatus(command, state);
                 default -> throw new IllegalStateException("Unexpected command status: " + state.status() + " - id=" + state.id());
             };
 
             // Handler returned a result - check if command is still in progress
-            if (result.status() == CommandStatus.RUNNING) {
-                // Handler explicitly returned RUNNING (e.g., async job not yet complete)
-                // Ensure state reflects RUNNING status for accurate reporting
-                if (state.status() != CommandStatus.RUNNING) {
+            if (result.status() == CommandStatus.PROCESSING) {
+                // Handler explicitly returned PROCESSING (e.g., async job not yet complete)
+                // Ensure state reflects PROCESSING status for accurate reporting
+                if (state.status() != CommandStatus.PROCESSING) {
                     store.save(state.started());
                 }
                 return false; // Keep in queue - re-polled and will call checkStatus()

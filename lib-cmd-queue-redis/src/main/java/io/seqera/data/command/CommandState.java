@@ -46,17 +46,17 @@ public record CommandState(
      */
     public static CommandState submitted(String id, String type, Object params) {
         return new CommandState(
-                id, type, CommandStatus.SUBMITTED, params,
+                id, type, CommandStatus.PENDING, params,
                 null, null, Instant.now(), null, null
         );
     }
 
     /**
-     * Transition to RUNNING status.
+     * Transition to PROCESSING status.
      */
     public CommandState started() {
         return new CommandState(
-                id, type, CommandStatus.RUNNING, params,
+                id, type, CommandStatus.PROCESSING, params,
                 result, error, createdAt, Instant.now(), completedAt
         );
     }

@@ -128,8 +128,8 @@ class CommandQueueShowcaseTest extends Specification {
         sleep(500)
         def initialState = commandService.getState(commandId).orElseThrow()
 
-        then: 'command is in RUNNING state (async processing started)'
-        initialState.status() == CommandStatus.RUNNING
+        then: 'command is in PROCESSING state (async processing started)'
+        initialState.status() == CommandStatus.PROCESSING
 
         when: 'wait for async completion via periodic status checks'
         sleep(4000)
