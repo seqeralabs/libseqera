@@ -32,20 +32,12 @@ public class TestCommandConfig implements CommandConfig {
     @Value("${command.poll-interval:100ms}")
     private Duration pollInterval;
 
-    @Value("${command.execute-timeout:1s}")
-    private Duration executeTimeout;
-
     @Value("${command.state.ttl:1h}")
     private Duration stateTtl;
 
     @Override
     public Duration pollInterval() {
         return pollInterval;
-    }
-
-    @Override
-    public Duration executeTimeout() {
-        return executeTimeout;
     }
 
     @Override

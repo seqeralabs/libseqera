@@ -37,6 +37,7 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.StreamEntryID;
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.params.XAutoClaimParams;
+import redis.clients.jedis.params.XClaimParams;
 import redis.clients.jedis.params.XReadGroupParams;
 import redis.clients.jedis.resps.StreamEntry;
 
@@ -142,33 +143,117 @@ public class RedisMessageStream implements MessageStream<String> {
 
     /**
      * {@inheritDoc}
+     *
+     * <p>Reads one entry (a reclaimed stalled one via {@code XAUTOCLAIM}, otherwise a
+     * newly delivered one via {@code XREADGROUP >}) <strong>without</strong> acking it.
+     * The returned lease id is the Redis {@link StreamEntryID} of the delivered entry.
      */
     @Override
-    public boolean consume(String streamId, MessageConsumer<String> consumer) {
+    public Lease<String> poll(String streamId) {
         try (Jedis jedis = pool.getResource()) {
-            String msg;
-            final long begin = System.currentTimeMillis();
             StreamEntry entry = claimMessage(jedis, streamId);
             if (entry == null) {
                 entry = readMessage(jedis, streamId);
             }
-            if (entry != null && consumer.accept(msg = entry.getFields().get(DATA_FIELD))) {
-                final var tx = jedis.multi();
-                // acknowledge the entry has been processed so that it cannot be claimed anymore
-                tx.xack(streamId, config.getDefaultConsumerGroupName(), entry.getID());
-                final var delta = System.currentTimeMillis() - begin;
-                if (delta > config.getConsumerWarnTimeoutMillis()) {
-                    log.warn("Redis message stream - consume processing took {} - offending entry={}; message={}",
-                            Duration.ofMillis(delta), entry.getID(), msg);
-                }
-                // this remove permanently the entry from the stream
-                tx.xdel(streamId, entry.getID());
-                tx.exec();
-                return true;
+            if (entry == null) {
+                return null;
             }
-            else {
-                return false;
+            return new Lease<>(entry.getID().toString(), entry.getFields().get(DATA_FIELD));
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Resets the idle time of the entry to zero by re-claiming it to this same
+     * consumer with a {@code min-idle} of {@code 0} using {@code XCLAIM … JUSTID},
+     * so an alive consumer keeps ownership of the message regardless of how long the
+     * handler runs.
+     */
+    @Override
+    public void renew(String streamId, String leaseId) {
+        try (Jedis jedis = pool.getResource()) {
+            jedis.xclaimJustId(
+                    streamId,
+                    config.getDefaultConsumerGroupName(),
+                    consumerName,
+                    0L,
+                    XClaimParams.xClaimParams(),
+                    new StreamEntryID(leaseId));
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Acknowledges the entry ({@code XACK}) and permanently removes it from the
+     * stream ({@code XDEL}) atomically so it can neither be claimed nor redelivered.
+     */
+    @Override
+    public void ack(String streamId, String leaseId) {
+        final var id = new StreamEntryID(leaseId);
+        try (Jedis jedis = pool.getResource()) {
+            final var tx = jedis.multi();
+            // acknowledge the entry has been processed so that it cannot be claimed anymore
+            tx.xack(streamId, config.getDefaultConsumerGroupName(), id);
+            // this removes permanently the entry from the stream
+            tx.xdel(streamId, id);
+            tx.exec();
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>No-op: the entry remains in the pending-entries list and becomes reclaimable
+     * by a peer consumer once its idle time exceeds {@code claim-timeout}.
+     */
+    @Override
+    public void release(String streamId, String leaseId) {
+        // no-op: entry stays in the PEL, reclaimable after claim-timeout
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Derived from the configured {@code claim-timeout} so an alive consumer's lease
+     * is renewed well before a peer could reclaim it.
+     */
+    @Override
+    public Duration heartbeatInterval() {
+        return config.getHeartbeatInterval();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Duration maxProcessingTime() {
+        return config.getMaxProcessingTime();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean consume(String streamId, MessageConsumer<String> consumer) {
+        final long begin = System.currentTimeMillis();
+        final Lease<String> lease = poll(streamId);
+        if (lease == null) {
+            return false;
+        }
+        if (consumer.accept(lease.message())) {
+            ack(streamId, lease.id());
+            final var delta = System.currentTimeMillis() - begin;
+            if (delta > config.getConsumerWarnTimeoutMillis()) {
+                log.warn("Redis message stream - consume processing took {} - offending entry={}; message={}",
+                        Duration.ofMillis(delta), lease.id(), lease.message());
             }
+            return true;
+        }
+        else {
+            release(streamId, lease.id());
+            return false;
         }
     }
 

@@ -1,5 +1,14 @@
 # lib-cmd-queue-redis changelog
 
+0.5.0 - 11 Jul 2026
+- Remove executeWithTimeout / the BLOCKING executor / future.get(timeout); execute() and
+  checkStatus() now run on the shared worker pool and never block the listener loop.
+- Remove the per-command distributed lock: cross-replica single-runner is provided by the
+  message-level lease in lib-data-stream-redis.
+- Adopt the shared async worker-pool model (lease-based dispatch + heartbeat + Model B
+  re-poll); CommandQueue sets concurrency() > 1 to enable parallelism.
+- Requires lib-data-stream-redis 1.6.0+
+
 0.4.0 - 13 May 2026
 - Add CommandQueue(MessageStream, StreamMetrics) constructor for optional Micrometer instrumentation
 - Requires lib-data-stream-redis 1.4.0+

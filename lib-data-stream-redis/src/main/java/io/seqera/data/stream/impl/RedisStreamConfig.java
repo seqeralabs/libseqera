@@ -93,4 +93,48 @@ public interface RedisStreamConfig {
     default long getConsumerWarnTimeoutMillis() {
         return getConsumerWarnTimeout().toMillis();
     }
+
+    /**
+     * Returns how often in-flight leases are renewed (heartbeated) to keep them
+     * from being reclaimed by peer consumers while a handler is still running.
+     * Must be shorter than {@link #getClaimTimeout()}; defaults to {@code claim-timeout / 3}
+     * so that up to two consecutive misses are tolerated.
+     *
+     * @return the heartbeat interval duration
+     */
+    default Duration getHeartbeatInterval() {
+        return getClaimTimeout().dividedBy(3);
+    }
+
+    /**
+     * Returns the heartbeat interval in milliseconds for convenience.
+     * This is a derived value from {@link #getHeartbeatInterval()}.
+     *
+     * @return the heartbeat interval in milliseconds
+     */
+    default long getHeartbeatIntervalMillis() {
+        return getHeartbeatInterval().toMillis();
+    }
+
+    /**
+     * Returns the upper bound on a single {@code accept()} invocation before its
+     * lease is released (safety valve). This bounds one handler invocation, not the
+     * total lease lifetime; past this bound the heartbeat daemon stops renewing the
+     * lease so it becomes reclaimable. Defaults to {@code 15m}.
+     *
+     * @return the maximum single-invocation processing time duration
+     */
+    default Duration getMaxProcessingTime() {
+        return Duration.ofMinutes(15);
+    }
+
+    /**
+     * Returns the maximum processing time in milliseconds for convenience.
+     * This is a derived value from {@link #getMaxProcessingTime()}.
+     *
+     * @return the maximum processing time in milliseconds
+     */
+    default long getMaxProcessingTimeMillis() {
+        return getMaxProcessingTime().toMillis();
+    }
 }

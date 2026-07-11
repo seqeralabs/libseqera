@@ -17,6 +17,8 @@
 
 package io.seqera.data.stream;
 
+import java.time.Duration;
+
 /**
  * Interface for a distributed message stream that supports real-time event processing.
  *
@@ -150,7 +152,98 @@ public interface MessageStream<M> {
      *         {@code false} if no message was available or processing failed
      * @see MessageConsumer#accept(Object)
      */
-    boolean consume(String streamId, MessageConsumer<M> consumer);
+    default boolean consume(String streamId, MessageConsumer<M> consumer) {
+        final Lease<M> lease = poll(streamId);
+        if (lease == null) {
+            return false;
+        }
+        final boolean accepted = consumer.accept(lease.message());
+        if (accepted) {
+            ack(streamId, lease.id());
+        }
+        else {
+            release(streamId, lease.id());
+        }
+        return accepted;
+    }
+
+    /**
+     * A single delivered message paired with the token needed to renew, acknowledge
+     * or release it. The {@code id} is the stream-implementation specific handle
+     * (e.g. the Redis stream entry id) that identifies the delivered entry within
+     * its stream.
+     *
+     * @param <M> the type of the delivered message
+     * @param id the implementation specific identifier of the delivered entry
+     * @param message the delivered message payload
+     */
+    record Lease<M>(String id, M message) {}
+
+    /**
+     * Reads one message (either newly delivered or reclaimed from a stalled consumer)
+     * <strong>without acknowledging</strong> it. The caller becomes responsible for
+     * eventually calling {@link #ack(String, String)} once processing terminates, or
+     * {@link #release(String, String)} to hand it back for later redelivery.
+     *
+     * @param streamId the unique identifier of the source stream; must not be null or empty
+     * @return a {@link Lease} for the delivered message, or {@code null} if none is available
+     */
+    Lease<M> poll(String streamId);
+
+    /**
+     * Resets the idle time of the given lease (heartbeat), so that an alive consumer
+     * keeps ownership of a message for as long as its handler runs. Implementations
+     * without a pending-entries list have no lease semantics and treat this as a no-op.
+     *
+     * @param streamId the unique identifier of the stream; must not be null or empty
+     * @param leaseId the identifier of the lease to renew
+     */
+    void renew(String streamId, String leaseId);
+
+    /**
+     * Acknowledges terminal processing of the given lease, removing the message from
+     * the stream so that it is never redelivered.
+     *
+     * @param streamId the unique identifier of the stream; must not be null or empty
+     * @param leaseId the identifier of the lease to acknowledge
+     */
+    void ack(String streamId, String leaseId);
+
+    /**
+     * Releases the given lease without acknowledging it, so that the message becomes
+     * available for redelivery later (a nack; used on shutdown). Implementations
+     * without a pending-entries list re-offer the message.
+     *
+     * @param streamId the unique identifier of the stream; must not be null or empty
+     * @param leaseId the identifier of the lease to release
+     */
+    void release(String streamId, String leaseId);
+
+    /**
+     * How often an in-flight lease must be renewed to retain ownership, so an alive
+     * consumer is never reclaimed by a peer while its handler is still running. The
+     * value is the implementation's own setting (e.g. {@code claim-timeout / 3} for a
+     * Redis consumer group) and MUST be shorter than the reclaim window. Returns
+     * {@code null} when the implementation has no lease concept (e.g. in-memory), in
+     * which case the caller uses its own default.
+     *
+     * @return the heartbeat interval, or {@code null} if the implementation has no lease
+     */
+    default Duration heartbeatInterval() {
+        return null;
+    }
+
+    /**
+     * Upper bound on a single {@code accept()} invocation before its lease is released
+     * (safety valve); it does not interrupt the handler thread. Returns {@code null}
+     * when the implementation has no lease concept, in which case the caller uses its
+     * own default.
+     *
+     * @return the maximum single-invocation processing time, or {@code null}
+     */
+    default Duration maxProcessingTime() {
+        return null;
+    }
 
     /**
      * Returns the approximate number of messages currently in the specified stream.

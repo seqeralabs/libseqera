@@ -22,12 +22,10 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import io.micronaut.context.annotation.Requires;
 import io.seqera.activator.redis.RedisActivator;
-import io.seqera.data.stream.MessageConsumer;
 import io.seqera.data.stream.MessageStream;
 import jakarta.inject.Singleton;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import static io.seqera.data.stream.impl.SleepHelper.sleep;
 
 /**
  * In-memory implementation of {@link MessageStream} using Java {@link LinkedBlockingQueue}
@@ -89,33 +87,51 @@ public class LocalMessageStream implements MessageStream<String> {
 
     /**
      * {@inheritDoc}
+     *
+     * <p>Reads one message off the local queue. There is no pending-entries list, so
+     * the lease id is simply the message value itself (used to re-offer it on release).
      */
     @Override
-    public boolean consume(String streamId, MessageConsumer<String> consumer) {
+    public Lease<String> poll(String streamId) {
         final var message = delegate
                 .get(streamId)
                 .poll();
         if (message == null) {
-            return false;
+            return null;
         }
+        return new Lease<>(message, message);
+    }
 
-        Throwable error = null;
-        boolean result = false;
-        try {
-            result = consumer.accept(message);
-        }
-        catch (Throwable e) {
-            result = false;
-            log.debug("Failed to consume message from stream={} - cause: {}", streamId, e.getMessage(), e);
-        }
-        finally {
-            if (!result) {
-                // add again message not consumed to mimic the behavior or redis stream
-                sleep(1_000);
-                offer(streamId, message);
-            }
-        }
-        return result;
+    /**
+     * {@inheritDoc}
+     *
+     * <p>No pending-entries list ⇒ no lease semantics ⇒ no-op.
+     */
+    @Override
+    public void renew(String streamId, String leaseId) {
+        // no-op: the local queue has no pending-entries list
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The message was already removed from the queue on {@link #poll(String)},
+     * so acknowledgment is a no-op (the entry is simply dropped).
+     */
+    @Override
+    public void ack(String streamId, String leaseId) {
+        // no-op: the entry was removed from the queue on poll
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Re-offers the message onto the queue so it is redelivered later, mimicking the
+     * behavior of a Redis stream pending entry that is not acknowledged.
+     */
+    @Override
+    public void release(String streamId, String leaseId) {
+        offer(streamId, leaseId);
     }
 
     /**
