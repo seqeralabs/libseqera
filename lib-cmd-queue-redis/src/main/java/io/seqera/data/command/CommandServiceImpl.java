@@ -243,11 +243,16 @@ public class CommandServiceImpl implements CommandService {
         final CommandHandler<P, R> handler = registration.handler();
 
         try {
-            // Branch based on current command status. Both execute() and checkStatus()
-            // run on the shared worker pool, so a slow handler does not block the loop.
-            final CommandResult<R> result = (state.status() == CommandStatus.RUNNING)
-                    ? handler.checkStatus(command, state)
-                    : handler.execute(command);
+            // Branch on the command status. Only SUBMITTED and RUNNING are reachable here
+            // (processCommand already acked terminal states); any other value is a bug or a
+            // newly-added status and must fail loudly rather than be silently executed. Both
+            // execute() and checkStatus() run on the shared worker pool, so a slow handler
+            // does not block the loop.
+            final CommandResult<R> result = switch (state.status()) {
+                case SUBMITTED -> handler.execute(command);
+                case RUNNING -> handler.checkStatus(command, state);
+                default -> throw new IllegalStateException("Unexpected command status: " + state.status() + " - id=" + state.id());
+            };
 
             // Handler returned a result - check if command is still in progress
             if (result.status() == CommandStatus.RUNNING) {
