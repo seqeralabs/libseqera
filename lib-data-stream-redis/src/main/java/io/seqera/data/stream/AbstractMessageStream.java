@@ -371,14 +371,10 @@ public abstract class AbstractMessageStream<M> implements Closeable {
      *      The message serialised as a string value
      * @param consumer
      *      The consumer {@link MessageConsumer} that will handle the message as a object
-     * @param count
-     *      An {@link AtomicInteger} counter incremented by one when this method is invoked,
-     *      irrespective if the consumer is successful or not.
      * @return
      *      The result of the consumer {@link MessageConsumer} operation.
      */
-    protected boolean processMessage(String msg, MessageConsumer<M> consumer, AtomicInteger count) {
-        count.incrementAndGet();
+    protected boolean processMessage(String msg, MessageConsumer<M> consumer) {
         final M decoded = encoder.decode(msg);
         log.trace("Message stream - receiving message={}; decoded={}", msg, decoded);
         return consumer.accept(decoded);
@@ -435,24 +431,26 @@ public abstract class AbstractMessageStream<M> implements Closeable {
      * @return {@code true} if a message was polled and submitted, {@code false} otherwise
      */
     private boolean dispatchOne(String streamId) {
-        MessageStream.Lease<String> lease = null;
+        boolean submitted = false;
         try {
-            lease = stream.poll(streamId);
+            final MessageStream.Lease<String> lease = stream.poll(streamId);
+            if (lease == null) {
+                metrics.recordOutcome(metrics.startSample(), streamId, Outcome.EMPTY);
+                return false;
+            }
+            final var e = new InFlight(streamId, lease.id(), lease.message());
+            inFlight.put(e.key(), e);
+            submitRun(e);
+            submitted = true;
+            return true;
         }
-        catch (Throwable t) {
-            slots.release();
-            throw t;
+        finally {
+            // the permit is held only once the lease is in flight; release it on an empty
+            // poll or an exception so the single acquire in the dispatcher stays balanced
+            if (!submitted) {
+                slots.release();
+            }
         }
-        if (lease == null) {
-            // nothing to do: return the permit and record an empty outcome
-            slots.release();
-            metrics.recordOutcome(metrics.startSample(), streamId, Outcome.EMPTY);
-            return false;
-        }
-        final var e = new InFlight(streamId, lease.id(), lease.message());
-        inFlight.put(e.key(), e);
-        submitRun(e);
-        return true;
     }
 
     /**
@@ -476,49 +474,84 @@ public abstract class AbstractMessageStream<M> implements Closeable {
      * invocation is scheduled only after this one returned.
      */
     private void run(InFlight e) {
-        final String key = e.key();
+        final boolean accepted = invokeHandler(e);
+        if (accepted) {
+            acknowledge(e);
+        }
+        else if (shouldRepoll(e)) {
+            scheduleRepoll(e);
+        }
+    }
+
+    /**
+     * Run one {@code accept()} invocation on the worker thread, recording the metrics
+     * outcome. Returns {@code true} for a terminal result, {@code false} for
+     * not-yet-terminal or an error (both keep the lease for a later re-poll).
+     */
+    private boolean invokeHandler(InFlight e) {
         final MessageConsumer<M> consumer = listeners.get(e.streamId());
         final long sample = metrics.startSample();
         boolean accepted = false;
         Outcome outcome = Outcome.ACTIVE;
-        active.put(key, System.currentTimeMillis());
+        active.put(e.key(), System.currentTimeMillis());
         try {
-            accepted = processMessage(e.message(), consumer, new AtomicInteger());
+            accepted = processMessage(e.message(), consumer);
             outcome = accepted ? Outcome.PROCESSED : Outcome.ACTIVE;
         }
         catch (Throwable t) {
             outcome = Outcome.ERRORED;
-            log.error("Message stream - error processing entry={} - cause: {}", key, t.getMessage(), t);
+            log.error("Message stream - error processing entry={} - cause: {}", e.key(), t.getMessage(), t);
         }
         finally {
-            active.remove(key);
+            active.remove(e.key());
             metrics.recordOutcome(sample, e.streamId(), outcome);
         }
+        return accepted;
+    }
 
-        if (accepted) {
-            // terminal: ack + remove from in-flight, then release the capacity permit
-            try {
-                stream.ack(e.streamId(), e.leaseId());
-            }
-            catch (Throwable t) {
-                log.error("Message stream - error acking entry={} - cause: {}", key, t.getMessage(), t);
-            }
-            finally {
-                if (inFlight.remove(key) != null) {
-                    slots.release();
-                }
-            }
+    /** Terminal result: acknowledge the message and release its lease. */
+    private void acknowledge(InFlight e) {
+        try {
+            stream.ack(e.streamId(), e.leaseId());
         }
-        else if (!closed && inFlight.containsKey(key)) {
-            // not-yet-terminal (or errored): keep the lease (heartbeat keeps renewing it,
-            // so no reclaim/migration) and schedule the next invocation after pollInterval
-            try {
-                scheduler.schedule(() -> submitRun(e), pollInterval().toMillis(), TimeUnit.MILLISECONDS);
-            }
-            catch (RejectedExecutionException ex) {
-                log.debug("Message stream - re-poll scheduler rejected entry={} (shutting down)", key);
-            }
+        catch (Throwable t) {
+            log.error("Message stream - error acking entry={} - cause: {}", e.key(), t.getMessage(), t);
         }
+        finally {
+            releaseLease(e.key());
+        }
+    }
+
+    /** Whether a not-yet-terminal command should be re-polled: still owned and not shutting down. */
+    private boolean shouldRepoll(InFlight e) {
+        return !closed && inFlight.containsKey(e.key());
+    }
+
+    /**
+     * Keep the lease (the heartbeat keeps renewing it, so no reclaim/migration) and schedule
+     * the next in-process invocation after {@link #pollInterval()} — strictly serial, since
+     * it is scheduled only after the previous invocation returned.
+     */
+    private void scheduleRepoll(InFlight e) {
+        try {
+            scheduler.schedule(() -> submitRun(e), pollInterval().toMillis(), TimeUnit.MILLISECONDS);
+        }
+        catch (RejectedExecutionException ex) {
+            log.debug("Message stream - re-poll scheduler rejected entry={} (shutting down)", e.key());
+        }
+    }
+
+    /**
+     * Drop a lease from the in-flight set and free its capacity permit. This pair is the
+     * single invariant "a permit is held iff its key is in-flight"; returns {@code true} if
+     * this call performed the removal (so callers can log only a real eviction).
+     */
+    private boolean releaseLease(String key) {
+        if (inFlight.remove(key) != null) {
+            slots.release();
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -535,8 +568,7 @@ public abstract class AbstractMessageStream<M> implements Closeable {
             if (now - start > maxMillis) {
                 // a single invocation is hung beyond the bound: stop renewing so the
                 // lease becomes reclaimable, and free its capacity permit
-                if (inFlight.remove(key) != null) {
-                    slots.release();
+                if (releaseLease(key)) {
                     log.warn("Message stream - releasing lease of hung entry={} after {} - reclaimable after claim timeout",
                             key, Duration.ofMillis(now - start));
                 }
