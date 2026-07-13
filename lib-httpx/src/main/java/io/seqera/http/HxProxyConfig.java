@@ -25,38 +25,25 @@ import java.net.Proxy;
 import java.net.ProxySelector;
 import java.net.SocketAddress;
 import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Properties;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Helper that resolves HTTP/HTTPS forward-proxy settings from the standard environment
- * variables and Java system properties, and exposes them as a {@link ProxySelector} and
- * a proxy-only {@link Authenticator} suitable for {@link java.net.http.HttpClient}.
+ * Holds HTTP/HTTPS forward-proxy settings supplied explicitly (host, port and optional
+ * credentials per protocol, plus {@code NO_PROXY} entries) and exposes them as a
+ * {@link ProxySelector} and a proxy-only {@link Authenticator} suitable for
+ * {@link java.net.http.HttpClient}. Build one with {@link #newBuilder()}.
  *
- * <p><strong>Configuration sources</strong> (first match wins, per target protocol):
- * <ul>
- *   <li><code>HTTPS_PROXY</code> / <code>https_proxy</code> — proxy for <code>https</code> targets</li>
- *   <li><code>HTTP_PROXY</code> / <code>http_proxy</code> — proxy for <code>http</code> targets</li>
- *   <li><code>ALL_PROXY</code> / <code>all_proxy</code> — fallback for both protocols</li>
- *   <li><code>https.proxyHost</code>/<code>https.proxyPort</code> and
- *       <code>http.proxyHost</code>/<code>http.proxyPort</code> system properties — last resort</li>
- * </ul>
+ * <p>The library never reads the environment or system properties on its own; the caller
+ * resolves proxy settings however it wishes and passes the values to {@link Builder}.
  *
- * <p>Proxy values are parsed as URLs and may embed URL-encoded credentials, e.g.
- * <code>http://user:p%40ss@proxy.example.com:8080</code>. The <code>NO_PROXY</code> /
- * <code>no_proxy</code> variable is honoured as a comma-separated list of host names or
- * domain suffixes (optionally prefixed with <code>.</code> or <code>*.</code>); the single
- * entry <code>*</code> disables proxying entirely. Loopback targets (<code>localhost</code>,
- * <code>127.*</code>, <code>[::1]</code>) always bypass the proxy, mirroring the JDK default
+ * <p><code>NO_PROXY</code> entries are honoured as a list of host names or domain suffixes
+ * (optionally prefixed with <code>.</code> or <code>*.</code>); the single entry <code>*</code>
+ * disables proxying entirely. Loopback targets (<code>localhost</code>, <code>127.*</code>,
+ * <code>[::1]</code>) always bypass the proxy, mirroring the JDK default
  * <code>http.nonProxyHosts</code> behaviour. CIDR notation entries are not supported.
  *
  * <p><strong>Why an explicit Authenticator?</strong><br>
@@ -117,42 +104,48 @@ public class HxProxyConfig {
     }
 
     /**
-     * Resolves the proxy configuration from the process environment variables and
-     * Java system properties.
+     * Creates a builder to assemble a proxy configuration from explicit values, for callers that
+     * resolve proxy settings themselves rather than from the environment.
      *
-     * @return the detected proxy configuration, or null when no proxy is configured
+     * @return a new {@link Builder}
      */
-    public static HxProxyConfig fromEnvironment() {
-        return fromEnvironment(System.getenv(), System.getProperties());
+    public static Builder newBuilder() {
+        return new Builder();
     }
 
     /**
-     * Resolves the proxy configuration from the given environment and system properties.
-     * Visible for testing.
-     *
-     * @param env the environment variables to inspect
-     * @param props the system properties to use as fallback
-     * @return the detected proxy configuration, or null when no proxy is configured
+     * Builder for {@link HxProxyConfig}: the proxy details are supplied explicitly
+     * (host, port and optional credentials per protocol, plus {@code NO_PROXY} entries).
      */
-    static HxProxyConfig fromEnvironment(Map<String, String> env, Properties props) {
-        final ProxyEntry allProxy = parseProxyUrl(getVar(env, "ALL_PROXY"));
+    public static final class Builder {
+        private ProxyEntry httpProxy;
+        private ProxyEntry httpsProxy;
+        private List<String> noProxyHosts = List.of();
 
-        ProxyEntry httpsProxy = parseProxyUrl(getVar(env, "HTTPS_PROXY"));
-        if (httpsProxy == null)
-            httpsProxy = allProxy;
-        if (httpsProxy == null)
-            httpsProxy = fromSystemProperties(props, "https", 443);
+        public Builder httpProxy(String host, int port, String username, String password) {
+            this.httpProxy = host != null ? new ProxyEntry(host, port, username, password) : null;
+            return this;
+        }
 
-        ProxyEntry httpProxy = parseProxyUrl(getVar(env, "HTTP_PROXY"));
-        if (httpProxy == null)
-            httpProxy = allProxy;
-        if (httpProxy == null)
-            httpProxy = fromSystemProperties(props, "http", 80);
+        public Builder httpsProxy(String host, int port, String username, String password) {
+            this.httpsProxy = host != null ? new ProxyEntry(host, port, username, password) : null;
+            return this;
+        }
 
-        if (httpProxy == null && httpsProxy == null)
-            return null;
+        public Builder noProxy(List<String> hosts) {
+            this.noProxyHosts = hosts == null
+                    ? List.of()
+                    : hosts.stream()
+                            .filter(h -> h != null)
+                            .map(h -> h.trim().toLowerCase(Locale.ROOT))
+                            .filter(h -> !h.isEmpty())
+                            .toList();
+            return this;
+        }
 
-        return new HxProxyConfig(httpProxy, httpsProxy, parseNoProxy(getVar(env, "NO_PROXY")));
+        public HxProxyConfig build() {
+            return new HxProxyConfig(httpProxy, httpsProxy, noProxyHosts);
+        }
     }
 
     /**
@@ -261,88 +254,5 @@ public class HxProxyConfig {
                 return entry;
         }
         return null;
-    }
-
-    /**
-     * Looks up an environment variable checking the upper-case name first, then the lower-case one.
-     */
-    private static String getVar(Map<String, String> env, String name) {
-        final String value = env.get(name);
-        if (value != null && !value.isBlank())
-            return value;
-        return env.get(name.toLowerCase(Locale.ROOT));
-    }
-
-    /**
-     * Parses a proxy URL such as {@code http://user:pass@host:port}, URL-decoding any
-     * embedded credentials. A bare {@code host:port} value is accepted as well.
-     *
-     * @param value the proxy setting value, may be null
-     * @return the parsed entry, or null when the value is missing or malformed
-     */
-    static ProxyEntry parseProxyUrl(String value) {
-        if (value == null || value.isBlank())
-            return null;
-        try {
-            String spec = value.trim();
-            if (!spec.contains("://"))
-                spec = "http://" + spec;
-            final URI uri = new URI(spec);
-            final String host = uri.getHost();
-            if (host == null) {
-                log.warn("Ignoring proxy setting with no valid host - check the HTTP_PROXY/HTTPS_PROXY environment variables");
-                return null;
-            }
-            int port = uri.getPort();
-            if (port == -1)
-                port = "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
-            String username = null;
-            String password = null;
-            final String userInfo = uri.getRawUserInfo();
-            if (userInfo != null) {
-                final int sep = userInfo.indexOf(':');
-                username = urlDecode(sep == -1 ? userInfo : userInfo.substring(0, sep));
-                password = sep == -1 ? null : urlDecode(userInfo.substring(sep + 1));
-            }
-            return new ProxyEntry(host, port, username, password);
-        }
-        catch (URISyntaxException e) {
-            // do not include the value in the message, it may embed credentials
-            log.warn("Ignoring malformed proxy setting - check the HTTP_PROXY/HTTPS_PROXY environment variables");
-            return null;
-        }
-    }
-
-    private static ProxyEntry fromSystemProperties(Properties props, String protocol, int defaultPort) {
-        final String host = props.getProperty(protocol + ".proxyHost");
-        if (host == null || host.isBlank())
-            return null;
-        int port = defaultPort;
-        final String portValue = props.getProperty(protocol + ".proxyPort");
-        if (portValue != null && !portValue.isBlank()) {
-            try {
-                port = Integer.parseInt(portValue.trim());
-            }
-            catch (NumberFormatException e) {
-                log.warn("Ignoring invalid {}.proxyPort system property: {}", protocol, portValue);
-            }
-        }
-        return new ProxyEntry(host.trim(), port, null, null);
-    }
-
-    static List<String> parseNoProxy(String value) {
-        if (value == null || value.isBlank())
-            return List.of();
-        final List<String> result = new ArrayList<>();
-        for (String entry : value.split(",")) {
-            final String item = entry.trim().toLowerCase(Locale.ROOT);
-            if (!item.isEmpty())
-                result.add(item);
-        }
-        return List.copyOf(result);
-    }
-
-    private static String urlDecode(String value) {
-        return URLDecoder.decode(value, StandardCharsets.UTF_8);
     }
 }

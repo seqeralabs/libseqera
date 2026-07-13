@@ -24,8 +24,7 @@ import java.net.Proxy
 import spock.lang.Specification
 
 /**
- * Test cases for {@link HxProxyConfig} environment parsing, proxy selection and
- * proxy authentication behaviour.
+ * Test cases for {@link HxProxyConfig} proxy selection and proxy authentication behaviour.
  */
 class HxProxyConfigTest extends Specification {
 
@@ -35,90 +34,46 @@ class HxProxyConfigTest extends Specification {
                 host, null, port, 'http', 'proxy auth', 'basic', new URL('http://example.com'), type )
     }
 
-    def 'should return null when no proxy is configured'() {
-        expect:
-        HxProxyConfig.fromEnvironment([:], new Properties()) == null
-    }
-
-    def 'should parse HTTPS_PROXY with embedded url-encoded credentials'() {
+    def 'builder should assemble a proxy config from explicit values'() {
         when:
-        def config = HxProxyConfig.fromEnvironment([HTTPS_PROXY: 'http://foo:p%40ss%2Fword@proxy.example.com:8080'], new Properties())
+        def config = HxProxyConfig.newBuilder()
+                .httpsProxy('proxy.example.com', 8080, 'foo', 'bar')
+                .noProxy(['internal.example.com'])
+                .build()
 
         then:
         config.httpsProxy.host == 'proxy.example.com'
         config.httpsProxy.port == 8080
         config.httpsProxy.username == 'foo'
-        config.httpsProxy.password == 'p@ss/word'
-        config.hasCredentials()
-        and: 'no proxy is configured for plain http targets'
+        config.httpsProxy.password == 'bar'
         config.httpProxy == null
+        config.hasCredentials()
+        and: 'the selector honours the explicit NO_PROXY entry'
+        config.isBypassed('internal.example.com')
+        !config.isBypassed('api.example.com')
+        and:
+        config.toAuthenticator() != null
     }
 
-    def 'should parse lower-case variables and bare host:port values'() {
+    def 'builder without credentials yields no authenticator'() {
         when:
-        def config = HxProxyConfig.fromEnvironment([http_proxy: 'proxy.local:3128'], new Properties())
+        def config = HxProxyConfig.newBuilder()
+                .httpProxy('proxy.local', 3128, null, null)
+                .build()
 
         then:
         config.httpProxy.host == 'proxy.local'
         config.httpProxy.port == 3128
-        config.httpProxy.username == null
         !config.hasCredentials()
         config.toAuthenticator() == null
     }
 
-    def 'should prefer upper-case variable over lower-case one'() {
-        when:
-        def config = HxProxyConfig.fromEnvironment([
-                HTTP_PROXY: 'http://upper:80',
-                http_proxy: 'http://lower:81' ], new Properties())
-
-        then:
-        config.httpProxy.host == 'upper'
-    }
-
-    def 'should fall back to ALL_PROXY for both protocols'() {
-        when:
-        def config = HxProxyConfig.fromEnvironment([ALL_PROXY: 'http://user:pass@allproxy:9090'], new Properties())
-
-        then:
-        config.httpProxy.host == 'allproxy'
-        config.httpsProxy.host == 'allproxy'
-        config.httpsProxy.username == 'user'
-        config.httpsProxy.password == 'pass'
-    }
-
-    def 'should fall back to java system properties'() {
-        given:
-        def props = new Properties()
-        props.setProperty('https.proxyHost', 'sysprop-proxy')
-        props.setProperty('https.proxyPort', '8443')
-
-        when:
-        def config = HxProxyConfig.fromEnvironment([:], props)
-
-        then:
-        config.httpsProxy.host == 'sysprop-proxy'
-        config.httpsProxy.port == 8443
-        config.httpProxy == null
-        !config.hasCredentials()
-    }
-
-    def 'should default the proxy port from the proxy url scheme'() {
-        expect:
-        HxProxyConfig.parseProxyUrl(value).port == expected
-
-        where:
-        value                       | expected
-        'http://proxy.example.com'  | 80
-        'https://proxy.example.com' | 443
-        'proxy.example.com:8080'    | 8080
-    }
-
     def 'should select the proxy matching the target scheme'() {
         given:
-        def config = HxProxyConfig.fromEnvironment([
-                HTTP_PROXY : 'http://http-proxy:3128',
-                HTTPS_PROXY: 'http://https-proxy:3129' ], new Properties())
+        def config = HxProxyConfig.newBuilder()
+                .httpProxy('http-proxy', 3128, null, null)
+                .httpsProxy('https-proxy', 3129, null, null)
+                .build()
         def selector = config.toProxySelector()
 
         when:
@@ -126,7 +81,6 @@ class HxProxyConfigTest extends Specification {
         def httpsResult = selector.select(URI.create('https://api.example.com/foo'))
 
         then:
-        httpResult.size() == 1
         (httpResult[0].address() as InetSocketAddress).hostString == 'http-proxy'
         (httpResult[0].address() as InetSocketAddress).port == 3128
         (httpsResult[0].address() as InetSocketAddress).hostString == 'https-proxy'
@@ -135,7 +89,7 @@ class HxProxyConfigTest extends Specification {
 
     def 'should connect directly when no proxy matches the target scheme'() {
         given:
-        def config = HxProxyConfig.fromEnvironment([HTTPS_PROXY: 'http://proxy:3128'], new Properties())
+        def config = HxProxyConfig.newBuilder().httpsProxy('proxy', 3128, null, null).build()
 
         expect:
         config.toProxySelector().select(URI.create('http://api.example.com/foo')) == [Proxy.NO_PROXY]
@@ -143,9 +97,11 @@ class HxProxyConfigTest extends Specification {
 
     def 'should bypass proxy for NO_PROXY entries'() {
         given:
-        def config = HxProxyConfig.fromEnvironment([
-                ALL_PROXY: 'http://proxy:3128',
-                NO_PROXY : 'internal.example.com, .corp.example.org, *.svc.cluster.local' ], new Properties())
+        def config = HxProxyConfig.newBuilder()
+                .httpProxy('proxy', 3128, null, null)
+                .httpsProxy('proxy', 3128, null, null)
+                .noProxy(['internal.example.com', '.corp.example.org', '*.svc.cluster.local'])
+                .build()
 
         expect:
         config.isBypassed(host) == bypassed
@@ -163,7 +119,7 @@ class HxProxyConfigTest extends Specification {
 
     def 'should bypass everything when NO_PROXY is a wildcard'() {
         given:
-        def config = HxProxyConfig.fromEnvironment([ALL_PROXY: 'http://proxy:3128', no_proxy: '*'], new Properties())
+        def config = HxProxyConfig.newBuilder().httpsProxy('proxy', 3128, null, null).noProxy(['*']).build()
 
         expect:
         config.toProxySelector().select(URI.create('https://api.example.com')) == [Proxy.NO_PROXY]
@@ -171,7 +127,7 @@ class HxProxyConfigTest extends Specification {
 
     def 'should always bypass loopback targets'() {
         given:
-        def config = HxProxyConfig.fromEnvironment([ALL_PROXY: 'http://proxy:3128'], new Properties())
+        def config = HxProxyConfig.newBuilder().httpsProxy('proxy', 3128, null, null).build()
 
         expect:
         config.isBypassed('localhost')
@@ -181,7 +137,7 @@ class HxProxyConfigTest extends Specification {
 
     def 'should provide credentials only for matching proxy requests'() {
         given:
-        def config = HxProxyConfig.fromEnvironment([HTTPS_PROXY: 'http://foo:bar@proxy.example.com:8080'], new Properties())
+        def config = HxProxyConfig.newBuilder().httpsProxy('proxy.example.com', 8080, 'foo', 'bar').build()
         def authenticator = config.toAuthenticator()
 
         when: 'the proxy itself requests authentication'
@@ -208,13 +164,5 @@ class HxProxyConfigTest extends Specification {
 
         then:
         auth == null
-    }
-
-    def 'should ignore malformed proxy values'() {
-        expect:
-        HxProxyConfig.parseProxyUrl(null) == null
-        HxProxyConfig.parseProxyUrl('') == null
-        HxProxyConfig.parseProxyUrl('http://') == null
-        HxProxyConfig.parseProxyUrl('::not a url::') == null
     }
 }

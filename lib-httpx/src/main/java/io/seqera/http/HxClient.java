@@ -1138,9 +1138,7 @@ public class HxClient {
          * <p>The selector is forwarded to the inner {@link HttpClient.Builder} and is also
          * inherited by the internal HTTP clients used for JWT token refresh and anonymous
          * Bearer token retrieval. Proxy settings are never resolved from the environment
-         * automatically; supply them explicitly here (optionally via {@link HxProxyConfig},
-         * which the caller can use to parse the standard {@code HTTPS_PROXY}/{@code HTTP_PROXY}
-         * environment variables when that behaviour is desired).
+         * automatically; supply them explicitly here (or via {@link #withProxyConfig(HxProxyConfig)}).
          *
          * @param proxySelector the proxy selector to use
          * @return this Builder instance
@@ -1174,6 +1172,26 @@ public class HxClient {
          */
         public Builder authenticator(Authenticator authenticator) {
             this.proxyAuthenticator = authenticator;
+            return this;
+        }
+
+        /**
+         * Applies the proxy selector and authenticator carried by the given {@link HxProxyConfig},
+         * a convenience over calling {@link #proxy(ProxySelector)} and
+         * {@link #authenticator(Authenticator)} separately. A {@code null} config is a no-op, so
+         * callers can pass an optionally-resolved configuration directly.
+         *
+         * @param config the proxy configuration to apply, or null for none
+         * @return this Builder instance
+         * @see HxProxyConfig
+         */
+        public Builder withProxyConfig(HxProxyConfig config) {
+            if( config == null )
+                return this;
+            proxy(config.toProxySelector());
+            final Authenticator auth = config.toAuthenticator();
+            if( auth != null )
+                authenticator(auth);
             return this;
         }
 

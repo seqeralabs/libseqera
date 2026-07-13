@@ -147,28 +147,6 @@ class HxClientProxyAuthIntegrationTest extends Specification {
         proxy.authHeaders.every { it == 'NONE' }
     }
 
-    def 'should configure proxy and credentials via the HxProxyConfig helper'() {
-        given: 'a proxy configuration explicitly resolved from HTTP_PROXY with embedded url-encoded credentials'
-        def env = [HTTP_PROXY: "http://alice:s%33cret@127.0.0.1:${proxyPort}".toString()]
-        def proxyConfig = HxProxyConfig.fromEnvironment(env, new Properties())
-        def client = HxClient.newBuilder()
-                .proxy(proxyConfig.toProxySelector())
-                .authenticator(proxyConfig.toAuthenticator())
-                .build()
-        def request = HttpRequest.newBuilder()
-                .uri(URI.create('http://test-target.example.com/hello'))
-                .GET()
-                .build()
-
-        when:
-        def response = client.send(request, HttpResponse.BodyHandlers.ofString())
-
-        then: 's%33cret decodes to s3cret and the request succeeds'
-        response.statusCode() == 200
-        response.body() == 'OK via proxy'
-        proxy.authHeaders.last() == proxy.expectedAuthHeader()
-    }
-
     def 'should route token refresh requests through the authenticating proxy'() {
         given: 'the proxy answers authorized requests with a token refresh JSON payload'
         proxy.responseBody = '{"access_token":"new-header.new-payload.new-signature","refresh_token":"refresh-2"}'
@@ -222,5 +200,36 @@ class HxClientProxyAuthIntegrationTest extends Specification {
         then: 'the internal token refresh clients can inherit them'
         client.getConfig().getProxySelector().is(selector)
         client.getConfig().getProxyAuthenticator().is(authenticator)
+    }
+
+    def 'should route through the proxy via withProxyConfig and the HxProxyConfig builder'() {
+        given: 'a proxy config assembled from explicit values'
+        def proxyConfig = HxProxyConfig.newBuilder()
+                .httpProxy('127.0.0.1', proxyPort, 'alice', 's3cret')
+                .build()
+        def client = HxClient.newBuilder()
+                .withProxyConfig(proxyConfig)
+                .build()
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create('http://test-target.example.com/hello'))
+                .GET()
+                .build()
+
+        when:
+        def response = client.send(request, HttpResponse.BodyHandlers.ofString())
+
+        then:
+        response.statusCode() == 200
+        response.body() == 'OK via proxy'
+        proxy.authHeaders.last() == proxy.expectedAuthHeader()
+    }
+
+    def 'withProxyConfig should be a no-op for a null config'() {
+        when:
+        def client = HxClient.newBuilder().withProxyConfig(null).build()
+
+        then:
+        client.getConfig().getProxySelector() == null
+        client.getConfig().getProxyAuthenticator() == null
     }
 }
