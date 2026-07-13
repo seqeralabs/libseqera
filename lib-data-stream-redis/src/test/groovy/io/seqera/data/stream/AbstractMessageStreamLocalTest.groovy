@@ -43,7 +43,7 @@ class AbstractMessageStreamLocalTest extends Specification {
         def stream = new TestStream(target)
         def queue = new ArrayBlockingQueue(10)
         and:
-        stream.addConsumer(id1, { it-> queue.add(it) })
+        stream.addConsumer(id1, { msg, ctx -> queue.add(msg) })
 
         when:
         stream.offer(id1, new TestMessage('one','two'))
