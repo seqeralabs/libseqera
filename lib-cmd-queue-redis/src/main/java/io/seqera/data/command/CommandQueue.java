@@ -68,11 +68,20 @@ public abstract class CommandQueue extends AbstractWorkQueue<CommandMsg> {
     protected abstract String name();
 
     /**
-     * Maximum number of commands that may be in flight on this instance at once. Handlers
-     * run on virtual threads, so this is a memory/heartbeat ceiling rather than a thread
-     * count; commands beyond it wait in the stream (backpressure). Cross-replica
-     * single-runner exclusion is provided by the per-message lease, so no per-command lock
-     * is required. Subclasses may override to tune the ceiling.
+     * Maximum number of commands that may be in flight on this instance at once — mirrors
+     * {@link CommandConfig#concurrency()} (default {@code 1000}). Handlers run on virtual
+     * threads, so this is a memory/heartbeat ceiling rather than a thread count; commands
+     * beyond it wait in the queue (backpressure). Cross-replica single-runner exclusion is
+     * provided by the per-message lease, so no per-command lock is required.
+     *
+     * <p>Subclasses backed by a {@link CommandConfig} should override this to return
+     * {@code config.concurrency()} (as they already do for {@link #pollInterval()}).
+     *
+     * <p>TODO(#86 follow-up): {@code CommandQueue} does not currently receive a
+     * {@link CommandConfig}, so this and {@link #pollInterval()} are threaded/overridden per
+     * subclass and the default is duplicated here. Passing a {@code CommandConfig} into the
+     * constructor would let {@code CommandQueue} read {@code concurrency()} /
+     * {@code pollInterval()} / {@code stateTtl()} directly and drop the per-subclass wiring.
      */
     @Override
     protected int concurrency() {

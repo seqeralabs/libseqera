@@ -5,6 +5,10 @@
 - MessageStream -> WorkQueue, AbstractMessageStream -> AbstractWorkQueue, StreamMetrics ->
   QueueMetrics, NoopStreamMetrics -> NoopQueueMetrics; package io.seqera.data.stream.* ->
   io.seqera.data.workqueue.* (MessageConsumer name unchanged, new package). No behavioural change.
+- Add CommandConfig.concurrency() (default 1000) to make the per-instance in-flight ceiling
+  configurable; CommandQueue no longer hardcodes it. Subclasses override concurrency() from
+  their config (as they do for pollInterval). NOTE: CommandQueue should receive a CommandConfig
+  so it can read these directly instead of per-subclass wiring — deferred follow-up.
 - Requires lib-data-workqueue 1.0.0+ / lib-data-workqueue-redis 1.0.0+
 
 0.6.0 - 11 Jul 2026
