@@ -16,6 +16,8 @@
  */
 package io.seqera.data.command;
 
+import java.time.Duration;
+
 import io.micronaut.core.annotation.Nullable;
 import io.seqera.data.workqueue.AbstractWorkQueue;
 import io.seqera.data.workqueue.MessageConsumer;
@@ -32,26 +34,29 @@ import org.slf4j.LoggerFactory;
  * Abstract message queue for command processing.
  * Extends AbstractWorkQueue to provide async, fire-and-forget command submission.
  *
- * Subclasses must implement {@link #name()} and {@link #pollInterval()}
- * to configure the queue behavior.
+ * <p>Behaviour knobs ({@link #pollInterval()}, {@link #concurrency()}) are read from the
+ * supplied {@link CommandConfig}; subclasses only need to implement {@link #name()}.
  */
 public abstract class CommandQueue extends AbstractWorkQueue<CommandMsg> {
 
     private static final Logger log = LoggerFactory.getLogger(CommandQueue.class);
 
-    public CommandQueue(WorkQueue<String> target) {
-        super(target);
-        log.info("Created command queue - name={}", name());
+    private final CommandConfig config;
+
+    public CommandQueue(WorkQueue<String> target, CommandConfig config) {
+        this(target, config, null);
     }
 
     /**
      * Constructs a command queue with optional metrics instrumentation.
      *
      * @param target  the underlying {@link WorkQueue}
+     * @param config  the command-queue configuration (poll interval, concurrency, …)
      * @param metrics the {@link QueueMetrics} to publish to, or {@code null} for no-op
      */
-    public CommandQueue(WorkQueue<String> target, @Nullable QueueMetrics metrics) {
+    public CommandQueue(WorkQueue<String> target, CommandConfig config, @Nullable QueueMetrics metrics) {
         super(target, metrics);
+        this.config = config;
         log.info("Created command queue - name={}; metrics={}",
                 name(), metrics != null && !(metrics instanceof NoopQueueMetrics) ? "enabled" : "disabled");
     }
@@ -67,25 +72,22 @@ public abstract class CommandQueue extends AbstractWorkQueue<CommandMsg> {
     @Override
     protected abstract String name();
 
+    /** Interval for polling the queue, from {@link CommandConfig#pollInterval()}. */
+    @Override
+    protected Duration pollInterval() {
+        return config.pollInterval();
+    }
+
     /**
-     * Maximum number of commands that may be in flight on this instance at once — mirrors
-     * {@link CommandConfig#concurrency()} (default {@code 1000}). Handlers run on virtual
-     * threads, so this is a memory/heartbeat ceiling rather than a thread count; commands
-     * beyond it wait in the queue (backpressure). Cross-replica single-runner exclusion is
-     * provided by the per-message lease, so no per-command lock is required.
-     *
-     * <p>Subclasses backed by a {@link CommandConfig} should override this to return
-     * {@code config.concurrency()} (as they already do for {@link #pollInterval()}).
-     *
-     * <p>TODO(#86 follow-up): {@code CommandQueue} does not currently receive a
-     * {@link CommandConfig}, so this and {@link #pollInterval()} are threaded/overridden per
-     * subclass and the default is duplicated here. Passing a {@code CommandConfig} into the
-     * constructor would let {@code CommandQueue} read {@code concurrency()} /
-     * {@code pollInterval()} / {@code stateTtl()} directly and drop the per-subclass wiring.
+     * Maximum number of commands in flight on this instance at once, from
+     * {@link CommandConfig#concurrency()}. Handlers run on virtual threads, so this is a
+     * memory/heartbeat ceiling rather than a thread count; commands beyond it wait in the
+     * queue (backpressure). Cross-replica single-runner exclusion is provided by the
+     * per-message lease, so no per-command lock is required.
      */
     @Override
     protected int concurrency() {
-        return 1000;
+        return config.concurrency();
     }
 
     /**
