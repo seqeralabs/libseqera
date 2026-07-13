@@ -189,9 +189,15 @@ finishes or the consumer dies.
 3. **In-process re-poll for not-yet-terminal work.** When a handler returns `false` (work
    in progress), the message keeps its lease and the handler is **re-invoked in-process**
    after `pollInterval` via a scheduler — Redis is not re-read. This makes the re-poll
-   cadence independent of `claim-timeout` (which then governs only failover). The next
-   invocation is scheduled only after the previous one returns, so a given message is
-   never processed by two overlapping invocations.
+   cadence independent of `claim-timeout` (which then governs only failover).
+
+   The re-poll is scheduled **after the handler returns** — a fixed *delay*, not a fixed
+   *rate*. So a handler that runs **longer than `pollInterval` never overlaps itself**: the
+   next call starts `pollInterval` after the previous one finished, and a given message is
+   processed by at most one invocation at a time (regardless of how slow the handler is).
+   The *only* exception is an invocation that exceeds `max-processing-time` — the safety
+   valve then stops renewing the lease so a concurrent reclaim becomes possible (see below),
+   which is why handlers must be idempotent.
 
 Delivery is **at-least-once** (a crash/pause beyond `claim-timeout`, or the
 `max-processing-time` valve, can hand a still-running message to a peer), so consumers
