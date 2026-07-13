@@ -75,7 +75,7 @@ import org.slf4j.LoggerFactory;
  * <code>-Djdk.http.auth.tunneling.disabledSchemes=</code>.
  *
  * @see HxClient.Builder#proxy(ProxySelector)
- * @see HxClient.Builder#proxyAuthenticator(Authenticator)
+ * @see HxClient.Builder#authenticator(Authenticator)
  */
 public class HxProxyConfig {
 

@@ -1137,11 +1137,10 @@ public class HxClient {
          *
          * <p>The selector is forwarded to the inner {@link HttpClient.Builder} and is also
          * inherited by the internal HTTP clients used for JWT token refresh and anonymous
-         * Bearer token retrieval. When this method is not called (and no explicit
-         * {@link #httpClient(HttpClient)} is provided), the proxy configuration is resolved
-         * automatically from the standard {@code HTTPS_PROXY}/{@code HTTP_PROXY}/{@code ALL_PROXY}
-         * and {@code NO_PROXY} environment variables, falling back to the
-         * {@code https.proxyHost}/{@code http.proxyHost} system properties - see {@link HxProxyConfig}.
+         * Bearer token retrieval. Proxy settings are never resolved from the environment
+         * automatically; supply them explicitly here (optionally via {@link HxProxyConfig},
+         * which the caller can use to parse the standard {@code HTTPS_PROXY}/{@code HTTP_PROXY}
+         * environment variables when that behaviour is desired).
          *
          * @param proxySelector the proxy selector to use
          * @return this Builder instance
@@ -1154,7 +1153,9 @@ public class HxClient {
         }
 
         /**
-         * Sets the authenticator used to supply credentials to an authenticating forward proxy.
+         * Sets the authenticator used to supply credentials for authentication challenges,
+         * mirroring {@link HttpClient.Builder#authenticator(Authenticator)}. Typically used to
+         * provide credentials to an authenticating forward proxy.
          *
          * <p>The authenticator is forwarded to the inner {@link HttpClient.Builder} and is also
          * inherited by the internal HTTP clients used for JWT token refresh and anonymous
@@ -1166,13 +1167,13 @@ public class HxClient {
          * {@code jdk.http.auth.tunneling.disabledSchemes} property must also be cleared - see
          * {@link HxProxyConfig} for details.
          *
-         * @param proxyAuthenticator the authenticator providing proxy credentials
+         * @param authenticator the authenticator providing credentials
          * @return this Builder instance
          * @see HttpClient.Builder#authenticator(Authenticator)
          * @see HxProxyConfig#toAuthenticator()
          */
-        public Builder proxyAuthenticator(Authenticator proxyAuthenticator) {
-            this.proxyAuthenticator = proxyAuthenticator;
+        public Builder authenticator(Authenticator authenticator) {
+            this.proxyAuthenticator = authenticator;
             return this;
         }
 
@@ -1397,24 +1398,14 @@ public class HxClient {
          * <p>This method creates the final HxClient using either the provided
          * HttpClient or building one from the configured HttpClient.Builder settings.
          *
-         * <p>When no explicit proxy is set via {@link #proxy(ProxySelector)} and no explicit
-         * {@link #httpClient(HttpClient)} is provided, the proxy configuration is resolved
-         * automatically from the standard environment variables and system properties -
-         * see {@link HxProxyConfig}. An explicitly supplied HttpClient is always used
-         * verbatim, with no proxy settings applied.
+         * <p>Proxy settings are applied only when supplied explicitly via
+         * {@link #proxy(ProxySelector)} / {@link #authenticator(Authenticator)}; they are never
+         * resolved from the environment automatically. An explicitly supplied HttpClient is always
+         * used verbatim, with no proxy settings applied.
          *
          * @return a new HxClient instance
          */
         public HxClient build() {
-            // resolve the proxy configuration from the environment when none is set explicitly
-            if (httpClient == null && proxySelector == null) {
-                final HxProxyConfig detected = HxProxyConfig.fromEnvironment();
-                if (detected != null) {
-                    proxySelector = detected.toProxySelector();
-                    if (proxyAuthenticator == null)
-                        proxyAuthenticator = detected.toAuthenticator();
-                }
-            }
             // propagate the proxy settings to the config so that the internal
             // token refresh clients inherit them - see HxTokenManager
             configBuilder.proxySelector(proxySelector);

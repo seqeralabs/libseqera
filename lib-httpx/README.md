@@ -25,7 +25,7 @@ dependencies {
 - **Custom Token Storage**: Pluggable token store interface for distributed deployments (Redis, database, etc.)
 - **WWW-Authenticate Support**: Automatic handling of HTTP authentication challenges (Basic and Bearer schemes)
 - **Anonymous Authentication**: Fallback to anonymous authentication when credentials aren't provided
-- **Proxy Support**: Authenticated forward-proxy support, auto-configured from `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY` environment variables
+- **Proxy Support**: Authenticated forward-proxy support via `.proxy(...)`/`.authenticator(...)`, with an opt-in `HxProxyConfig` helper for `HTTPS_PROXY`/`HTTP_PROXY`/`NO_PROXY` environment variables
 - **Configurable**: Customizable retry policies, timeouts, token refresh, authentication settings, and cookie policies
 - **Generic Integration**: Compatible with any `Retryable.Config` for flexible retry configuration
 - **Thread-safe**: Safe for concurrent use with atomic token refresh coordination
@@ -286,22 +286,32 @@ HxClient client = HxClient.newBuilder().config(config).build();
 
 ### Proxy Configuration
 
-When no explicit proxy (and no explicit `HttpClient`) is supplied, `HxClient.newBuilder()` automatically
-resolves the proxy configuration from the standard `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY` and `NO_PROXY`
-environment variables (upper and lower case), falling back to the `https.proxyHost`/`http.proxyHost`
-system properties. Credentials embedded in the proxy URL (e.g. `http://user:pass@proxy.example.com:8080`,
-URL-encoded) are supplied automatically to the proxy — but only for proxy authentication challenges,
-never to origin servers:
+Proxy settings are configured explicitly through the builder, mirroring `java.net.http.HttpClient.Builder`
+— `HxClient` never reads proxy settings from the environment or system properties on its own. The
+`.proxy(...)` and `.authenticator(...)` methods map directly onto their `HttpClient.Builder` counterparts,
+so an `HxClient` can act as a drop-in replacement:
 
 ```java
-// Auto-configured from the environment (HTTPS_PROXY, HTTP_PROXY, ALL_PROXY, NO_PROXY)
-HxClient client = HxClient.newBuilder().build();
-
-// Or configure explicitly
 HxClient client = HxClient.newBuilder()
     .proxy(ProxySelector.of(new InetSocketAddress("proxy.example.com", 8080)))
-    .proxyAuthenticator(myAuthenticator)
+    .authenticator(myAuthenticator)
     .build();
+```
+
+If you *want* environment-variable behaviour, the `HxProxyConfig` helper parses the standard
+`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY` and `NO_PROXY` variables (upper and lower case), falling back to
+the `https.proxyHost`/`http.proxyHost` system properties. Credentials embedded in the proxy URL (e.g.
+`http://user:pass@proxy.example.com:8080`, URL-encoded) are supplied only for proxy authentication
+challenges, never to origin servers. It is opt-in — the caller decides when to use it:
+
+```java
+HxProxyConfig proxy = HxProxyConfig.fromEnvironment();
+HxClient client = (proxy == null)
+    ? HxClient.newBuilder().build()
+    : HxClient.newBuilder()
+        .proxy(proxy.toProxySelector())
+        .authenticator(proxy.toAuthenticator())
+        .build();
 ```
 
 The internal HTTP clients used for JWT token refresh and anonymous Bearer token retrieval inherit the
@@ -310,7 +320,7 @@ proxy settings applied.
 
 **Important notes:**
 - `java.net.http.HttpClient` ignores `Authenticator.setDefault(...)` — proxy credentials only work when
-  the authenticator is passed to the client builder, which is what `proxyAuthenticator(...)` does.
+  the authenticator is passed to the client builder, which is what `.authenticator(...)` does.
 - The JDK disables the Basic scheme for HTTPS CONNECT tunnelling by default
   (`jdk.http.auth.tunneling.disabledSchemes=Basic` in `$JAVA_HOME/conf/net.properties`). For Basic proxy
   authentication of HTTPS traffic, run the JVM with `-Djdk.http.auth.tunneling.disabledSchemes=`.
@@ -347,8 +357,8 @@ HxClient client = HxClient.newBuilder()
 | `refreshCookiePolicy` | Cookie policy for JWT token refresh operations | null |
 | `wwwAuthentication` | Enable WWW-Authenticate challenge handling | false |
 | `wwwAuthenticationCallback` | Callback for providing authentication credentials | null |
-| `proxySelector` | Proxy selector for routing requests through a forward proxy | auto-detected from environment |
-| `proxyAuthenticator` | Authenticator supplying credentials to an authenticating proxy | auto-detected from environment |
+| `proxy` | Proxy selector for routing requests through a forward proxy | null |
+| `authenticator` | Authenticator supplying credentials to an authenticating proxy | null |
 
 ## Key Classes
 

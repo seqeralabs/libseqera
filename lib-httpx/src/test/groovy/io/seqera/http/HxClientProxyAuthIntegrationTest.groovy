@@ -68,7 +68,7 @@ class HxClientProxyAuthIntegrationTest extends Specification {
         given:
         def client = HxClient.newBuilder()
                 .proxy(proxySelector())
-                .proxyAuthenticator(basicProxyAuth('alice', 's3cret'))
+                .authenticator(basicProxyAuth('alice', 's3cret'))
                 .build()
         def request = HttpRequest.newBuilder()
                 .uri(URI.create('http://test-target.example.com/hello'))
@@ -109,7 +109,7 @@ class HxClientProxyAuthIntegrationTest extends Specification {
         given: 'a client with proxy credentials and no retries (the mock proxy cannot complete a TLS tunnel)'
         def client = HxClient.newBuilder()
                 .proxy(proxySelector())
-                .proxyAuthenticator(basicProxyAuth('alice', 's3cret'))
+                .authenticator(basicProxyAuth('alice', 's3cret'))
                 .maxAttempts(1)
                 .build()
         def request = HttpRequest.newBuilder()
@@ -147,13 +147,13 @@ class HxClientProxyAuthIntegrationTest extends Specification {
         proxy.authHeaders.every { it == 'NONE' }
     }
 
-    def 'should auto-configure proxy and credentials from environment variables'() {
-        given: 'a proxy configuration resolved from HTTP_PROXY with embedded url-encoded credentials'
+    def 'should configure proxy and credentials via the HxProxyConfig helper'() {
+        given: 'a proxy configuration explicitly resolved from HTTP_PROXY with embedded url-encoded credentials'
         def env = [HTTP_PROXY: "http://alice:s%33cret@127.0.0.1:${proxyPort}".toString()]
         def proxyConfig = HxProxyConfig.fromEnvironment(env, new Properties())
         def client = HxClient.newBuilder()
                 .proxy(proxyConfig.toProxySelector())
-                .proxyAuthenticator(proxyConfig.toAuthenticator())
+                .authenticator(proxyConfig.toAuthenticator())
                 .build()
         def request = HttpRequest.newBuilder()
                 .uri(URI.create('http://test-target.example.com/hello'))
@@ -176,7 +176,7 @@ class HxClientProxyAuthIntegrationTest extends Specification {
         and:
         def client = HxClient.newBuilder()
                 .proxy(proxySelector())
-                .proxyAuthenticator(basicProxyAuth('alice', 's3cret'))
+                .authenticator(basicProxyAuth('alice', 's3cret'))
                 .bearerToken('old-header.old-payload.old-signature')
                 .refreshToken('refresh-1')
                 .refreshTokenUrl('http://token.example.com/oauth/token')
@@ -216,7 +216,7 @@ class HxClientProxyAuthIntegrationTest extends Specification {
         when:
         def client = HxClient.newBuilder()
                 .proxy(selector)
-                .proxyAuthenticator(authenticator)
+                .authenticator(authenticator)
                 .build()
 
         then: 'the internal token refresh clients can inherit them'
