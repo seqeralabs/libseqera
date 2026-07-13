@@ -313,9 +313,10 @@ HxClient client = HxClient.newBuilder()
     .build();
 ```
 
-The internal HTTP clients used for JWT token refresh and anonymous Bearer token retrieval inherit the
-same proxy settings. An `HttpClient` supplied via `httpClient(...)` is always used verbatim, with no
-proxy settings applied.
+When the client is built from the builder (no explicit `httpClient(...)`), the internal HTTP clients used
+for JWT token refresh and anonymous Bearer token retrieval inherit the same proxy settings. An `HttpClient`
+supplied via `httpClient(...)` is always used verbatim: proxy settings are neither applied to it nor
+propagated to those internal clients.
 
 **Important notes:**
 - `java.net.http.HttpClient` ignores `Authenticator.setDefault(...)` — proxy credentials only work when
