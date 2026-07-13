@@ -33,6 +33,8 @@ dependencies {
 test {
     // the JDK strips Basic from HTTPS CONNECT tunnelling by default
     // (jdk.http.auth.tunneling.disabledSchemes=Basic in $JAVA_HOME/conf/net.properties);
-    // clear it so the proxy authentication integration tests can exercise that path
+    // clear it so the proxy authentication integration tests can exercise that path.
+    // Must be set at JVM startup - the JDK caches this property when java.net.http
+    // initialises, so setting it from within a test is too late.
     systemProperty 'jdk.http.auth.tunneling.disabledSchemes', ''
 }
