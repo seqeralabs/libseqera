@@ -1188,7 +1188,8 @@ public class HxClient {
         public Builder withProxyConfig(HxProxyConfig config) {
             if( config == null )
                 return this;
-            proxy(config.toProxySelector());
+            if( config.getHttpProxy() != null || config.getHttpsProxy() != null )
+                proxy(config.toProxySelector());
             final Authenticator auth = config.toAuthenticator();
             if( auth != null )
                 authenticator(auth);
@@ -1419,24 +1420,24 @@ public class HxClient {
          * <p>Proxy settings are applied only when supplied explicitly via
          * {@link #proxy(ProxySelector)} / {@link #authenticator(Authenticator)}; they are never
          * resolved from the environment automatically. An explicitly supplied HttpClient is always
-         * used verbatim, with no proxy settings applied.
+         * used verbatim: proxy settings are neither applied to it nor propagated to the internal
+         * token refresh clients.
          *
          * @return a new HxClient instance
          */
         public HxClient build() {
+            if (httpClient != null) {
+                // an explicitly supplied client is used verbatim - proxy settings are neither
+                // applied to it nor propagated to the internal token refresh clients
+                return new HxClient(httpClient, configBuilder.build(), tokenStore);
+            }
             // propagate the proxy settings to the config so that the internal
             // token refresh clients inherit them - see HxTokenManager
             configBuilder.proxySelector(proxySelector);
             configBuilder.proxyAuthenticator(proxyAuthenticator);
             final HxConfig actualConfig = configBuilder.build();
-            final HttpClient actualHttpClient;
-            if (httpClient != null) {
-                actualHttpClient = httpClient;
-            }
-            else {
-                actualConfig.applyProxySettings(httpClientBuilder);
-                actualHttpClient = httpClientBuilder.build();
-            }
+            actualConfig.applyProxySettings(httpClientBuilder);
+            final HttpClient actualHttpClient = httpClientBuilder.build();
             return new HxClient(actualHttpClient, actualConfig, tokenStore);
         }
     }
