@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-cmd-queue-redis:0.5.0'
+    implementation 'io.seqera:lib-cmd-queue-redis:0.7.0'
 }
 ```
 
@@ -134,14 +134,13 @@ import io.seqera.data.workqueue.metrics.MicrometerQueueMetrics;
 public class MyCommandQueue extends CommandQueue {
 
     @Inject
-    public MyCommandQueue(WorkQueue<String> target, @Nullable MeterRegistry registry) {
-        super(target, registry != null
+    public MyCommandQueue(WorkQueue<String> target, CommandConfig config, @Nullable MeterRegistry registry) {
+        super(target, config, registry != null
                 ? new MicrometerQueueMetrics(registry, "my-cmd-queue")
                 : null);
     }
 
     @Override protected String name() { return "my-cmd-queue"; }
-    @Override protected Duration pollInterval() { return Duration.ofSeconds(1); }
 }
 ```
 
@@ -158,23 +157,26 @@ a lightweight **message** that flows through a queue, and the **full state**
 just transport; the store is the source of truth.
 
 ```
-                          ┌──────────────────────────────────────────────┐
-   submit(command)        │              CommandServiceImpl              │
-        │                 │                                              │
-        ▼                 │  registerHandler() ─▶ handlers: type→handler │
-  ┌────────────┐  save()  │                                              │
-  │CommandState│◀─────────┤  processCommand(msg)  (poll-thread loop)     │
-  │  store     │  find()  │      │                                       │
-  │(Redis/mem) │─────────▶│      └─▶ executeWithTimeout() / checkStatus  │
-  └────────────┘          │              on BLOCKING executor            │
-        ▲                 └───────────────┬──────────────────────────────┘
-        │                    submit(msg)  │  addConsumer(msg→bool)
-   getState/getResult                     ▼
-                                  ┌───────────────────┐
-                                  │   CommandQueue    │  AbstractWorkQueue
-                                  │  (Redis queue /   │  polls every pollInterval()
-                                  │   in-memory)      │  redelivers un-acked msgs
-                                  └───────────────────┘
+   submit(command)
+        │  persist PENDING state + enqueue CommandMsg (fire-and-forget)
+        ▼
+  ┌──────────────┐  save() ┌──────────────────────────────────────────────┐
+  │ CommandState │◀────────┤              CommandServiceImpl                │
+  │    store     │  find() │  processCommand(msg): load state, then         │──▶ execute()
+  │ (Redis/mem)  │────────▶│  dispatch the handler to a worker pool         │    checkStatus()
+  │              │         │  (off the dispatcher thread; virtual threads): │
+  └──────────────┘         │    • terminal     → ack (remove from queue)    │
+        ▲                  │    • processing() → keep lease, re-poll after  │
+        │ getState/Result  │                     pollInterval (in-process)  │
+        │                  └───────────────────────┬────────────────────────┘
+        │                       submit(msg)         │  addConsumer(processCommand)
+        │                                           ▼
+        │                     ┌────────────────────────────────────────────┐
+        └─────────────────────│  CommandQueue (Redis work queue / in-mem.)  │
+                              │  = AbstractWorkQueue: dispatcher + worker   │
+                              │  pool + heartbeat lease → exactly one live  │
+                              │  runner per command, no timeout             │
+                              └────────────────────────────────────────────┘
 ```
 
 ### Components
