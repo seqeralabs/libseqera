@@ -158,23 +158,26 @@ a lightweight **message** that flows through a queue, and the **full state**
 just transport; the store is the source of truth.
 
 ```
-                          ┌──────────────────────────────────────────────┐
-   submit(command)        │              CommandServiceImpl              │
-        │                 │                                              │
-        ▼                 │  registerHandler() ─▶ handlers: type→handler │
-  ┌────────────┐  save()  │                                              │
-  │CommandState│◀─────────┤  processCommand(msg)  (poll-thread loop)     │
-  │  store     │  find()  │      │                                       │
-  │(Redis/mem) │─────────▶│      └─▶ executeWithTimeout() / checkStatus  │
-  └────────────┘          │              on BLOCKING executor            │
-        ▲                 └───────────────┬──────────────────────────────┘
-        │                    submit(msg)  │  addConsumer(msg→bool)
-   getState/getResult                     ▼
-                                  ┌───────────────────┐
-                                  │   CommandQueue    │  AbstractMessageStream
-                                  │  (Redis stream /  │  polls every pollInterval()
-                                  │   in-memory)      │  redelivers un-acked msgs
-                                  └───────────────────┘
+   submit(command)
+        │  persist SUBMITTED state + enqueue CommandMsg (fire-and-forget)
+        ▼
+  ┌──────────────┐  save() ┌──────────────────────────────────────────────┐
+  │ CommandState │◀────────┤              CommandServiceImpl                │
+  │    store     │  find() │  processCommand(msg): load state, then         │──▶ execute()
+  │ (Redis/mem)  │────────▶│  dispatch the handler to a worker pool         │    checkStatus()
+  │              │         │  (off the dispatcher thread; virtual threads): │
+  └──────────────┘         │    • terminal  → ack (remove from queue)       │
+        ▲                  │    • running() → keep lease, re-poll after     │
+        │ getState/Result  │                  pollInterval (in-process)     │
+        │                  └───────────────────────┬────────────────────────┘
+        │                       submit(msg)         │  addConsumer(processCommand)
+        │                                           ▼
+        │                     ┌────────────────────────────────────────────┐
+        └─────────────────────│  CommandQueue (Redis stream / in-memory)    │
+                              │  = AbstractMessageStream: dispatcher +      │
+                              │  worker pool + heartbeat lease → exactly    │
+                              │  one live runner per command, no timeout    │
+                              └────────────────────────────────────────────┘
 ```
 
 ### Components

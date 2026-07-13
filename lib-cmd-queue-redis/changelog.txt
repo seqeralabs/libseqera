@@ -1,13 +1,20 @@
 # lib-cmd-queue-redis changelog
 
 0.5.0 - 11 Jul 2026
-- Remove executeWithTimeout / the BLOCKING executor / future.get(timeout); execute() and
-  checkStatus() now run on the shared worker pool and never block the listener loop.
-- Remove the per-command distributed lock: cross-replica single-runner is provided by the
-  message-level lease in lib-data-stream-redis.
+- BREAKING (API): CommandConfig.executeTimeout() is removed — the per-command execute-timeout
+  mechanism no longer exists (handlers run asynchronously, so nothing blocks the loop).
+  Downstream CommandConfig implementations that @Override executeTimeout() must drop the
+  override, and any `<prefix>.command-queue.execute-timeout` config key becomes inert.
+- BREAKING (behaviour): commands are processed asynchronously on a shared worker pool, off the
+  dispatcher thread, with at-least-once delivery via the underlying per-message lease.
+  Handlers (execute()/checkStatus()) MUST be idempotent and thread-safe — they can be
+  re-invoked and, across replicas, may run at-least-once. CommandServiceImpl injects
+  @Named(TaskExecutors.BLOCKING) ExecutorService (provided by Micronaut by default).
+- Remove executeWithTimeout / the BLOCKING future.get(timeout) crutch and the per-command
+  distributed lock: cross-replica single-runner is provided by the message-level lease.
 - Adopt the shared async worker-pool model (lease-based dispatch + heartbeat + Model B
-  re-poll); CommandQueue sets concurrency() > 1 to enable parallelism.
-- Requires lib-data-stream-redis 1.6.0+
+  re-poll); CommandQueue sets concurrency() to bound in-flight commands.
+- Requires lib-data-stream-redis 2.0.0+
 
 0.4.0 - 13 May 2026
 - Add CommandQueue(MessageStream, StreamMetrics) constructor for optional Micrometer instrumentation

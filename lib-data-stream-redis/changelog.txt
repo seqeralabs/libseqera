@@ -1,6 +1,16 @@
 # lib-data-stream-redis changelog
 
-1.6.0 - 11 Jul 2026
+2.0.0 - 11 Jul 2026
+- BREAKING (SPI): MessageStream gains abstract poll/renew/ack/release plus the Lease<M>
+  record. Any class IMPLEMENTING MessageStream must add them (the in-repo Redis/Local impls
+  are updated). consume(streamId, consumer) is RETAINED as a default implemented over the
+  triad, so callers of consume() remain source-compatible.
+- BREAKING (subclass): the protected processMessage(...) signature dropped its trailing
+  AtomicInteger count parameter; subclasses overriding it must update.
+- BREAKING (behaviour): handlers now run asynchronously off the listener thread (on virtual
+  threads / an injectable executor); delivery is at-least-once with a heartbeat lease and
+  in-process re-poll, so consumers MUST be idempotent. concurrency() defaults to 1, so intake
+  stays effectively serial until a subclass opts in to parallelism.
 - Async, non-blocking consumer processing: the listener thread becomes a dispatcher that
   hands each message to a virtual-thread executor and never runs a handler itself, removing
   head-of-line blocking and enabling concurrent processing. Handlers run on a shared
