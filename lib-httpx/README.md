@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-httpx:2.3.0'
+    implementation 'io.seqera:lib-httpx:2.4.0'
 }
 ```
 
@@ -25,6 +25,7 @@ dependencies {
 - **Custom Token Storage**: Pluggable token store interface for distributed deployments (Redis, database, etc.)
 - **WWW-Authenticate Support**: Automatic handling of HTTP authentication challenges (Basic and Bearer schemes)
 - **Anonymous Authentication**: Fallback to anonymous authentication when credentials aren't provided
+- **Proxy Support**: Authenticated forward-proxy support via `.proxy(...)`/`.authenticator(...)`, or an `HxProxyConfig` value applied with `.withProxyConfig(...)`
 - **Configurable**: Customizable retry policies, timeouts, token refresh, authentication settings, and cookie policies
 - **Generic Integration**: Compatible with any `Retryable.Config` for flexible retry configuration
 - **Thread-safe**: Safe for concurrent use with atomic token refresh coordination
@@ -283,6 +284,47 @@ HxConfig config = HxConfig.newBuilder()
 HxClient client = HxClient.newBuilder().config(config).build();
 ```
 
+### Proxy Configuration
+
+Proxy settings are configured explicitly through the builder, mirroring `java.net.http.HttpClient.Builder`
+— `HxClient` never reads proxy settings from the environment or system properties on its own. The
+`.proxy(...)` and `.authenticator(...)` methods map directly onto their `HttpClient.Builder` counterparts,
+so an `HxClient` can act as a drop-in replacement:
+
+```java
+HxClient client = HxClient.newBuilder()
+    .proxy(ProxySelector.of(new InetSocketAddress("proxy.example.com", 8080)))
+    .authenticator(myAuthenticator)
+    .build();
+```
+
+For callers that resolve proxy settings themselves (host, port, optional credentials per protocol and
+`NO_PROXY` entries), `HxProxyConfig` bundles them into a single value and produces the matching selector
+and a proxy-only authenticator (credentials are supplied only for proxy authentication challenges, never
+to origin servers). Apply it in one call with `.withProxyConfig(...)`:
+
+```java
+HxProxyConfig proxy = HxProxyConfig.newBuilder()
+    .httpsProxy("proxy.example.com", 8080, "user", "pass")
+    .noProxy(List.of("internal.example.com"))
+    .build();
+HxClient client = HxClient.newBuilder()
+    .withProxyConfig(proxy)   // no-op if proxy is null
+    .build();
+```
+
+When the client is built from the builder (no explicit `httpClient(...)`), the internal HTTP clients used
+for JWT token refresh and anonymous Bearer token retrieval inherit the same proxy settings. An `HttpClient`
+supplied via `httpClient(...)` is always used verbatim: proxy settings are neither applied to it nor
+propagated to those internal clients.
+
+**Important notes:**
+- `java.net.http.HttpClient` ignores `Authenticator.setDefault(...)` — proxy credentials only work when
+  the authenticator is passed to the client builder, which is what `.authenticator(...)` does.
+- The JDK disables the Basic scheme for HTTPS CONNECT tunnelling by default
+  (`jdk.http.auth.tunneling.disabledSchemes=Basic` in `$JAVA_HOME/conf/net.properties`). For Basic proxy
+  authentication of HTTPS traffic, run the JVM with `-Djdk.http.auth.tunneling.disabledSchemes=`.
+
 ### Cookie Policy Configuration
 
 Configure cookie handling for JWT token refresh operations:
@@ -315,11 +357,14 @@ HxClient client = HxClient.newBuilder()
 | `refreshCookiePolicy` | Cookie policy for JWT token refresh operations | null |
 | `wwwAuthentication` | Enable WWW-Authenticate challenge handling | false |
 | `wwwAuthenticationCallback` | Callback for providing authentication credentials | null |
+| `proxy` | Proxy selector for routing requests through a forward proxy | null |
+| `authenticator` | Authenticator supplying credentials to an authenticating proxy | null |
 
 ## Key Classes
 
 - **`HxClient`**: Main HTTP client with retry, JWT, and WWW-Authenticate functionality
 - **`HxConfig`**: Configuration builder with all available options
+- **`HxProxyConfig`**: Forward-proxy settings (selector + proxy-only authenticator) assembled from explicit values via its builder
 - **`HxAuth`**: Interface for authentication credentials with stable identity across refreshes
 - **`HxTokenStore`**: Interface for pluggable token storage (default: in-memory ConcurrentHashMap)
 - **`HxTokenManager`**: Thread-safe JWT token lifecycle management with multi-session support
