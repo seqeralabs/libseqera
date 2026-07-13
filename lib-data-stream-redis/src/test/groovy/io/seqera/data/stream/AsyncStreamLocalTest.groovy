@@ -210,4 +210,44 @@ class AsyncStreamLocalTest extends Specification {
         stream.close()
     }
 
+    // self-reclaim: if the heartbeat falls behind, this instance's own poll() (XAUTOCLAIM) can
+    // re-deliver an entry it is still processing. That duplicate must NOT start a second handler
+    // or leak a permit (regression for the concurrency()>1 permit-leak / double-run).
+    def 'self-reclaim of an in-flight entry does not double-run the handler'() {
+        given: 'a backing stream that re-delivers the SAME lease id twice, then nothing'
+        def deliveries = new AtomicInteger(0)
+        def acks = new AtomicInteger(0)
+        def target = [
+                init   : { String q -> },
+                offer  : { String q, String m -> },
+                poll   : { String q -> deliveries.getAndIncrement() < 2 ? new MessageStream.Lease<String>('dup-id', 'payload') : null },
+                renew  : { String q, String id -> },
+                ack    : { String q, String id -> acks.incrementAndGet() },
+                release: { String q, String id -> },
+                length : { String q -> 0 }
+        ] as MessageStream<String>
+        def stream = new TunableStream(target, concurrency: 2, pollInterval: Duration.ofMillis(50))
+        def runs = new AtomicInteger(0)
+        def gate = new CountDownLatch(1)
+
+        when: 'the handler blocks, so the entry stays in flight across the duplicate delivery'
+        stream.addConsumer('q1', { msg -> runs.incrementAndGet(); gate.await(5, TimeUnit.SECONDS); true } as MessageConsumer)
+        and: 'wait until the duplicate delivery has been attempted, then let a stray 2nd run surface'
+        new PollingConditions(timeout: 3).eventually { deliveries.get() >= 2 }
+        sleep(300)
+
+        then: 'the handler ran exactly once despite the duplicate delivery'
+        runs.get() == 1
+
+        when: 'the handler completes'
+        gate.countDown()
+
+        then: 'the entry is acked exactly once (no permit leak / double-run)'
+        new PollingConditions(timeout: 5).eventually { acks.get() == 1 }
+
+        cleanup:
+        gate.countDown()
+        stream.close()
+    }
+
 }

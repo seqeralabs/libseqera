@@ -439,7 +439,14 @@ public abstract class AbstractMessageStream<M> implements Closeable {
                 return false;
             }
             final var e = new InFlight(streamId, lease.id(), lease.message());
-            inFlight.put(e.key(), e);
+            // Guard against self-reclaim: if the heartbeat falls behind by more than the
+            // claim-timeout, this instance's own poll() (XAUTOCLAIM) can re-deliver an entry it
+            // is already processing. The reclaim only refreshed the lease idle time, so keep the
+            // live in-flight entry and drop the duplicate — otherwise a second handler runs
+            // concurrently and its permit leaks (the original remove() returns null).
+            if (inFlight.putIfAbsent(e.key(), e) != null) {
+                return false;   // 'submitted' stays false → finally releases this permit
+            }
             submitRun(e);
             submitted = true;
             return true;
