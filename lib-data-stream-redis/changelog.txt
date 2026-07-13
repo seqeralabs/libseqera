@@ -1,5 +1,40 @@
 # lib-data-stream-redis changelog
 
+2.0.0 - 11 Jul 2026
+- BREAKING (SPI): MessageStream gains abstract poll/renew/ack/release plus the Lease<M>
+  record. Any class IMPLEMENTING MessageStream must add them (the in-repo Redis/Local impls
+  are updated). consume(streamId, consumer) is RETAINED as a default implemented over the
+  triad, so callers of consume() remain source-compatible.
+- BREAKING (subclass): the protected processMessage(...) signature dropped its trailing
+  AtomicInteger count parameter; subclasses overriding it must update.
+- BREAKING (behaviour): handlers now run asynchronously off the listener thread (on virtual
+  threads / an injectable executor); delivery is at-least-once with a heartbeat lease and
+  in-process re-poll, so consumers MUST be idempotent. concurrency() defaults to 1, so intake
+  stays effectively serial until a subclass opts in to parallelism.
+- Async, non-blocking consumer processing: the listener thread becomes a dispatcher that
+  hands each message to a virtual-thread executor and never runs a handler itself, removing
+  head-of-line blocking and enabling concurrent processing. Handlers run on a shared
+  virtual-thread executor by default; supply the Micronaut @Named(BLOCKING) executor via
+  AbstractMessageStream.withHandlerExecutor(...). Concurrency is bounded by a semaphore
+  (see concurrency()), not by the executor.
+- Worker-scoped heartbeat lease: while a handler is in-flight, a daemon renews its Redis
+  entry (XCLAIM ... JUSTID) so an alive consumer is never reclaimed regardless of duration;
+  the lease lapses on crash to preserve real failover. Decouples processing time from
+  claim-timeout.
+- Model B (hold-lease + scheduled re-poll): a not-yet-terminal command keeps its lease and
+  is re-invoked in-process after pollInterval instead of waiting for a Redis reclaim,
+  decoupling re-poll cadence from claim-timeout.
+- SPI evolution on MessageStream: add lease triad poll/renew/ack/release plus Lease<M>
+  record; add heartbeatInterval()/maxProcessingTime() (default null; overridden by the Redis
+  impl to expose the configured values) so the base derives the renew cadence from the
+  underlying stream's claim-timeout. consume(streamId, consumer) is retained as a default
+  implemented over the triad (backward compatible, additive).
+- RedisStreamConfig gains getHeartbeatInterval() (default claim-timeout/3) and
+  getMaxProcessingTime() (default 15m) with their *Millis() variants; RedisMessageStream
+  wires them through so the heartbeat cadence tracks any configured claim-timeout.
+- AbstractMessageStream.concurrency() defaults to 1 (a semaphore ceiling on in-flight
+  commands), overridable by subclasses.
+
 1.5.0 - 14 May 2026
 - BREAKING (observability): rename Outcome.FAILED -> Outcome.ACTIVE; metric tag value
   outcome="failed" is now outcome="active". The Java API is source-compatible, but any

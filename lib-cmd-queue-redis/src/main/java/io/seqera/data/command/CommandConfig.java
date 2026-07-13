@@ -37,15 +37,6 @@ public interface CommandConfig {
     }
 
     /**
-     * Timeout for synchronous command execution.
-     * If execute() takes longer than this, the command is marked as RUNNING
-     * and checkStatus() will be called on subsequent queue deliveries.
-     */
-    default Duration executeTimeout() {
-        return Duration.ofSeconds(1);
-    }
-
-    /**
      * TTL (Time-To-Live) for command state records in the persistent store.
      * Commands expire and are removed after this duration.
      */

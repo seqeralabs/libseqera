@@ -68,6 +68,18 @@ public abstract class CommandQueue extends AbstractMessageStream<CommandMsg> {
     protected abstract String name();
 
     /**
+     * Maximum number of commands that may be in flight on this instance at once. Handlers
+     * run on virtual threads, so this is a memory/heartbeat ceiling rather than a thread
+     * count; commands beyond it wait in the stream (backpressure). Cross-replica
+     * single-runner exclusion is provided by the per-message lease, so no per-command lock
+     * is required. Subclasses may override to tune the ceiling.
+     */
+    @Override
+    protected int concurrency() {
+        return 1000;
+    }
+
+    /**
      * The name of the message stream, derived from {@link #name()}.
      */
     protected String streamName() {
