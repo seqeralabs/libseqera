@@ -249,10 +249,10 @@ public class HxProxyConfig {
     }
 
     private ProxyEntry credentialsFor(String host, int port) {
-        for (ProxyEntry entry : new ProxyEntry[]{httpsProxy, httpProxy}) {
-            if (entry != null && entry.hasCredentials() && entry.host.equalsIgnoreCase(host) && entry.port == port)
-                return entry;
-        }
+        if (httpsProxy != null && httpsProxy.hasCredentials() && httpsProxy.host.equalsIgnoreCase(host) && httpsProxy.port == port)
+            return httpsProxy;
+        if (httpProxy != null && httpProxy.hasCredentials() && httpProxy.host.equalsIgnoreCase(host) && httpProxy.port == port)
+            return httpProxy;
         return null;
     }
 }
