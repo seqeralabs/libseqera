@@ -161,7 +161,7 @@ just transport; the store is the source of truth.
    submit(command)
         │  persist SUBMITTED state + enqueue CommandMsg (fire-and-forget)
         ▼
-  ┌──────────────┐  save() ┌──────────────────────────────────────────────┐
+  ┌──────────────┐  save() ┌────────────────────────────────────────────────┐
   │ CommandState │◀────────┤              CommandServiceImpl                │
   │    store     │  find() │  processCommand(msg): load state, then         │──▶ execute()
   │ (Redis/mem)  │────────▶│  dispatch the handler to a worker pool         │    checkStatus()
@@ -170,14 +170,14 @@ just transport; the store is the source of truth.
         ▲                  │    • running() → keep lease, re-poll after     │
         │ getState/Result  │                  pollInterval (in-process)     │
         │                  └───────────────────────┬────────────────────────┘
-        │                       submit(msg)         │  addConsumer(processCommand)
-        │                                           ▼
-        │                     ┌────────────────────────────────────────────┐
+        │                       submit(msg)        │  addConsumer(processCommand)
+        │                                          ▼
+        │                     ┌─────────────────────────────────────────────┐
         └─────────────────────│  CommandQueue (Redis stream / in-memory)    │
                               │  = AbstractMessageStream: dispatcher +      │
                               │  worker pool + heartbeat lease → exactly    │
                               │  one live runner per command, no timeout    │
-                              └────────────────────────────────────────────┘
+                              └─────────────────────────────────────────────┘
 ```
 
 ### Components

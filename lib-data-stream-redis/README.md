@@ -151,22 +151,22 @@ independent of how long that takes — and ownership is relinquished only when t
 finishes or the consumer dies.
 
 ```
-  offer(msg)                                    ┌──────────────────────────────┐
-      │                                         │      AbstractMessageStream    │
-      ▼                                         │                               │
- ┌──────────┐   poll (XREADGROUP / XAUTOCLAIM)  │  dispatcher thread            │
- │  Redis   │◀─────────────────────────────────┤   • acquire a semaphore slot  │
- │  stream  │                                   │   • poll one message          │
- │  (PEL,   │   renew (XCLAIM … JUSTID)          │   • hand it to the executor   │
- │  group)  │◀───────────── heartbeat daemon ───┤     (never runs it inline)    │
- │          │        every claim-timeout/3      │                               │
- │          │   ack (XACK + XDEL)                │  worker (virtual thread)      │
- │          │◀──────────── on terminal ─────────┤   accept(msg):                │
- └──────────┘                                   │    ├─ true  → ack + free slot │
-      ▲                                         │    └─ false → keep lease,     │
+  offer(msg)                                    ┌────────────────────────────────┐
+      │                                         │      AbstractMessageStream     │
+      ▼                                         │                                │
+ ┌──────────┐   poll (XREADGROUP / XAUTOCLAIM)  │  dispatcher thread             │
+ │  Redis   │◀──────────────────────────────────┤   • acquire a semaphore slot   │
+ │  stream  │                                   │   • poll one message           │
+ │  (PEL,   │   renew (XCLAIM … JUSTID)         │   • hand it to the executor    │
+ │  group)  │◀───────────── heartbeat daemon ───┤     (never runs it inline)     │
+ │          │        every claim-timeout/3      │                                │
+ │          │   ack (XACK + XDEL)               │  worker (virtual thread)       │
+ │          │◀──────────── on terminal ─────────┤   accept(msg):                 │
+ └──────────┘                                   │    ├─ true  → ack + free slot  │
+      ▲                                         │    └─ false → keep lease,      │
       │ reclaimed by a peer only if the owner   │       re-run after pollInterval│
-      │ dies (heartbeat stops → idle > claim-timeout)  via the re-poll scheduler│
-      └─────────────────────────────────────────────────────────────────────────┘
+      │ dies (heartbeat stops → idle > claim-timeout)  via the re-poll scheduler │
+      └──────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Three mechanisms:**
