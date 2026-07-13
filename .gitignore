@@ -3,3 +3,5 @@
 .idea
 # Ignore Gradle build output directory
 build
+/grafana
+/notes

@@ -395,4 +395,40 @@ class HxClientTest extends Specification {
         then:
         client.tokenManager.tokenStore == customStore
     }
+
+    def 'parseRetryAfter returns null for null response'() {
+        expect:
+        HxClient.parseRetryAfter(null) == null
+    }
+
+    def 'parseRetryAfter parses delta-seconds and rejects malformed/non-positive values'() {
+        given:
+        def httpHeaders = java.net.http.HttpHeaders.of(headers, { a, b -> true })
+        and: 'a minimal HttpResponse exposing only the headers — HttpHeaders is final so Spock cannot mock it directly'
+        def response = new HttpResponse() {
+            int statusCode() { 0 }
+            HttpRequest request() { null }
+            Optional<HttpResponse<?>> previousResponse() { Optional.empty() }
+            java.net.http.HttpHeaders headers() { httpHeaders }
+            Object body() { null }
+            Optional<javax.net.ssl.SSLSession> sslSession() { Optional.empty() }
+            URI uri() { null }
+            HttpClient.Version version() { HttpClient.Version.HTTP_1_1 }
+        }
+
+        expect:
+        HxClient.parseRetryAfter(response) == expected
+
+        where:
+        headers                                            | expected
+        ['retry-after': ['41']]                            | Duration.ofSeconds(41)
+        ['retry-after': ['  41  ']]                        | Duration.ofSeconds(41)   // whitespace trimmed
+        ['retry-after': ['1']]                             | Duration.ofSeconds(1)
+        ['retry-after': ['0']]                             | null                     // zero is not a useful hint
+        ['retry-after': ['-5']]                            | null                     // negative rejected
+        ['retry-after': ['abc']]                           | null                     // non-numeric
+        ['retry-after': ['1.5']]                           | null                     // fractional not supported
+        ['retry-after': ['Wed, 21 Oct 2015 07:28:00 GMT']] | null                     // HTTP-date form not supported
+        [:]                                                | null                     // header absent
+    }
 }

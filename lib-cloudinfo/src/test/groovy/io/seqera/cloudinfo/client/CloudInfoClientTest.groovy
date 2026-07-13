@@ -17,6 +17,8 @@
 
 package io.seqera.cloudinfo.client
 
+import io.seqera.cloudinfo.api.AcceleratorFeatures
+import io.seqera.cloudinfo.api.ProductsQuery
 import spock.lang.Specification
 import spock.lang.Shared
 
@@ -56,5 +58,73 @@ class CloudInfoClientTest extends Specification {
         products.size() > 0
         products.every { it.type != null }
         products.any { it.onDemandPrice > 0 }
+    }
+
+    def 'should fetch products with null query equal to no query'() {
+        when:
+        def a = client.getProducts('amazon', 'us-east-1')
+        def b = client.getProducts('amazon', 'us-east-1', null)
+
+        then:
+        a.size() == b.size()
+    }
+
+    def 'should filter products with sched=true to a subset'() {
+        given:
+        def query = ProductsQuery.builder().sched(true).build()
+
+        when:
+        def all = client.getProducts('amazon', 'us-east-1')
+        def filtered = client.getProducts('amazon', 'us-east-1', query)
+
+        then:
+        filtered.size() > 0
+        filtered.size() <= all.size()
+        def allTypes = all*.type as Set
+        filtered.every { allTypes.contains(it.type) }
+    }
+
+    def 'should filter products with nvme=true to a subset'() {
+        given:
+        def query = ProductsQuery.builder().nvme(true).build()
+
+        when:
+        def all = client.getProducts('amazon', 'us-east-1')
+        def filtered = client.getProducts('amazon', 'us-east-1', query)
+
+        then:
+        filtered.size() > 0
+        filtered.size() <= all.size()
+        def allTypes = all*.type as Set
+        filtered.every { allTypes.contains(it.type) }
+    }
+
+    def 'should filter FPGA products and classify them with AcceleratorFeatures'() {
+        given:
+        def query = ProductsQuery.builder().features([AcceleratorFeatures.TOKEN_FPGA]).build()
+
+        when:
+        def fpga = client.getProducts('amazon', 'us-east-1', query)
+
+        then:
+        fpga.size() > 0
+        fpga.every { AcceleratorFeatures.hasFpga(it.features) }
+    }
+
+    def 'should return all products for a provider without a sched allowlist'() {
+        given:
+        // sched is a curated allowlist configured only for amazon; a provider
+        // without one (google) treats the sched filter as unknown/no-op and
+        // returns all products. Only sched behaves this way: derived features
+        // such as nvme/ssd genuinely narrow the result, so they are not asserted
+        // here (see the amazon nvme=true subset test above).
+        def query = ProductsQuery.builder().sched(true).build()
+
+        when:
+        def all = client.getProducts('google', 'us-central1')
+        def filtered = client.getProducts('google', 'us-central1', query)
+
+        then:
+        filtered.size() == all.size()
     }
 }

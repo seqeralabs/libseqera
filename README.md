@@ -22,9 +22,11 @@ A collection of reusable Java & Groovy libraries for Seqera platform components.
 - **[lib-util-http](lib-util-http/)** - HTTP utilities for debugging, header dumping, and sensitive data masking
 - **[lib-util-string](lib-util-string/)** - General-purpose string utilities (pattern matching, redaction, URL/path helpers, email validation)
 - **[lib-util-time](lib-util-time/)** - Time duration utilities for random duration generation with range and jitter support
+- **[lib-util-tsid](lib-util-tsid/)** - Seeds the TSID Creator node ID from a coordinated NodeId for collision-free distributed ID generation
 - **[lib-jedis-pool](lib-jedis-pool/)** - JedisPool factory with Micrometer metrics integration
 - **[lib-lock](lib-lock/)** - Distributed lock interface abstraction
 - **[lib-lock-redis](lib-lock-redis/)** - Redis-based distributed locking with Micronaut integration
+- **[lib-node-id-redis](lib-node-id-redis/)** - Distributed node-ordinal assignment (Redis-backed with local fallback) for seeding collision-free ID generators
 - **[lib-pairing](lib-pairing/)** - Credential federation library for secure RSA key exchange between services
 
 ### Messaging & Data Libraries

@@ -28,6 +28,12 @@ import java.util.Objects;
 public class CloudProduct {
 
     private String type;
+    /**
+     * Machine family this instance type belongs to (e.g. m5d for m5d.large).
+     * Used by the /families endpoint and the families query filter. Null when
+     * the backend does not populate it (legacy responses).
+     */
+    private String family;
     private String category;
     private Integer cpusPerVm;
     private Float memPerVm;
@@ -39,6 +45,18 @@ public class CloudProduct {
     private List<String> zones;
     private List<CloudPrice> spotPrice;
     private ProductAttributes attributes;
+    /**
+     * Capability feature tokens for this instance type, as a flat list of
+     * lowercase tokens: ssd, gpu, arm, x86, burst, hibernation, sched, plus GPU
+     * vendor tokens (nvidia, amd, habana) and model tokens (a100, tesla-a100, ...).
+     * These are also the accepted values of the features filter on ProductsQuery
+     * and the /families endpoint. Consumers usually map them onto their own enum
+     * and drop unrecognised tokens.
+     *
+     * Null means the backend did not populate features (legacy); an empty list
+     * means none advertised.
+     */
+    private List<String> features;
 
     public CloudProduct() {
     }
@@ -49,6 +67,14 @@ public class CloudProduct {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public String getFamily() {
+        return family;
+    }
+
+    public void setFamily(String family) {
+        this.family = family;
     }
 
     public String getCategory() {
@@ -139,12 +165,21 @@ public class CloudProduct {
         this.attributes = attributes;
     }
 
+    public List<String> getFeatures() {
+        return features;
+    }
+
+    public void setFeatures(List<String> features) {
+        this.features = features;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         CloudProduct that = (CloudProduct) o;
         return Objects.equals(type, that.type) &&
+                Objects.equals(family, that.family) &&
                 Objects.equals(category, that.category) &&
                 Objects.equals(cpusPerVm, that.cpusPerVm) &&
                 Objects.equals(memPerVm, that.memPerVm) &&
@@ -155,18 +190,20 @@ public class CloudProduct {
                 Objects.equals(onDemandPrice, that.onDemandPrice) &&
                 Objects.equals(zones, that.zones) &&
                 Objects.equals(spotPrice, that.spotPrice) &&
-                Objects.equals(attributes, that.attributes);
+                Objects.equals(attributes, that.attributes) &&
+                Objects.equals(features, that.features);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, category, cpusPerVm, memPerVm, gpusPerVm, currentGen,
-                ntwPerf, ntwPerfCategory, onDemandPrice, zones, spotPrice, attributes);
+        return Objects.hash(type, family, category, cpusPerVm, memPerVm, gpusPerVm, currentGen,
+                ntwPerf, ntwPerfCategory, onDemandPrice, zones, spotPrice, attributes, features);
     }
 
     @Override
     public String toString() {
         return "CloudProduct[type=" + type +
+                ", family=" + family +
                 ", category=" + category +
                 ", cpusPerVm=" + cpusPerVm +
                 ", memPerVm=" + memPerVm +
@@ -177,6 +214,7 @@ public class CloudProduct {
                 ", onDemandPrice=" + onDemandPrice +
                 ", zones=" + zones +
                 ", spotPrice=" + spotPrice +
-                ", attributes=" + attributes + "]";
+                ", attributes=" + attributes +
+                ", features=" + features + "]";
     }
 }

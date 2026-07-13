@@ -229,7 +229,7 @@ public abstract class GsonEncodingStrategy<V> implements StringEncodingStrategy<
         try {
             return gson0().fromJson(value, type);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to decode JSON: " + value, e);
+            throw new RuntimeException("Failed to decode JSON: " + e.getMessage(), e);
         }
     }
 }

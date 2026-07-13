@@ -48,6 +48,19 @@ public class LocalRangeProvider implements RangeProvider {
     }
 
     @Override
+    public boolean addIfLess(String key, String element, double score) {
+        Map<String, Double> map = store.computeIfAbsent(key, k -> new HashMap<>());
+        final Double current = map.get(element);
+        if (current == null || score < current) {
+            map.put(element, score);
+            log.trace("* addIfLess (applied) - store: {}", store);
+            return true;
+        }
+        log.trace("* addIfLess (kept earlier score {}) - store: {}", current, store);
+        return false;
+    }
+
+    @Override
     public List<String> getRange(String key, double min, double max, int count, boolean remove) {
         Map<String, Double> map = store.getOrDefault(key, new HashMap<>());
         List<String> result = new ArrayList<>();

@@ -39,6 +39,11 @@ dependencies {
     implementation "io.micronaut:micronaut-websocket:${micronautCoreVersion}"
     implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
 
+    // Optional Micrometer instrumentation. Consumers that pass a non-null
+    // MeterRegistry to AbstractMessageStream must provide micrometer-core at runtime.
+    compileOnly        "io.micrometer:micrometer-core:1.12.4"
+    testImplementation "io.micrometer:micrometer-core:1.12.4"
+
     // Groovy dependencies only for tests
     testImplementation "org.apache.groovy:groovy:4.0.24"
     testImplementation "org.apache.groovy:groovy-nio:4.0.24"

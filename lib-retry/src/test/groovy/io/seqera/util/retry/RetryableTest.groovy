@@ -138,6 +138,99 @@ class RetryableTest extends Specification {
         e.message == 'Oops failed!'
     }
 
+    // Note: ConfigImpl substitutes DEFAULT_JITTER (0.25) whenever getJitter() returns 0.0,
+    // so these tests implicitly run with 25% jitter applied by Failsafe on top of the
+    // computed delay. Assertions allow for this variance.
+
+    def 'retryDelayHint floors the wait at the hinted value when greater than backoff'() {
+        given: 'a fast backoff (50ms) and a hint of 600ms'
+        def config = Mock(Retryable.Config) {
+            getDelay() >> Duration.ofMillis(50)
+            getMaxDelay() >> Duration.ofSeconds(5)
+            getMaxAttempts() >> 3
+            getMultiplier() >> 2.0
+        }
+        and: 'a value-returning supplier that fails twice then succeeds'
+        int attempts = 0
+        def timestamps = []
+        def retryable = Retryable.<String>of(config)
+                .retryIf { it == 'TRY_AGAIN' }
+                .retryDelayHint { result -> result == 'TRY_AGAIN' ? Duration.ofMillis(600) : null }
+
+        when:
+        def start = System.currentTimeMillis()
+        def result = retryable.apply {
+            timestamps << (System.currentTimeMillis() - start)
+            attempts++
+            return attempts < 3 ? 'TRY_AGAIN' : 'OK'
+        }
+
+        then:
+        result == 'OK'
+        attempts == 3
+        // each retry waits hint=600ms ± 25% jitter (450..750), well above the 50/100ms backoff
+        (timestamps[1] - timestamps[0]) >= 450
+        (timestamps[2] - timestamps[1]) >= 450
+    }
+
+    def 'retryDelayHint falls back to backoff when hint is null'() {
+        given:
+        def config = Mock(Retryable.Config) {
+            getDelay() >> Duration.ofMillis(50)
+            getMaxDelay() >> Duration.ofSeconds(5)
+            getMaxAttempts() >> 3
+            getMultiplier() >> 2.0
+        }
+        and:
+        int attempts = 0
+        def timestamps = []
+        def retryable = Retryable.<String>of(config)
+                .retryIf { it == 'TRY_AGAIN' }
+                .retryDelayHint { result -> null } // no hint - regular backoff applies
+
+        when:
+        def start = System.currentTimeMillis()
+        retryable.apply {
+            timestamps << (System.currentTimeMillis() - start)
+            attempts++
+            return attempts < 3 ? 'TRY_AGAIN' : 'OK'
+        }
+
+        then:
+        // first retry uses backoff 50ms ± 25% (37..62), second uses 100ms ± 25% (75..125)
+        (timestamps[1] - timestamps[0]) < 200   // well below any reasonable hint
+        (timestamps[2] - timestamps[1]) < 300
+    }
+
+    def 'retryDelayHint is capped by maxDelay'() {
+        given: 'maxDelay (200ms) smaller than the hint (10s)'
+        def config = Mock(Retryable.Config) {
+            getDelay() >> Duration.ofMillis(50)
+            getMaxDelay() >> Duration.ofMillis(200)
+            getMaxAttempts() >> 2
+            getMultiplier() >> 2.0
+        }
+        and:
+        int attempts = 0
+        def timestamps = []
+        def retryable = Retryable.<String>of(config)
+                .retryIf { it == 'TRY_AGAIN' }
+                .retryDelayHint { result -> Duration.ofSeconds(10) }  // huge hint
+
+        when:
+        def start = System.currentTimeMillis()
+        retryable.apply {
+            timestamps << (System.currentTimeMillis() - start)
+            attempts++
+            return attempts < 2 ? 'TRY_AGAIN' : 'OK'
+        }
+
+        then:
+        attempts == 2
+        // wait must respect maxDelay (200ms ± 25% → max ~250ms) - never the 10s the hint asked for
+        (timestamps[1] - timestamps[0]) < 500
+    }
+
     def 'should validate config' () {
         given:
         def config = Mock(Retryable.Config){

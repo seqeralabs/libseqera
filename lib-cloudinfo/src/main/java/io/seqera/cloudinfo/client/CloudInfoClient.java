@@ -18,15 +18,21 @@
 package io.seqera.cloudinfo.client;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import io.seqera.cloudinfo.api.CloudProduct;
 import io.seqera.cloudinfo.api.CloudRegion;
 import io.seqera.cloudinfo.api.CloudResponse;
+import io.seqera.cloudinfo.api.ErrorResponse;
+import io.seqera.cloudinfo.api.FamiliesResponse;
+import io.seqera.cloudinfo.api.ProductsQuery;
 import io.seqera.http.HxClient;
 import io.seqera.serde.jackson.JacksonEncodingStrategy;
 import org.slf4j.Logger;
@@ -61,6 +67,12 @@ public class CloudInfoClient {
 
     private static final JacksonEncodingStrategy<CloudResponse> RESPONSE_ENCODER =
             new JacksonEncodingStrategy<CloudResponse>() {};
+
+    private static final JacksonEncodingStrategy<FamiliesResponse> FAMILIES_ENCODER =
+            new JacksonEncodingStrategy<FamiliesResponse>() {};
+
+    private static final JacksonEncodingStrategy<ErrorResponse> ERROR_ENCODER =
+            new JacksonEncodingStrategy<ErrorResponse>() {};
 
     private final String endpoint;
     private final HxClient httpClient;
@@ -151,12 +163,31 @@ public class CloudInfoClient {
      * @throws CloudInfoException if the request fails
      */
     public List<CloudProduct> getProducts(String provider, String region) {
+        return getProducts(provider, region, null);
+    }
+
+    /**
+     * Gets the list of compute products for a cloud provider and region, applying
+     * the optional filters in {@code query}.
+     *
+     * <p>When {@code query} is {@code null} or has no flags set, the request is
+     * equivalent to {@link #getProducts(String, String)} and all products are
+     * returned. Unknown filters for a provider are ignored server-side.
+     *
+     * @param provider the cloud provider identifier (e.g., "amazon", "google", "azure")
+     * @param region the region identifier (e.g., "us-east-1", "europe-west1")
+     * @param query optional filters to apply to the request; may be {@code null}
+     * @return list of compute products with pricing
+     * @throws CloudInfoException if the request fails
+     */
+    public List<CloudProduct> getProducts(String provider, String region, ProductsQuery query) {
         String path = String.format("/api/v1/providers/%s/services/compute/regions/%s/products", provider, region);
-        log.trace("CloudInfo products: {}", path);
+        String url = endpoint + path + buildQueryString(query);
+        log.trace("CloudInfo products: {}", url);
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint + path))
+                    .uri(URI.create(url))
                     .GET()
                     .timeout(Duration.ofSeconds(60))
                     .build();
@@ -177,6 +208,118 @@ public class CloudInfoClient {
             throw new CloudInfoException(
                     String.format("Failed to fetch products for provider=%s, region=%s", provider, region), e);
         }
+    }
+
+    /**
+     * Gets the machine families for a cloud provider.
+     *
+     * @param provider the cloud provider identifier (e.g., "amazon", "google", "azure")
+     * @return the sorted list of distinct machine-family names
+     * @throws CloudInfoException if the request fails
+     */
+    public List<String> getFamilies(String provider) {
+        return getFamilies(provider, null);
+    }
+
+    /**
+     * Gets the machine families for a provider, restricted to those having at
+     * least one product with all the given capability features. Tokens must be
+     * lowercase; an unknown or non-lowercase token yields HTTP 400, surfaced as a
+     * CloudInfoException whose getValidCapabilities() lists the accepted tokens.
+     *
+     * @param provider the cloud provider identifier (e.g. amazon, google, azure)
+     * @param features capability tokens to intersect (AND); may be null or empty
+     * @return the sorted distinct machine-family names matching the query
+     * @throws CloudInfoException if the request fails
+     */
+    public List<String> getFamilies(String provider, List<String> features) {
+        String path = String.format("/api/v1/providers/%s/families", provider);
+        String url = endpoint + path + buildFeaturesQueryString(features);
+        log.trace("CloudInfo families: {}", url);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .GET()
+                    .timeout(Duration.ofSeconds(60))
+                    .build();
+
+            HttpResponse<String> response = httpClient.sendAsString(request);
+
+            if (response.statusCode() != 200) {
+                throw familiesError(provider, response);
+            }
+
+            FamiliesResponse familiesResponse = FAMILIES_ENCODER.decode(response.body());
+            return familiesResponse != null && familiesResponse.getFamilies() != null
+                    ? familiesResponse.getFamilies()
+                    : Collections.emptyList();
+        } catch (CloudInfoException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CloudInfoException(
+                    String.format("Failed to fetch families for provider=%s", provider), e);
+        }
+    }
+
+    /**
+     * Builds a CloudInfoException for a non-200 families response, adding the
+     * server's error message and validCapabilities when the body has that shape.
+     */
+    private static CloudInfoException familiesError(String provider, HttpResponse<String> response) {
+        int status = response.statusCode();
+        String detail = null;
+        List<String> validCapabilities = null;
+        try {
+            ErrorResponse error = ERROR_ENCODER.decode(response.body());
+            if (error != null) {
+                detail = error.getError();
+                validCapabilities = error.getValidCapabilities();
+            }
+        } catch (Exception ignore) {
+            // body is not in the {error, validCapabilities} shape — fall back to a plain error
+        }
+        String message = detail != null
+                ? String.format("Failed to fetch families for provider=%s, status=%d: %s", provider, status, detail)
+                : String.format("Failed to fetch families for provider=%s, status=%d", provider, status);
+        return new CloudInfoException(message, status, validCapabilities);
+    }
+
+    private static String buildQueryString(ProductsQuery query) {
+        if (query == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        if (query.isSched()) {
+            appendParam(sb, "sched=true");
+        }
+        if (query.isNvme()) {
+            appendParam(sb, "nvme=true");
+        }
+        appendCsvParam(sb, "features", query.getFeatures());
+        appendCsvParam(sb, "families", query.getFamilies());
+        return sb.toString();
+    }
+
+    /** Builds ?features=a,b,c for the families endpoint, or an empty string. */
+    private static String buildFeaturesQueryString(List<String> features) {
+        StringBuilder sb = new StringBuilder();
+        appendCsvParam(sb, "features", features);
+        return sb.toString();
+    }
+
+    private static void appendParam(StringBuilder sb, String param) {
+        sb.append(sb.length() == 0 ? '?' : '&').append(param);
+    }
+
+    private static void appendCsvParam(StringBuilder sb, String name, List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return;
+        }
+        String joined = values.stream()
+                .map(v -> URLEncoder.encode(v, StandardCharsets.UTF_8))
+                .collect(Collectors.joining(","));
+        appendParam(sb, name + "=" + joined);
     }
 
     /**

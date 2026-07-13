@@ -476,6 +476,7 @@ public class HxClient {
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
                 .retryCondition(config.getRetryCondition())
                 .retryIf(this::shouldRetryOnResponse)
+                .retryDelayHint(HxClient::parseRetryAfter)
                 .onRetry(event -> {
                     String message = event.getFailure() != null ? event.getFailure().getMessage()
                             : String.valueOf(event.getResult().statusCode());
@@ -548,6 +549,7 @@ public class HxClient {
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
                 .retryCondition(config.getRetryCondition())
                 .retryIf(this::shouldRetryOnResponse)
+                .retryDelayHint(HxClient::parseRetryAfter)
                 .onRetry(event -> {
                     String message = event.getFailure() != null ? event.getFailure().getMessage()
                             : String.valueOf(event.getResult().statusCode());
@@ -637,6 +639,40 @@ public class HxClient {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Extracts the {@code Retry-After} header from an HTTP response as a {@link Duration},
+     * for use as a per-attempt delay hint by the retry policy. Returns {@code null} when the
+     * header is absent or malformed, in which case the regular backoff schedule applies.
+     *
+     * <p>Only the RFC 9110 §10.2.3 delta-seconds form is supported (e.g. {@code Retry-After: 41});
+     * the HTTP-date form is not used by Seqera services and is intentionally ignored to keep
+     * parsing trivial. The retry policy uses this as a lower bound — see
+     * {@link Retryable#retryDelayHint(java.util.function.Function)}.
+     *
+     * @param response the HTTP response to inspect; may be null
+     * @return the requested wait duration, or null if no usable hint is present
+     */
+    static Duration parseRetryAfter(HttpResponse<?> response) {
+        if (response == null) {
+            return null;
+        }
+        final String header = response.headers().firstValue("retry-after").orElse(null);
+        if (header == null) {
+            return null;
+        }
+        try {
+            final long secs = Long.parseLong(header.trim());
+            if (secs <= 0) {
+                return null;
+            }
+            return Duration.ofSeconds(secs);
+        }
+        catch (NumberFormatException e) {
+            log.debug("Ignoring unparseable Retry-After header: {}", header);
+            return null;
+        }
     }
 
     public HttpClient getHttpClient() {

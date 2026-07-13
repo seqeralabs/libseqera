@@ -25,6 +25,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.params.ZAddParams;
 import redis.clients.jedis.resps.Tuple;
 
 /**
@@ -43,6 +44,18 @@ public class RedisRangeProvider implements RangeProvider {
     public void add(String key, String element, double score) {
         try (Jedis conn = pool.getResource()) {
             conn.zadd(key, score, element);
+        }
+    }
+
+    @Override
+    public boolean addIfLess(String key, String element, double score) {
+        // ZADD ... LT CH: LT updates only when the new score is strictly less
+        // than the current one (and still adds new members); CH makes the
+        // return value reflect "elements changed" rather than the default
+        // "elements added", giving us the boolean we need.
+        try (Jedis conn = pool.getResource()) {
+            final long changed = conn.zadd(key, score, element, ZAddParams.zAddParams().lt().ch());
+            return changed > 0;
         }
     }
 

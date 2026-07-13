@@ -23,6 +23,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import io.micronaut.core.annotation.Nullable;
+import io.seqera.data.stream.metrics.NoopStreamMetrics;
+import io.seqera.data.stream.metrics.Outcome;
+import io.seqera.data.stream.metrics.StreamMetrics;
 import io.seqera.serde.encode.StringEncodingStrategy;
 import io.seqera.util.retry.ExponentialAttempt;
 import org.slf4j.Logger;
@@ -105,13 +109,37 @@ public abstract class AbstractMessageStream<M> implements Closeable {
 
     private final MessageStream<String> stream;
 
+    private final StreamMetrics metrics;
+
     private Thread thread;
 
     private final String name0;
 
+    /**
+     * Constructs a new stream without metrics instrumentation. Behavior is identical
+     * to passing {@link NoopStreamMetrics#INSTANCE} to {@link #AbstractMessageStream(MessageStream, StreamMetrics)}.
+     */
     protected AbstractMessageStream(MessageStream<String> target) {
+        this(target, NoopStreamMetrics.INSTANCE);
+    }
+
+    /**
+     * Constructs a new stream, optionally instrumented through a {@link StreamMetrics} handle.
+     *
+     * <p>To publish Micrometer metrics, pass an instance of
+     * {@code io.seqera.data.stream.metrics.MicrometerStreamMetrics}. To opt out,
+     * pass {@link NoopStreamMetrics#INSTANCE} (or {@code null}, which is treated as no-op).
+     *
+     * <p>This class never references {@code io.micrometer.core.instrument.MeterRegistry}
+     * directly, so it is loadable on classpaths without {@code micrometer-core}.
+     *
+     * @param target  the underlying {@link MessageStream} implementation
+     * @param metrics the {@link StreamMetrics} handle, or {@code null} for no-op
+     */
+    protected AbstractMessageStream(MessageStream<String> target, @Nullable StreamMetrics metrics) {
         this.encoder = createEncodingStrategy();
         this.stream = target;
+        this.metrics = (metrics != null) ? metrics : NoopStreamMetrics.INSTANCE;
         this.name0 = name() + "-thread-" + count.getAndIncrement();
     }
 
@@ -188,6 +216,8 @@ public abstract class AbstractMessageStream<M> implements Closeable {
             stream.init(streamId);
             // then add the consumer to the listeners
             listeners.put(streamId, consumer);
+            // bind the backlog gauge for this stream id (no-op when metrics disabled)
+            metrics.bindBacklog(streamId, () -> stream.length(streamId));
             // finally start the listener thread
             if (thread == null) {
                 thread = createListenerThread();
@@ -208,6 +238,37 @@ public abstract class AbstractMessageStream<M> implements Closeable {
     }
 
     /**
+     * Run one consume cycle for the given stream and record the outcome on the
+     * {@link StreamMetrics} handle. The outcome is derived from the {@code count}
+     * delta (was the consumer lambda invoked?) and the return value of
+     * {@link MessageStream#consume}.
+     */
+    private void consumeOne(String streamId, MessageConsumer<M> consumer, AtomicInteger count) {
+        final long sample = metrics.startSample();
+        final int countBefore = count.get();
+        Outcome outcome = Outcome.EMPTY;
+        try {
+            // Raw context carries encoded strings; wrap it into a typed view
+            // that encodes domain messages on their way out. Atomic hand-off
+            // therefore only works between streams sharing this encoding strategy.
+            final boolean accepted = stream.consume(streamId, (String msg, TxContext<String> rawCtx) -> {
+                final TxContext<M> typedCtx = (dst, m) -> rawCtx.offer(dst, encoder.encode(m));
+                return processMessage(msg, consumer, typedCtx, count);
+            });
+            if (count.get() != countBefore) {
+                outcome = accepted ? Outcome.PROCESSED : Outcome.ACTIVE;
+            }
+        }
+        catch (Throwable t) {
+            outcome = Outcome.ERRORED;
+            throw t;
+        }
+        finally {
+            metrics.recordOutcome(sample, streamId, outcome);
+        }
+    }
+
+    /**
      * Process the messages as they are available from the underlying stream
      */
     protected void processMessages() {
@@ -218,14 +279,7 @@ public abstract class AbstractMessageStream<M> implements Closeable {
                 for (Map.Entry<String, MessageConsumer<M>> entry : listeners.entrySet()) {
                     final var streamId = entry.getKey();
                     final var consumer = entry.getValue();
-                    // Raw context carries encoded strings; wrap it into a typed
-                    // view that encodes domain messages on their way out. Atomic
-                    // hand-off therefore only works between streams sharing this
-                    // encoding strategy.
-                    stream.consume(streamId, (String msg, TxContext<String> rawCtx) -> {
-                        final TxContext<M> typedCtx = (dst, m) -> rawCtx.offer(dst, encoder.encode(m));
-                        return processMessage(msg, consumer, typedCtx, count);
-                    });
+                    consumeOne(streamId, consumer, count);
                 }
                 // reset the attempt count because no error has been thrown
                 attempt.reset();

@@ -1,3 +1,6 @@
+1.0.1 - 14 May 2026
+  Avoid embedding raw JSON value in decode-error message
+
 1.0.0 - 6 Jan 2026
   Initial release with Gson-based serialization
   GsonEncodingStrategy with fluent configuration API

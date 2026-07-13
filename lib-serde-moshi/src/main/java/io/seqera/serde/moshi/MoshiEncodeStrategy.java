@@ -145,7 +145,7 @@ public abstract class MoshiEncodeStrategy<V> implements StringEncodingStrategy<V
         try {
             return jsonAdapter.fromJson(value);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to decode JSON: " + value, e);
+            throw new RuntimeException("Failed to decode JSON: " + e.getMessage(), e);
         }
     }
 }

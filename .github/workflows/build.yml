@@ -31,13 +31,13 @@ jobs:
         run: env | sort
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 1
           submodules: true
 
       - name: Setup Java ${{ matrix.java_version }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           java-version: ${{matrix.java_version}}
           distribution: 'adopt'
@@ -59,7 +59,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_SEQERA_TOKEN }}
 
       - name: Release
-        if: "contains(github.event.head_commit.message, '[release]')"
+        # Release only from master (protected, updated exclusively via merged PRs)
+        # AND when the merge commit is explicitly marked [release]. publish.sh is
+        # idempotent (skips versions already in the repo), so a bumped VERSION file
+        # still gates what actually publishes.
+        if: "github.ref == 'refs/heads/master' && contains(github.event.head_commit.message, '[release]')"
         run: |
           bash publish.sh lib-jedis-lock
           bash publish.sh lib-activator
@@ -81,11 +85,14 @@ jobs:
           bash publish.sh lib-lock-redis
           bash publish.sh lib-httpx
           bash publish.sh lib-mail
+          bash publish.sh lib-node-id-redis
           bash publish.sh lib-pairing
           bash publish.sh lib-platform-oidc
           bash publish.sh lib-util-http
           bash publish.sh lib-util-string
           bash publish.sh lib-util-time
+          bash publish.sh lib-util-tsid
+          bash publish.sh lib-util-net
           bash publish.sh lib-pool
           bash publish.sh lib-random
           bash publish.sh lib-retry
@@ -112,7 +119,7 @@ jobs:
 
       - name: Publish tests report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-reports-jdk-${{ matrix.java_version }}
           path: |

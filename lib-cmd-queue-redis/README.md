@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-cmd-queue-redis:0.1.0'
+    implementation 'io.seqera:lib-cmd-queue-redis:0.4.0'
 }
 ```
 
@@ -152,6 +152,38 @@ ProcessingResult result = commandService.getResult(commandId, ProcessingResult.c
 // Stop consuming commands (e.g. during shutdown)
 commandService.stop();
 ```
+
+## Metrics (optional)
+
+Since `0.4.0`, `CommandQueue` exposes a second constructor that forwards an optional
+[`StreamMetrics`](https://github.com/seqeralabs/libseqera/tree/master/lib-data-stream-redis)
+handle to the underlying `AbstractMessageStream`. Subclasses that want to publish
+Micrometer metrics construct a `MicrometerStreamMetrics` from a `MeterRegistry` and pass
+it through:
+
+```java
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micronaut.core.annotation.Nullable;
+import io.seqera.data.stream.metrics.MicrometerStreamMetrics;
+
+public class MyCommandQueue extends CommandQueue {
+
+    @Inject
+    public MyCommandQueue(MessageStream<String> target, @Nullable MeterRegistry registry) {
+        super(target, registry != null
+                ? new MicrometerStreamMetrics(registry, "my-cmd-queue")
+                : null);
+    }
+
+    @Override protected String name() { return "my-cmd-queue"; }
+    @Override protected Duration pollInterval() { return Duration.ofSeconds(1); }
+}
+```
+
+The 1-arg constructor is unchanged: existing subclasses continue to compile and run
+with no metrics. See [`lib-data-stream-redis`](../lib-data-stream-redis/README.md) for the
+list of published meters (`seqera.stream.entries`, `seqera.stream.messages`,
+`seqera.stream.processing`) and their tags.
 
 ## Command Status Flow
 

@@ -59,13 +59,13 @@ class RedisMessageStreamTest extends Specification implements RedisTestContainer
         stream.offer(id2, 'gamma')
 
         then:
-        stream.consume(id1, { it-> it=='one'})
+        stream.consume(id1, { it, ctx ->it=='one'})
         and:
-        stream.consume(id2, { it-> it=='alpha'})
-        stream.consume(id2, { it-> it=='delta'})
-        stream.consume(id2, { it-> it=='gamma'})
+        stream.consume(id2, { it, ctx ->it=='alpha'})
+        stream.consume(id2, { it, ctx ->it=='delta'})
+        stream.consume(id2, { it, ctx ->it=='gamma'})
         and:
-        !stream.consume(id2, { it-> assert false /* <-- this should not be invoked */ })
+        !stream.consume(id2, { it, ctx ->assert false /* <-- this should not be invoked */ })
     }
 
     def 'should offer and consume a value with a failure' () {
@@ -79,32 +79,32 @@ class RedisMessageStreamTest extends Specification implements RedisTestContainer
         stream.offer(id1, 'gamma')
 
         then:
-        stream.consume(id1, { it-> it=='alpha'})
+        stream.consume(id1, { it, ctx ->it=='alpha'})
         and:
         try {
-            stream.consume(id1, { it-> throw new RuntimeException("Oops")})
+            stream.consume(id1, { it, ctx ->throw new RuntimeException("Oops")})
         }
         catch (RuntimeException e) {
             assert e.message == 'Oops'
         }
         and:
         // next message is 'gamma' as expected
-        stream.consume(id1, { it-> it=='gamma'})
+        stream.consume(id1, { it, ctx ->it=='gamma'})
         and:
         // still nothing
-        !stream.consume(id1, { it-> assert false /* <-- this should not be invoked */ })
+        !stream.consume(id1, { it, ctx ->assert false /* <-- this should not be invoked */ })
         and:
         // wait 2 seconds (claim timeout is 1 sec)
         sleep 2_000
         // now the errored message is available
-        stream.consume(id1, { it-> it=='delta'})
+        stream.consume(id1, { it, ctx ->it=='delta'})
         and:
-        !stream.consume(id1, { it-> assert false /* <-- this should not be invoked */ })
+        !stream.consume(id1, { it, ctx ->assert false /* <-- this should not be invoked */ })
         
         when:
         stream.offer(id1, 'something')
         then:
-        stream.consume(id1, { it-> it=='something'})
+        stream.consume(id1, { it, ctx ->it=='something'})
     }
 
     def 'should validate length method' () {
@@ -124,7 +124,7 @@ class RedisMessageStreamTest extends Specification implements RedisTestContainer
         stream.length(id1) == 3
 
         when:
-        stream.consume(id1, { it-> true})
+        stream.consume(id1, { it, ctx ->true})
         then:
         stream.length(id1) == 2
     }
@@ -147,7 +147,7 @@ class RedisMessageStreamTest extends Specification implements RedisTestContainer
         and: 'consume all messages but reject them (return false) - simulating RUNNING tasks'
         // First pass - read all messages, reject all (they go to PEL)
         5.times {
-            stream.consume(streamId, { msg ->
+            stream.consume(streamId, { msg, ctx ->
                 consumedMessages << msg
                 return false  // reject - message stays in PEL
             })
@@ -164,7 +164,7 @@ class RedisMessageStreamTest extends Specification implements RedisTestContainer
         and: 'consume again multiple times - messages should be reclaimed in round-robin'
         // Consume 10 times to verify round-robin (should see each message ~2 times)
         10.times {
-            stream.consume(streamId, { msg ->
+            stream.consume(streamId, { msg, ctx ->
                 consumedMessages << msg
                 return false  // keep rejecting
             })

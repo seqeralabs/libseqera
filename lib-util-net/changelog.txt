@@ -1,0 +1,4 @@
+# lib-util-net changelog
+
+0.1.0
+- Initial release with SsrfValidator providing SSRF host validation (rejects localhost, loopback, link-local, private and cloud-metadata addresses)

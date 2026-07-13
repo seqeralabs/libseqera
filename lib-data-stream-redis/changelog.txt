@@ -1,5 +1,29 @@
 # lib-data-stream-redis changelog
 
+1.6.0 - 13 Jul 2026
+- Add TxContext for atomic cross-stream message hand-off: a consumer can offer messages to
+  other streams that are delivered atomically with acknowledgment of the current message
+  (a single MULTI/EXEC on Redis; an in-memory equivalent for LocalMessageStream)
+- BREAKING (source): MessageConsumer.accept now takes a TxContext parameter
+  (accept(T) -> accept(T, TxContext<T>)); implementors must add the parameter
+- LocalMessageStream can share a backing store across instances so a hand-off queued on
+  one instance reaches a consumer living on another
+
+1.5.0 - 14 May 2026
+- BREAKING (observability): rename Outcome.FAILED -> Outcome.ACTIVE; metric tag value
+  outcome="failed" is now outcome="active". The Java API is source-compatible, but any
+  downstream dashboard or alert filtering on outcome="failed" will silently return no
+  data after upgrade and must be updated. Real failures are unchanged: outcome="errored".
+- The rename clarifies that consumer-returns-false means "work still in progress, keep
+  for redelivery" rather than a failure.
+
+1.4.0 - 13 May 2026
+- Add optional Micrometer instrumentation (backlog gauge, processed counter, processing-time Timer)
+- New backward-compatible constructor: AbstractMessageStream(MessageStream, StreamMetrics)
+- New public types under io.seqera.data.stream.metrics: StreamMetrics, MicrometerStreamMetrics, NoopStreamMetrics, Outcome
+- micrometer-core is a compileOnly dependency; AbstractMessageStream itself never references MeterRegistry,
+  so subclasses without metrics remain loadable on classpaths without micrometer-core
+
 1.3.0 - 20 Feb 2026
 - Rewrite production code from Groovy to Java
 - Add SleepHelper utility to simplify sleep patterns
