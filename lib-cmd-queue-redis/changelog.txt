@@ -1,5 +1,16 @@
 # lib-cmd-queue-redis changelog
 
+0.5.1 - 16 Jul 2026
+- Fix: a handler that throws is no longer treated as a terminal command failure. The catch in
+  CommandServiceImpl.processCommandWithHandler now returns false — keeping the message leased so
+  the stream layer re-polls it — instead of persisting FAILED and acking (which removed the
+  message from the queue). A transient/infra error (e.g. the Postgres connection pool closing
+  during pod shutdown) previously became a permanent FAILED command while the domain entity was
+  left non-terminal, stranding the work with an empty queue and no retry (seqeralabs/sched#712).
+  A genuine command failure must be signalled by returning a FAILED CommandResult, never by
+  throwing; deciding a command has *permanently* failed is delegated to the domain layer that
+  owns the entity state.
+
 0.5.0 - 11 Jul 2026
 - BREAKING (API): CommandConfig.executeTimeout() is removed — the per-command execute-timeout
   mechanism no longer exists (handlers run asynchronously, so nothing blocks the loop).
