@@ -172,6 +172,23 @@ class CommandServiceTest extends Specification implements TestPropertyProvider {
         result.processedValue == 99
     }
 
+    def 'should retry a handler that throws instead of failing it terminally'() {
+        given: 'a command whose handler throws on the first attempt, then succeeds'
+        def params = new TestParams(7, 'flaky')
+        def command = new TestCommand(TsidCreator.getTsid().toLowerCase(), 'test', params)
+
+        when: 'command is submitted'
+        commandService.submit(command)
+
+        and: 'wait for the first (throwing) attempt to be retried'
+        sleep(3000)
+        def state = commandService.getState(command.id()).orElseThrow()
+
+        then: 'the throw was treated as transient and retried to success, not persisted as FAILED'
+        state.status() == CommandStatus.SUCCEEDED
+        commandService.getResult(command.id(), TestResult).orElseThrow().message == 'Recovered'
+    }
+
     def 'should handle unknown command type'() {
         given:
         def params = new TestParams(42, 'fast')
@@ -239,6 +256,7 @@ class TestCommand implements Command<TestParams> {
 
 class TestCommandHandler implements CommandHandler<TestParams, TestResult> {
     private Instant startTime
+    private final java.util.concurrent.atomic.AtomicInteger flakyAttempts = new java.util.concurrent.atomic.AtomicInteger()
 
     @Override
     String type() { 'test' }
@@ -249,6 +267,14 @@ class TestCommandHandler implements CommandHandler<TestParams, TestResult> {
 
         if (params.mode == 'fail') {
             return CommandResult.failure('Intentional failure')
+        }
+
+        if (params.mode == 'flaky') {
+            // throw on the first attempt (simulating a transient/infra error), succeed on retry
+            if (flakyAttempts.getAndIncrement() == 0) {
+                throw new RuntimeException('Transient failure')
+            }
+            return CommandResult.success(new TestResult('Recovered', params.value))
         }
 
         if (params.mode == 'slow') {
