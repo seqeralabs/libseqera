@@ -263,6 +263,10 @@ public class CommandServiceImpl implements CommandService {
                 // Ensure state reflects RUNNING status for accurate reporting
                 if (state.status() != CommandStatus.RUNNING) {
                     store.save(state.started());
+                } else if (state.errorsCount() > 0) {
+                    // Recovered after one or more transient errors — reset the streak. Single write,
+                    // and only when there is something to reset, so healthy re-polls stay write-free.
+                    store.save(state.clearErrors());
                 }
                 return false; // Keep in queue - re-polled and will call checkStatus()
             }
@@ -284,7 +288,22 @@ public class CommandServiceImpl implements CommandService {
             // non-terminal, stranding the work. Deciding a command has *permanently* failed is
             // delegated to the domain layer that owns the entity state (see seqeralabs/sched#712).
             log.error("Command processing errored, will retry: id={}", msg.commandId(), e);
+            recordError(state, e);
             return false; // Keep in queue - redelivered / re-polled
+        }
+    }
+
+    /**
+     * Best-effort: record a non-terminal processing error on the command state — increment the
+     * consecutive-error count and capture the message — for observability of a retry storm on a
+     * command that stays retryable. A failure to persist this must not change control flow: the
+     * command is kept in the queue and retried regardless.
+     */
+    private void recordError(CommandState state, Exception e) {
+        try {
+            store.save(state.withError(e.getMessage()));
+        } catch (Exception saveErr) {
+            log.warn("Failed to record command error state: id={}", state.id(), saveErr);
         }
     }
 }
