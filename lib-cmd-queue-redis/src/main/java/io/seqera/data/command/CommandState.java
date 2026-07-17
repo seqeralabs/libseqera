@@ -26,22 +26,23 @@ import io.micronaut.core.annotation.Nullable;
  * Uses @JsonTypeInfo to preserve type information for params and result
  * during serialization, enabling proper deserialization without explicit type knowledge.
  *
- * <p>Error-tracking fields ({@code errorsCount}, {@code lastError}) capture processing
- * errors that did <em>not</em> terminally fail the command — a handler that threw is retried
- * (see {@code CommandServiceImpl}), and these record how many consecutive times it has thrown and
- * the most recent message, for observability of a retry storm on an otherwise non-terminal command.
- * Distinct from {@code error}, which is the terminal failure reason (set only when FAILED).
- * {@code modifiedAt} is refreshed on every state write, giving a last-touched timestamp.
+ * <p>{@code errorsCount} counts processing errors that did <em>not</em> terminally fail the
+ * command — a handler that threw is retried (see {@code CommandServiceImpl}), so this records how
+ * many consecutive times it has thrown, for observability of a retry storm on an otherwise
+ * non-terminal command. {@code error} holds the message of the most recent error, transient or
+ * terminal — check {@code status == FAILED} to tell a terminal failure from a transient one, not
+ * {@code error != null}. {@code modifiedAt} is refreshed on every state write, giving a
+ * last-touched timestamp.
  *
  * @param id command id
  * @param type command type discriminator
  * @param status current lifecycle status
  * @param params command parameters (polymorphic, type preserved via {@code @JsonTypeInfo})
  * @param result terminal result payload, if any (polymorphic)
- * @param error terminal failure reason (non-null only when {@code status == FAILED})
+ * @param error message of the most recent error, transient or terminal (nullable); terminal only
+ *        when {@code status == FAILED}
  * @param errorsCount number of consecutive processing errors since the last successful
  *        processing; reset to 0 on any successful transition or recovery
- * @param lastError message of the most recent processing error, transient or terminal (nullable)
  * @param createdAt when the command was first submitted
  * @param startedAt when the command first transitioned to RUNNING (nullable)
  * @param modifiedAt when the command state was last written (nullable for pre-existing records)
@@ -57,7 +58,6 @@ public record CommandState(
         @Nullable Object result,
         @Nullable String error,
         int errorsCount,
-        @Nullable String lastError,
         Instant createdAt,
         @Nullable Instant startedAt,
         @Nullable Instant modifiedAt,
@@ -71,7 +71,7 @@ public record CommandState(
         final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.SUBMITTED, params,
-                null, null, 0, null, now, null, now, null
+                null, null, 0, now, null, now, null
         );
     }
 
@@ -83,7 +83,7 @@ public record CommandState(
         final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.RUNNING, params,
-                result, error, 0, lastError, createdAt, now, now, completedAt
+                result, error, 0, createdAt, now, now, completedAt
         );
     }
 
@@ -94,7 +94,7 @@ public record CommandState(
         final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.SUCCEEDED, params,
-                result, null, 0, lastError, createdAt, startedAt, now, now
+                result, null, 0, createdAt, startedAt, now, now
         );
     }
 
@@ -105,7 +105,7 @@ public record CommandState(
         final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.FAILED, params,
-                null, error, errorsCount, error, createdAt, startedAt, now, now
+                null, error, errorsCount, createdAt, startedAt, now, now
         );
     }
 
@@ -116,7 +116,7 @@ public record CommandState(
         final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.CANCELLED, params,
-                null, null, 0, lastError, createdAt, startedAt, now, now
+                null, null, 0, createdAt, startedAt, now, now
         );
     }
 
@@ -128,18 +128,18 @@ public record CommandState(
     public CommandState withError(String message) {
         return new CommandState(
                 id, type, status, params,
-                result, error, errorsCount + 1, message, createdAt, startedAt, Instant.now(), completedAt
+                result, message, errorsCount + 1, createdAt, startedAt, Instant.now(), completedAt
         );
     }
 
     /**
      * Clear the consecutive-error streak after a recovery, without changing status. Refreshes
-     * {@code modifiedAt}. {@code lastError} is retained as a historical marker of the last error seen.
+     * {@code modifiedAt}. {@code error} is retained as a historical marker of the last error seen.
      */
     public CommandState clearErrors() {
         return new CommandState(
                 id, type, status, params,
-                result, error, 0, lastError, createdAt, startedAt, Instant.now(), completedAt
+                result, error, 0, createdAt, startedAt, Instant.now(), completedAt
         );
     }
 

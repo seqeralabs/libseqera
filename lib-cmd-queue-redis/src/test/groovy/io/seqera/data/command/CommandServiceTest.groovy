@@ -205,7 +205,7 @@ class CommandServiceTest extends Specification implements TestPropertyProvider {
         then: 'the command stays retryable while the error streak and last message are recorded'
         !state.status().isTerminal()
         state.errorsCount() >= 1
-        state.lastError() == 'Persistent boom'
+        state.error() == 'Persistent boom'
         state.modifiedAt() != null
     }
 

@@ -178,7 +178,7 @@ class CommandStateSerializationTest extends Specification {
         given: 'the encoder as wired by CommandStateStoreFactory'
         def encoder = new JacksonEncodingStrategy<CommandState>() {}
         def now = Instant.now()
-        and: 'old-format JSON, before errorsCount/lastError/modifiedAt existed'
+        and: 'old-format JSON, before errorsCount/modifiedAt existed'
         def paramsClass = CreateJobParams.name
         def legacyJson = """\
             {
@@ -203,7 +203,6 @@ class CommandStateSerializationTest extends Specification {
         decoded.params().image == 'alpine:latest'
         and: 'new fields default without a stored value — safe rolling deploy'
         decoded.errorsCount() == 0
-        decoded.lastError() == null
         decoded.modifiedAt() == null
     }
 }
