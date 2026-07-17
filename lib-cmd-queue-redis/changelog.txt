@@ -1,7 +1,8 @@
 # lib-cmd-queue-redis changelog
 
 0.7.0 - 17 Jul 2026
-- Adopt the lib-data-workqueue / lib-data-workqueue-redis modules; drop lib-data-stream-redis.
+- Adopt the lib-data-workqueue / lib-data-workqueue-redis modules; no longer depends on
+  lib-data-stream-redis (which remains available as a standalone module).
 - MessageStream -> WorkQueue, AbstractMessageStream -> AbstractWorkQueue, StreamMetrics ->
   QueueMetrics, NoopStreamMetrics -> NoopQueueMetrics; package io.seqera.data.stream.* ->
   io.seqera.data.workqueue.* (MessageConsumer name unchanged, new package). No behavioural change.
