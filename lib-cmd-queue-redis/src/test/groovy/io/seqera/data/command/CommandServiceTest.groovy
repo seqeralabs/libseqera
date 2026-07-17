@@ -187,6 +187,26 @@ class CommandServiceTest extends Specification implements TestPropertyProvider {
         then: 'the throw was treated as transient and retried to success, not persisted as FAILED'
         state.status() == CommandStatus.SUCCEEDED
         commandService.getResult(command.id(), TestResult).orElseThrow().message == 'Recovered'
+
+        and: 'the consecutive-error streak is reset once the command recovers'
+        state.errorsCount() == 0
+    }
+
+    def 'should track consecutive errors and last message without failing a still-retryable command'() {
+        given: 'a handler that always throws'
+        def params = new TestParams(0, 'always-throw')
+        def command = new TestCommand(TsidCreator.getTsid().toLowerCase(), 'test', params)
+
+        when: 'command is submitted and retried a few times'
+        commandService.submit(command)
+        sleep(2000)
+        def state = commandService.getState(command.id()).orElseThrow()
+
+        then: 'the command stays retryable while the error streak and last message are recorded'
+        !state.status().isTerminal()
+        state.errorsCount() >= 1
+        state.error() == 'Persistent boom'
+        state.modifiedAt() != null
     }
 
     def 'should handle unknown command type'() {
@@ -275,6 +295,10 @@ class TestCommandHandler implements CommandHandler<TestParams, TestResult> {
                 throw new RuntimeException('Transient failure')
             }
             return CommandResult.success(new TestResult('Recovered', params.value))
+        }
+
+        if (params.mode == 'always-throw') {
+            throw new RuntimeException('Persistent boom')
         }
 
         if (params.mode == 'slow') {

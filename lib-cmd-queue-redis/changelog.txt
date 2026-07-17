@@ -1,5 +1,16 @@
 # lib-cmd-queue-redis changelog
 
+0.6.0 - 16 Jul 2026
+- Add error-tracking fields to CommandState for observability of a retry storm on a command that
+  stays retryable (i.e. errors that do not terminally fail it, since a thrown handler is now
+  retried — see 0.5.1): errorsCount (count of consecutive processing errors since the last
+  successful processing), lastError (most recent error message, transient or terminal), and
+  modifiedAt (last-write timestamp). CommandServiceImpl increments the count / records the message
+  on each caught handler exception (best-effort — a failed record never changes control flow), and
+  resets the streak on any successful transition or recovery. Distinct from the existing `error`
+  field, which remains the terminal failure reason. Backward-compatible: the new fields default to
+  0/null when an older serialized CommandState is read.
+
 0.5.1 - 16 Jul 2026
 - Fix: a handler that throws is no longer treated as a terminal command failure. The catch in
   CommandServiceImpl.processCommandWithHandler now returns false — keeping the message leased so

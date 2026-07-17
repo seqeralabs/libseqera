@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-cmd-queue-redis:0.5.0'
+    implementation 'io.seqera:lib-cmd-queue-redis:0.6.0'
 }
 ```
 
