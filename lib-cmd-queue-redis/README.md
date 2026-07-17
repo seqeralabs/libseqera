@@ -261,7 +261,7 @@ just transport; the store is the source of truth.
         │                                          ▼
         │                     ┌─────────────────────────────────────────────┐
         └─────────────────────│  CommandQueue (Redis stream / in-memory)    │
-                              │  = AbstractMessageStream: dispatcher +      │
+                              │  = AbstractWorkQueue: dispatcher +          │
                               │  worker pool + heartbeat lease → exactly    │
                               │  one live runner per command, no timeout    │
                               └─────────────────────────────────────────────┘
@@ -272,7 +272,7 @@ just transport; the store is the source of truth.
 | Component | Role |
 |-----------|------|
 | `CommandService` | Public facade: `submit`, `getState`, `getResult`, `cancel`, `registerHandler`, `start`/`stop`. |
-| `CommandQueue` | Abstract `AbstractMessageStream<CommandMsg>` (from `lib-data-stream-redis`). Carries only `CommandMsg` (id + type), Moshi-encoded. Backed by a Redis stream or an in-memory stream. |
+| `CommandQueue` | Abstract `AbstractWorkQueue<CommandMsg>` (from `lib-data-workqueue`). Carries only `CommandMsg` (id + type), Moshi-encoded. Backed by a Redis-backed or in-memory work queue. |
 | `CommandStateStore` | Abstract `AbstractStateStore<CommandState>` (from `lib-data-store-state-redis`). Holds the full JSON state with a TTL (default 7 days). Backed by Redis or in-memory. |
 | `CommandHandler<P,R>` | User code: `execute()` runs the work; optional `checkStatus()` polls a long-running/external job. |
 | `CommandState` | Persisted record (params + result via `@JsonTypeInfo`, status, timings). The source of truth. |
@@ -313,9 +313,9 @@ A quick command finishes in one delivery; a slow or external one flips to `RUNNI
 and is driven to completion by repeated `checkStatus()` calls at `pollInterval`
 cadence. Handler exceptions transition the command to `FAILED` and ack. There is no
 per-command timeout and no per-command lock — the handler runs to completion on a
-virtual thread, and the underlying stream's per-message lease guarantees a single
+virtual thread, and the underlying work queue's per-message lease guarantees a single
 concurrent runner across replicas (see
-[`lib-data-stream-redis`](../lib-data-stream-redis/README.md)).
+[`lib-data-workqueue`](../lib-data-workqueue/README.md)).
 
 ### Multi-replica behaviour
 
