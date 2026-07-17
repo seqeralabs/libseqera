@@ -49,6 +49,11 @@ class PairingServiceImpl implements PairingService {
 
     @Override
     PairingResponse acquirePairingKey(String service, String endpoint) {
+        return acquirePairingKey(service, endpoint, null)
+    }
+
+    @Override
+    PairingResponse acquirePairingKey(String service, String endpoint, String token) {
         final key = makeKey(service,endpoint)
 
         def entry = store.get(key)
@@ -57,11 +62,17 @@ class PairingServiceImpl implements PairingService {
             log.debug "Pairing with service '${service}' at address $endpoint - pairing id: $pairingId (key: $key)"
             final keyPair = generate()
             final expiration = Instant.now() + config.keyLease
-            final newEntry = new PairingRecord(service, endpoint, pairingId, keyPair.getPrivate().getEncoded(), keyPair.getPublic().getEncoded(), expiration)
+            final newEntry = new PairingRecord(service, endpoint, pairingId, keyPair.getPrivate().getEncoded(), keyPair.getPublic().getEncoded(), expiration, token)
             store.put(key,newEntry)
             entry = newEntry
         } else {
             log.trace "Paired already with service '${service}' at address $endpoint - pairing id: $entry.pairingId (key: $key)"
+            // refresh the license token on the existing record so a token rotation
+            // is reflected without waiting for the record to expire
+            if (token != null && token != entry.token) {
+                entry.token = token
+                store.put(key, entry)
+            }
         }
 
         return new PairingResponse( pairingId: entry.pairingId, publicKey: entry.publicKey.encodeBase64() )

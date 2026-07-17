@@ -23,7 +23,15 @@ import groovy.transform.Canonical
 import groovy.transform.ToString
 
 /**
- * Model a security key record associated with a registered service endpoint
+ * Model a security key record associated with a registered service endpoint.
+ *
+ * <p>The optional {@code token} is the license token the remote service
+ * presented when it opened the pairing session (for {@code tower} pairings this
+ * is the SHA-256 checksum of the Enterprise license). It is captured so that a
+ * request whose declared endpoint resolves to this record can be validated
+ * against the license binding held by the license manager. It is {@code null}
+ * for records created before this field existed, or when the remote service
+ * paired without a token.
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
@@ -36,6 +44,7 @@ class PairingRecord {
     byte[] privateKey
     byte[] publicKey
     Instant expiration
+    String token
 
     boolean isExpiredAt(Instant time) {
         return expiration == null || expiration.isBefore(time)
