@@ -80,9 +80,10 @@ public record CommandState(
      * consecutive-error streak is reset.
      */
     public CommandState started() {
+        final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.RUNNING, params,
-                result, error, 0, lastError, createdAt, Instant.now(), Instant.now(), completedAt
+                result, error, 0, lastError, createdAt, now, now, completedAt
         );
     }
 

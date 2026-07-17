@@ -20,6 +20,7 @@ import java.time.Instant
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import groovy.transform.Canonical
+import io.seqera.data.command.CommandState
 import io.seqera.data.command.CommandStatus
 import io.seqera.serde.jackson.JacksonEncodingStrategy
 import spock.lang.Specification
@@ -171,5 +172,38 @@ class CommandStateSerializationTest extends Specification {
         decoded.params.image == 'ubuntu:22.04'
         decoded.result == null
         decoded.status == CommandStatus.RUNNING
+    }
+
+    def 'should decode legacy JSON without error-tracking fields into the real record'() {
+        given: 'the encoder as wired by CommandStateStoreFactory'
+        def encoder = new JacksonEncodingStrategy<CommandState>() {}
+        def now = Instant.now()
+        and: 'old-format JSON, before errorsCount/lastError/modifiedAt existed'
+        def paramsClass = CreateJobParams.name
+        def legacyJson = """\
+            {
+                "id": "cmd-legacy",
+                "type": "create-job",
+                "status": "RUNNING",
+                "params": {"@class": "${paramsClass}", "image": "alpine:latest", "command": "echo hi", "cpu": 1, "memory": 512},
+                "result": null,
+                "error": null,
+                "createdAt": "${now}",
+                "startedAt": "${now}",
+                "completedAt": null
+            }""".stripIndent()
+
+        when:
+        def decoded = encoder.decode(legacyJson)
+
+        then: 'existing fields survive'
+        decoded.id() == 'cmd-legacy'
+        decoded.status() == CommandStatus.RUNNING
+        decoded.params() instanceof CreateJobParams
+        decoded.params().image == 'alpine:latest'
+        and: 'new fields default without a stored value — safe rolling deploy'
+        decoded.errorsCount() == 0
+        decoded.lastError() == null
+        decoded.modifiedAt() == null
     }
 }
