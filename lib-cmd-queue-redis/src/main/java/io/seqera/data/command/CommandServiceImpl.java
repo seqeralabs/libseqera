@@ -302,8 +302,8 @@ public class CommandServiceImpl implements CommandService {
     private void recordError(CommandState state, Exception e) {
         try {
             store.save(state.withError(e.getMessage() != null ? e.getMessage() : e.toString()));
-        } catch (Exception saveErr) {
-            log.warn("Failed to record command error state: id={}", state.id(), saveErr);
+        } catch (Exception fail) {
+            log.warn("Failed to record command error state: id={}", state.id(), fail);
         }
     }
 }
