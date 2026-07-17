@@ -1,5 +1,11 @@
 # lib-httpx changelog
 
+2.4.0 - 7 Jul 2026
+- Add authenticated forward-proxy support to HxClient
+- Add proxy(ProxySelector) and authenticator(Authenticator) passthroughs to HxClient.Builder, mirroring java.net.http.HttpClient.Builder
+- Add HxProxyConfig value (built via HxProxyConfig.newBuilder from explicit host/port/credentials and NO_PROXY entries) exposing a proxy selector and proxy-only authenticator, applied with HxClient.Builder.withProxyConfig(...)
+- Make the internal token refresh and anonymous Bearer token clients inherit the proxy settings
+
 2.3.0 - 27 May 2026
 - Honor server-supplied Retry-After header (delta-seconds) on retried HTTP responses
 - Debug-log unparseable Retry-After header values

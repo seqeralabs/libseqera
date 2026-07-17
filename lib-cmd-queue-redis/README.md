@@ -237,6 +237,94 @@ lease lapses and a peer reclaims the command. The store is the shared source of 
 so the terminal-state check keeps processing idempotent. Delivery is **at-least-once**,
 so `execute()`/`checkStatus()` should be idempotent.
 
+## Architecture
+
+Under the hood the module splits a command into two independently stored parts:
+a lightweight **message** that flows through a queue, and the **full state**
+(params, result, status, timings) that lives in a persistent store. The queue is
+just transport; the store is the source of truth.
+
+```
+   submit(command)
+        │  persist SUBMITTED state + enqueue CommandMsg (fire-and-forget)
+        ▼
+  ┌──────────────┐  save() ┌────────────────────────────────────────────────┐
+  │ CommandState │◀────────┤              CommandServiceImpl                │
+  │    store     │  find() │  processCommand(msg): load state, then         │──▶ execute()
+  │ (Redis/mem)  │────────▶│  dispatch the handler to a worker pool         │    checkStatus()
+  │              │         │  (off the dispatcher thread; virtual threads): │
+  └──────────────┘         │    • terminal  → ack (remove from queue)       │
+        ▲                  │    • running() → keep lease, re-poll after     │
+        │ getState/Result  │                  pollInterval (in-process)     │
+        │                  └───────────────────────┬────────────────────────┘
+        │                       submit(msg)        │  addConsumer(processCommand)
+        │                                          ▼
+        │                     ┌─────────────────────────────────────────────┐
+        └─────────────────────│  CommandQueue (Redis stream / in-memory)    │
+                              │  = AbstractMessageStream: dispatcher +      │
+                              │  worker pool + heartbeat lease → exactly    │
+                              │  one live runner per command, no timeout    │
+                              └─────────────────────────────────────────────┘
+```
+
+### Components
+
+| Component | Role |
+|-----------|------|
+| `CommandService` | Public facade: `submit`, `getState`, `getResult`, `cancel`, `registerHandler`, `start`/`stop`. |
+| `CommandQueue` | Abstract `AbstractMessageStream<CommandMsg>` (from `lib-data-stream-redis`). Carries only `CommandMsg` (id + type), Moshi-encoded. Backed by a Redis stream or an in-memory stream. |
+| `CommandStateStore` | Abstract `AbstractStateStore<CommandState>` (from `lib-data-store-state-redis`). Holds the full JSON state with a TTL (default 7 days). Backed by Redis or in-memory. |
+| `CommandHandler<P,R>` | User code: `execute()` runs the work; optional `checkStatus()` polls a long-running/external job. |
+| `CommandState` | Persisted record (params + result via `@JsonTypeInfo`, status, timings). The source of truth. |
+| `CommandMsg` | Minimal queue pointer — just `commandId` + `type`; the payload is looked up from the store on delivery. |
+
+Backend selection is automatic: when a `RedisActivator` bean is present both the
+queue and the store use Redis; otherwise they fall back to in-memory
+implementations (useful for tests and single-node setups).
+
+### Submit path
+
+`submit()` is fire-and-forget: it persists a `SUBMITTED` `CommandState` to the
+store, then enqueues a `CommandMsg`, and returns the command id immediately. No
+handler runs on the caller's thread.
+
+### Processing loop
+
+`start()` supplies the shared Micronaut `BLOCKING` (virtual-thread) executor to the
+queue and registers `processCommand` as the consumer. The queue's dispatcher thread
+never runs a handler itself: it hands each delivered `CommandMsg` to the executor and
+returns immediately, so a slow handler never blocks intake. The consumer returns a
+boolean:
+
+- **`true`** → terminal; the message is acknowledged and removed.
+- **`false`** → not yet terminal; the command **keeps its lease** and `processCommand`
+  is re-invoked in-process after `pollInterval` (the poll loop for long-running commands).
+
+For each delivery, `processCommand` loads the state and decides:
+
+1. **State missing or already terminal** → `true`; nothing to do (another replica finished it, or it was cancelled).
+2. **No handler registered** → mark `FAILED`, `true`.
+3. **State is `SUBMITTED`** → run `handler.execute()`. Terminal result → apply, `true`;
+   `running()` → mark `RUNNING`, `false` (re-polled after `pollInterval`).
+4. **State is `RUNNING`** → run `handler.checkStatus()`. Terminal → `true`;
+   `running()` → `false` (re-polled again).
+
+A quick command finishes in one delivery; a slow or external one flips to `RUNNING`
+and is driven to completion by repeated `checkStatus()` calls at `pollInterval`
+cadence. Handler exceptions transition the command to `FAILED` and ack. There is no
+per-command timeout and no per-command lock — the handler runs to completion on a
+virtual thread, and the underlying stream's per-message lease guarantees a single
+concurrent runner across replicas (see
+[`lib-data-stream-redis`](../lib-data-stream-redis/README.md)).
+
+### Multi-replica behaviour
+
+The stream's per-message lease (a heartbeated Redis consumer-group entry) ensures a
+command is processed by exactly one live replica at a time; if that replica dies, the
+lease lapses and a peer reclaims the command. The store is the shared source of truth,
+so the terminal-state check keeps processing idempotent. Delivery is **at-least-once**,
+so `execute()`/`checkStatus()` should be idempotent.
+
 ## Command Status Flow
 
 ```

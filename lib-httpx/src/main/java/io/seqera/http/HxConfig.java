@@ -17,7 +17,10 @@
 
 package io.seqera.http;
 
+import java.net.Authenticator;
 import java.net.CookiePolicy;
+import java.net.ProxySelector;
+import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -90,6 +93,9 @@ public class HxConfig implements Retryable.Config {
 
     private CookiePolicy refreshCookiePolicy;
 
+    private ProxySelector proxySelector;
+    private Authenticator proxyAuthenticator;
+
     @Override
     public Duration getDelay() {
         return delay;
@@ -155,6 +161,29 @@ public class HxConfig implements Retryable.Config {
         return refreshCookiePolicy;
     }
 
+    public ProxySelector getProxySelector() {
+        return proxySelector;
+    }
+
+    public Authenticator getProxyAuthenticator() {
+        return proxyAuthenticator;
+    }
+
+    /**
+     * Applies the configured proxy selector and authenticator, when present, to the given
+     * HTTP client builder. Used for the main {@link HxClient} as well as the internal clients
+     * created for JWT token refresh and anonymous Bearer token retrieval, so that all of them
+     * share the same proxy configuration.
+     *
+     * @param builder the HTTP client builder to configure
+     */
+    void applyProxySettings(HttpClient.Builder builder) {
+        if (proxySelector != null)
+            builder.proxy(proxySelector);
+        if (proxyAuthenticator != null)
+            builder.authenticator(proxyAuthenticator);
+    }
+
     /**
      * Creates a new builder instance for constructing HttpConfig objects.
      * 
@@ -186,6 +215,8 @@ public class HxConfig implements Retryable.Config {
         private boolean wwwAuthenticationEnabled = false;
         private AuthenticationCallback wwwAuthenticationCallback;
         private CookiePolicy refreshCookiePolicy;
+        private ProxySelector proxySelector;
+        private Authenticator proxyAuthenticator;
 
         /**
          * Sets the initial retry delay duration.
@@ -603,6 +634,36 @@ public class HxConfig implements Retryable.Config {
         }
 
         /**
+         * Sets the proxy selector used to route HTTP requests through a forward proxy.
+         *
+         * <p>The selector is used both by the main HTTP client and by the internal HTTP
+         * clients created for JWT token refresh and anonymous Bearer token retrieval.
+         *
+         * @param proxySelector the proxy selector, or null to use the JVM default behaviour
+         * @return this builder instance for method chaining
+         * @see HxProxyConfig
+         */
+        public Builder proxySelector(ProxySelector proxySelector) {
+            this.proxySelector = proxySelector;
+            return this;
+        }
+
+        /**
+         * Sets the authenticator used to supply credentials to an authenticating forward proxy,
+         * applied to the main HTTP client and the internal token refresh clients. See
+         * {@link HxProxyConfig} for the {@code Authenticator.setDefault} and Basic-over-HTTPS
+         * tunnelling caveats.
+         *
+         * @param proxyAuthenticator the authenticator providing proxy credentials, or null for none
+         * @return this builder instance for method chaining
+         * @see HxProxyConfig#toAuthenticator()
+         */
+        public Builder proxyAuthenticator(Authenticator proxyAuthenticator) {
+            this.proxyAuthenticator = proxyAuthenticator;
+            return this;
+        }
+
+        /**
          * Configures retry settings from a generic Retryable.Config instance.
          * This allows building HttpConfig with retry configuration from other sources.
          * 
@@ -657,7 +718,9 @@ public class HxConfig implements Retryable.Config {
             config.wwwAuthenticateEnabled = this.wwwAuthenticationEnabled;
             config.authenticationCallback = this.wwwAuthenticationCallback;
             config.refreshCookiePolicy = this.refreshCookiePolicy;
-            
+            config.proxySelector = this.proxySelector;
+            config.proxyAuthenticator = this.proxyAuthenticator;
+
             // Validate authentication configuration
             if (this.bearerToken != null && this.basicAuthToken != null) {
                 throw new IllegalArgumentException("Cannot configure both JWT token and Basic authentication. Choose one authentication method.");

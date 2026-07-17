@@ -1,6 +1,6 @@
 # lib-cmd-queue-redis changelog
 
-0.7.0 - 11 Jul 2026
+0.7.0 - 17 Jul 2026
 - Adopt the lib-data-workqueue / lib-data-workqueue-redis modules; drop lib-data-stream-redis.
 - MessageStream -> WorkQueue, AbstractMessageStream -> AbstractWorkQueue, StreamMetrics ->
   QueueMetrics, NoopStreamMetrics -> NoopQueueMetrics; package io.seqera.data.stream.* ->
@@ -10,32 +10,61 @@
 - CommandQueue now takes a CommandConfig in its constructor and reads pollInterval() /
   concurrency() from it directly; subclasses only implement name() (no more per-subclass
   pollInterval/concurrency wiring). Constructor change: (target, config[, metrics]).
-- Requires lib-data-workqueue 1.0.0+ / lib-data-workqueue-redis 1.0.0+
-
-0.6.0 - 11 Jul 2026
 - Rename CommandStatus.SUBMITTED -> PENDING and RUNNING -> PROCESSING (the latter to avoid
   confusion with a downstream task's own "running" state). The dead, never-persisted PENDING
   value is removed.
 - Wire compatibility: new state is serialized with the new names; legacy SUBMITTED/RUNNING
   entries still decode via @JsonAlias, so command state persisted by earlier versions is read
   correctly.
-- MIGRATION: upgrade to 0.6.0 with a SINGLE replica (scale the service to 1 for the duration
-  of the rollout, then scale back up). Do NOT run a mixed pre-0.6.0 / 0.6.0 deployment: a
-  pre-0.6.0 replica cannot deserialize the PENDING/PROCESSING names written by a 0.6.0 replica.
-  A single-replica rollout guarantees the two versions never read the same Redis concurrently.
+- MIGRATION: upgrade with a SINGLE replica (scale the service to 1 for the duration of the
+  rollout, then scale back up). Do NOT run a mixed old / new deployment: an older replica
+  cannot deserialize the PENDING/PROCESSING names written by a new replica. A single-replica
+  rollout guarantees the two versions never read the same Redis concurrently.
 - CommandResult.running() is deprecated in favour of CommandResult.processing() (identical
   behaviour); the switch on command status now fails loud on any unexpected value.
 - Source-breaking for downstream references to CommandStatus.SUBMITTED/RUNNING (e.g. sched):
   update to PENDING/PROCESSING. The running() helper remains (deprecated) so handler code compiles.
+- Requires lib-data-workqueue 1.0.0+ / lib-data-workqueue-redis 1.0.0+
+
+0.6.0 - 16 Jul 2026
+- Add error-tracking fields to CommandState for observability of a retry storm on a command that
+  stays retryable (i.e. errors that do not terminally fail it, since a thrown handler is now
+  retried — see 0.5.1): errorsCount (count of consecutive processing errors since the last
+  successful processing) and modifiedAt (last-write timestamp). The existing `error` field now
+  also holds the message of a transient (non-terminal) processing error — it carries the most
+  recent error message, transient or terminal; the terminal failure is identified by
+  status == FAILED, not by error being non-null. CommandServiceImpl increments the count /
+  records the message on each caught handler exception (best-effort — a failed record never
+  changes control flow), and resets the streak on any successful transition or recovery.
+  Backward-compatible: the new fields default to 0/null when an older serialized CommandState
+  is read.
+
+0.5.1 - 16 Jul 2026
+- Fix: a handler that throws is no longer treated as a terminal command failure. The catch in
+  CommandServiceImpl.processCommandWithHandler now returns false — keeping the message leased so
+  the stream layer re-polls it — instead of persisting FAILED and acking (which removed the
+  message from the queue). A transient/infra error (e.g. the Postgres connection pool closing
+  during pod shutdown) previously became a permanent FAILED command while the domain entity was
+  left non-terminal, stranding the work with an empty queue and no retry (seqeralabs/sched#712).
+  A genuine command failure must be signalled by returning a FAILED CommandResult, never by
+  throwing; deciding a command has *permanently* failed is delegated to the domain layer that
+  owns the entity state.
 
 0.5.0 - 11 Jul 2026
-- Remove executeWithTimeout / the BLOCKING executor / future.get(timeout); execute() and
-  checkStatus() now run on the shared worker pool and never block the listener loop.
-- Remove the per-command distributed lock: cross-replica single-runner is provided by the
-  message-level lease in lib-data-stream-redis.
+- BREAKING (API): CommandConfig.executeTimeout() is removed — the per-command execute-timeout
+  mechanism no longer exists (handlers run asynchronously, so nothing blocks the loop).
+  Downstream CommandConfig implementations that @Override executeTimeout() must drop the
+  override, and any `<prefix>.command-queue.execute-timeout` config key becomes inert.
+- BREAKING (behaviour): commands are processed asynchronously on a shared worker pool, off the
+  dispatcher thread, with at-least-once delivery via the underlying per-message lease.
+  Handlers (execute()/checkStatus()) MUST be idempotent and thread-safe — they can be
+  re-invoked and, across replicas, may run at-least-once. CommandServiceImpl injects
+  @Named(TaskExecutors.BLOCKING) ExecutorService (provided by Micronaut by default).
+- Remove executeWithTimeout / the BLOCKING future.get(timeout) crutch and the per-command
+  distributed lock: cross-replica single-runner is provided by the message-level lease.
 - Adopt the shared async worker-pool model (lease-based dispatch + heartbeat + Model B
-  re-poll); CommandQueue sets concurrency() > 1 to enable parallelism.
-- Requires lib-data-stream-redis 1.6.0+
+  re-poll); CommandQueue sets concurrency() to bound in-flight commands.
+- Requires lib-data-stream-redis 2.0.0+
 
 0.4.0 - 13 May 2026
 - Add CommandQueue(MessageStream, StreamMetrics) constructor for optional Micrometer instrumentation
