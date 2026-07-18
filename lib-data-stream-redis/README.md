@@ -1,10 +1,17 @@
 # lib-data-stream-redis
 
-> **⚠️ Deprecated.** This module is frozen and kept only for existing consumers. New code
-> should use [`lib-data-workqueue`](../lib-data-workqueue/README.md) +
-> [`lib-data-workqueue-redis`](../lib-data-workqueue-redis/README.md), the split/rename of this
-> library with aligned vocabulary (`poll`→`receive`, `renew`→`renewLease`, `claim-timeout`→
-> `visibility-timeout`). No further changes will be made here.
+> **⚠️ Deprecated.** This module is frozen and kept only for existing consumers; no further
+> changes will be made here. You have two paths:
+>
+> - **Move to [`lib-data-workqueue`](../lib-data-workqueue/README.md) +
+>   [`lib-data-workqueue-redis`](../lib-data-workqueue-redis/README.md)** — the split/rename of
+>   this library with aligned vocabulary (`poll`→`receive`, `renew`→`renewLease`,
+>   `claim-timeout`→`visibility-timeout`). `workqueue 1.0.0` ≡ this library's `2.0.0` behaviour
+>   (async, at-least-once, heartbeat lease — handlers must be idempotent). Recommended for new
+>   code. See the [migration guide](../docs/superpowers/specs/2026-07-11-workqueue-rename-migration.md).
+> - **Stay on `lib-data-stream-redis:1.5.x`** — the last *synchronous* release (handler runs on
+>   the listener thread, exactly-once-per-poll). Pin `1.5.x` if you don't want the `2.0.0`
+>   async/at-least-once rewrite and aren't ready to adopt the idempotency requirement.
 
 Message streaming with Redis Streams and local implementations for persistent event processing.
 
