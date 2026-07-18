@@ -43,4 +43,14 @@ public interface CommandConfig {
     default Duration stateTtl() {
         return Duration.ofDays(7);
     }
+
+    /**
+     * Maximum number of commands that may be in flight on a single instance at once.
+     * Handlers run on virtual threads, so this is a memory/heartbeat ceiling (the underlying
+     * work queue's in-flight semaphore), not a thread-pool size; commands beyond it wait in
+     * the queue (backpressure). Effective minimum is 1.
+     */
+    default int concurrency() {
+        return 1000;
+    }
 }

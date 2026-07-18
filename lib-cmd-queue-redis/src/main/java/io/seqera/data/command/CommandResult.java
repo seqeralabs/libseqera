@@ -45,10 +45,21 @@ public record CommandResult<R>(
     }
 
     /**
-     * Indicate that the command is still running (for long-running commands).
+     * Indicate that the command is still being processed (for long-running commands).
      */
+    public static <R> CommandResult<R> processing() {
+        return new CommandResult<>(CommandStatus.PROCESSING, null, null);
+    }
+
+    /**
+     * Indicate that the command is still running (for long-running commands).
+     *
+     * @deprecated renamed to {@link #processing()} to avoid confusion with a downstream
+     * task's own "running" state. Behaviour is identical; will be removed in a future release.
+     */
+    @Deprecated
     public static <R> CommandResult<R> running() {
-        return new CommandResult<>(CommandStatus.RUNNING, null, null);
+        return processing();
     }
 
     /**

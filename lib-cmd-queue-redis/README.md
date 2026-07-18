@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-cmd-queue-redis:0.6.0'
+    implementation 'io.seqera:lib-cmd-queue-redis:0.7.0'
 }
 ```
 
@@ -16,7 +16,7 @@ dependencies {
 
 - Fire-and-forget command submission
 - Typed parameters and results with JSON serialization
-- Status transitions: `SUBMITTED` → `RUNNING` → `SUCCEEDED`/`FAILED`/`CANCELLED`
+- Status transitions: `PENDING` → `PROCESSING` → `SUCCEEDED`/`FAILED`/`CANCELLED`
 - Non-blocking, concurrent handler execution on virtual threads (no per-command timeout)
 - Periodic status checking for async commands via in-process re-polling
 - Command cancellation support
@@ -78,7 +78,7 @@ public class AsyncProcessingHandler implements CommandHandler<ProcessingParams, 
     public CommandResult<ProcessingResult> execute(Command<ProcessingParams> command) {
         // Start async job
         externalService.startJob(command.id(), command.params());
-        return CommandResult.running();  // checkStatus() will be called later
+        return CommandResult.processing();  // checkStatus() will be called later
     }
 
     @Override
@@ -86,7 +86,7 @@ public class AsyncProcessingHandler implements CommandHandler<ProcessingParams, 
         var status = externalService.getStatus(command.id());
         if (status.isComplete()) return CommandResult.success(status.getResult());
         if (status.isFailed()) return CommandResult.failure(status.getError());
-        return CommandResult.running();  // Still running, check again later
+        return CommandResult.processing();  // Still processing, check again later
     }
 }
 ```
@@ -121,34 +121,33 @@ commandService.stop();
 ## Metrics (optional)
 
 Since `0.4.0`, `CommandQueue` exposes a second constructor that forwards an optional
-[`StreamMetrics`](https://github.com/seqeralabs/libseqera/tree/master/lib-data-stream-redis)
-handle to the underlying `AbstractMessageStream`. Subclasses that want to publish
-Micrometer metrics construct a `MicrometerStreamMetrics` from a `MeterRegistry` and pass
+[`QueueMetrics`](https://github.com/seqeralabs/libseqera/tree/master/lib-data-workqueue)
+handle to the underlying `AbstractWorkQueue`. Subclasses that want to publish
+Micrometer metrics construct a `MicrometerQueueMetrics` from a `MeterRegistry` and pass
 it through:
 
 ```java
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micronaut.core.annotation.Nullable;
-import io.seqera.data.stream.metrics.MicrometerStreamMetrics;
+import io.seqera.data.workqueue.metrics.MicrometerQueueMetrics;
 
 public class MyCommandQueue extends CommandQueue {
 
     @Inject
-    public MyCommandQueue(MessageStream<String> target, @Nullable MeterRegistry registry) {
-        super(target, registry != null
-                ? new MicrometerStreamMetrics(registry, "my-cmd-queue")
+    public MyCommandQueue(WorkQueue<String> target, CommandConfig config, @Nullable MeterRegistry registry) {
+        super(target, config, registry != null
+                ? new MicrometerQueueMetrics(registry, "my-cmd-queue")
                 : null);
     }
 
     @Override protected String name() { return "my-cmd-queue"; }
-    @Override protected Duration pollInterval() { return Duration.ofSeconds(1); }
 }
 ```
 
 The 1-arg constructor is unchanged: existing subclasses continue to compile and run
-with no metrics. See [`lib-data-stream-redis`](../lib-data-stream-redis/README.md) for the
-list of published meters (`seqera.stream.entries`, `seqera.stream.messages`,
-`seqera.stream.processing`) and their tags.
+with no metrics. See [`lib-data-workqueue`](../lib-data-workqueue/README.md) for the
+list of published meters (`seqera.workqueue.entries`, `seqera.workqueue.messages`,
+`seqera.workqueue.processing`) and their tags.
 
 ## Architecture
 
@@ -159,25 +158,25 @@ just transport; the store is the source of truth.
 
 ```
    submit(command)
-        │  persist SUBMITTED state + enqueue CommandMsg (fire-and-forget)
+        │  persist PENDING state + enqueue CommandMsg (fire-and-forget)
         ▼
-  ┌──────────────┐  save() ┌────────────────────────────────────────────────┐
+  ┌──────────────┐  save() ┌──────────────────────────────────────────────┐
   │ CommandState │◀────────┤              CommandServiceImpl                │
   │    store     │  find() │  processCommand(msg): load state, then         │──▶ execute()
   │ (Redis/mem)  │────────▶│  dispatch the handler to a worker pool         │    checkStatus()
   │              │         │  (off the dispatcher thread; virtual threads): │
-  └──────────────┘         │    • terminal  → ack (remove from queue)       │
-        ▲                  │    • running() → keep lease, re-poll after     │
-        │ getState/Result  │                  pollInterval (in-process)     │
+  └──────────────┘         │    • terminal     → ack (remove from queue)    │
+        ▲                  │    • processing() → keep lease, re-poll after  │
+        │ getState/Result  │                     pollInterval (in-process)  │
         │                  └───────────────────────┬────────────────────────┘
-        │                       submit(msg)        │  addConsumer(processCommand)
-        │                                          ▼
-        │                     ┌─────────────────────────────────────────────┐
-        └─────────────────────│  CommandQueue (Redis stream / in-memory)    │
-                              │  = AbstractMessageStream: dispatcher +      │
-                              │  worker pool + heartbeat lease → exactly    │
-                              │  one live runner per command, no timeout    │
-                              └─────────────────────────────────────────────┘
+        │                       submit(msg)         │  addConsumer(processCommand)
+        │                                           ▼
+        │                     ┌────────────────────────────────────────────┐
+        └─────────────────────│  CommandQueue (Redis work queue / in-mem.)  │
+                              │  = AbstractWorkQueue: dispatcher + worker   │
+                              │  pool + heartbeat lease → exactly one live  │
+                              │  runner per command, no timeout             │
+                              └────────────────────────────────────────────┘
 ```
 
 ### Components
@@ -185,7 +184,7 @@ just transport; the store is the source of truth.
 | Component | Role |
 |-----------|------|
 | `CommandService` | Public facade: `submit`, `getState`, `getResult`, `cancel`, `registerHandler`, `start`/`stop`. |
-| `CommandQueue` | Abstract `AbstractMessageStream<CommandMsg>` (from `lib-data-stream-redis`). Carries only `CommandMsg` (id + type), Moshi-encoded. Backed by a Redis stream or an in-memory stream. |
+| `CommandQueue` | Abstract `AbstractWorkQueue<CommandMsg>` (from `lib-data-workqueue-redis`). Carries only `CommandMsg` (id + type), Moshi-encoded. Backed by a Redis work queue or an in-memory queue. |
 | `CommandStateStore` | Abstract `AbstractStateStore<CommandState>` (from `lib-data-store-state-redis`). Holds the full JSON state with a TTL (default 7 days). Backed by Redis or in-memory. |
 | `CommandHandler<P,R>` | User code: `execute()` runs the work; optional `checkStatus()` polls a long-running/external job. |
 | `CommandState` | Persisted record (params + result via `@JsonTypeInfo`, status, timings). The source of truth. |
@@ -197,7 +196,7 @@ implementations (useful for tests and single-node setups).
 
 ### Submit path
 
-`submit()` is fire-and-forget: it persists a `SUBMITTED` `CommandState` to the
+`submit()` is fire-and-forget: it persists a `PENDING` `CommandState` to the
 store, then enqueues a `CommandMsg`, and returns the command id immediately. No
 handler runs on the caller's thread.
 
@@ -217,18 +216,18 @@ For each delivery, `processCommand` loads the state and decides:
 
 1. **State missing or already terminal** → `true`; nothing to do (another replica finished it, or it was cancelled).
 2. **No handler registered** → mark `FAILED`, `true`.
-3. **State is `SUBMITTED`** → run `handler.execute()`. Terminal result → apply, `true`;
-   `running()` → mark `RUNNING`, `false` (re-polled after `pollInterval`).
-4. **State is `RUNNING`** → run `handler.checkStatus()`. Terminal → `true`;
-   `running()` → `false` (re-polled again).
+3. **State is `PENDING`** → run `handler.execute()`. Terminal result → apply, `true`;
+   `processing()` → mark `PROCESSING`, `false` (re-polled after `pollInterval`).
+4. **State is `PROCESSING`** → run `handler.checkStatus()`. Terminal → `true`;
+   `processing()` → `false` (re-polled again).
 
-A quick command finishes in one delivery; a slow or external one flips to `RUNNING`
+A quick command finishes in one delivery; a slow or external one flips to `PROCESSING`
 and is driven to completion by repeated `checkStatus()` calls at `pollInterval`
 cadence. Handler exceptions transition the command to `FAILED` and ack. There is no
 per-command timeout and no per-command lock — the handler runs to completion on a
 virtual thread, and the underlying stream's per-message lease guarantees a single
 concurrent runner across replicas (see
-[`lib-data-stream-redis`](../lib-data-stream-redis/README.md)).
+[`lib-data-workqueue-redis`](../lib-data-workqueue-redis/README.md)).
 
 ### Multi-replica behaviour
 
@@ -241,9 +240,12 @@ so `execute()`/`checkStatus()` should be idempotent.
 ## Command Status Flow
 
 ```
-submit() ──▶ SUBMITTED ──pickup──▶ RUNNING ─┬─success──▶ SUCCEEDED
-                                            ├─error────▶ FAILED
-                                            └─cancel───▶ CANCELLED
+submit() ──▶ PENDING ──pickup──▶ PROCESSING ─┬─success──▶ SUCCEEDED
+                                             ├─error────▶ FAILED
+                                             └─cancel───▶ CANCELLED
+
+(new state persists as PENDING/PROCESSING; legacy SUBMITTED/RUNNING entries still decode.
+Upgrading across this rename requires a zero-overlap rollout — see changelog 0.7.0.)
 ```
 
 ## Testing

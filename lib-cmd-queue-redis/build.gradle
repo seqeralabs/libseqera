@@ -32,8 +32,9 @@ dependencies {
     // JSON serialization
     implementation project(':lib-serde-jackson')
 
-    // Message stream
-    implementation project(':lib-data-stream-redis')
+    // Work queue
+    implementation project(':lib-data-workqueue')
+    implementation project(':lib-data-workqueue-redis')
     implementation project(':lib-serde-moshi')
 
     // State store

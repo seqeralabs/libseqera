@@ -44,7 +44,7 @@ import io.micronaut.core.annotation.Nullable;
  * @param errorsCount number of consecutive processing errors since the last successful
  *        processing; reset to 0 on any successful transition or recovery
  * @param createdAt when the command was first submitted
- * @param startedAt when the command first transitioned to RUNNING (nullable)
+ * @param startedAt when the command first transitioned to PROCESSING (nullable)
  * @param modifiedAt when the command state was last written (nullable for pre-existing records)
  * @param completedAt when the command reached a terminal state (nullable)
  */
@@ -70,19 +70,19 @@ public record CommandState(
     public static CommandState submitted(String id, String type, Object params) {
         final Instant now = Instant.now();
         return new CommandState(
-                id, type, CommandStatus.SUBMITTED, params,
+                id, type, CommandStatus.PENDING, params,
                 null, null, 0, now, null, now, null
         );
     }
 
     /**
-     * Transition to RUNNING status. A successful (non-throwing) transition, so the
+     * Transition to PROCESSING status. A successful (non-throwing) transition, so the
      * consecutive-error streak is reset.
      */
     public CommandState started() {
         final Instant now = Instant.now();
         return new CommandState(
-                id, type, CommandStatus.RUNNING, params,
+                id, type, CommandStatus.PROCESSING, params,
                 result, error, 0, createdAt, now, now, completedAt
         );
     }

@@ -1,0 +1,34 @@
+# lib-data-workqueue changelog
+
+1.0.0 - 11 Jul 2026
+- Initial release. This module is the redis-free split of lib-data-stream-redis 1.6.0,
+  renamed to reflect the reliable work-queue semantics it actually implements (competing
+  consumers, one live owner per key, acknowledgment, lease/visibility-timeout with heartbeat
+  renewal, redelivery + dead-owner reclaim) rather than a replayable log/stream.
+- Contains the API/SPI, the abstract base, the in-memory implementation, the consumer
+  interface, the metrics seam and the sleep util. The Redis implementation lives in the
+  companion module lib-data-workqueue-redis.
+- Symbol renames vs lib-data-stream-redis:
+    MessageStream<M>          -> WorkQueue<M>            (poll -> receive, renew -> renewLease;
+                                                          offer/ack/release/consume/init/length
+                                                          unchanged; param streamId -> queueId)
+    MessageStream.Lease<M>    -> WorkQueue.Lease<M>      (record shape unchanged)
+    AbstractMessageStream<M>  -> AbstractWorkQueue<M>
+    MessageConsumer<T>        -> MessageConsumer<T>      (kept)
+    LocalMessageStream        -> LocalWorkQueue          (package io.seqera.data.workqueue)
+    SleepHelper               -> SleepHelper             (package io.seqera.data.workqueue)
+    metrics.StreamMetrics     -> metrics.QueueMetrics
+    metrics.NoopStreamMetrics -> metrics.NoopQueueMetrics
+    metrics.MicrometerStreamMetrics -> metrics.MicrometerQueueMetrics
+    metrics.Outcome           -> metrics.Outcome         (kept)
+  Package io.seqera.data.stream[.metrics] -> io.seqera.data.workqueue[.metrics].
+- Observability (runtime-breaking vs the old module): metric names
+  seqera.stream.{entries,messages,processing} -> seqera.workqueue.{entries,messages,processing};
+  tags stream -> queue and stream_id -> queue_id. The outcome tag values
+  (processed/active/errored) are unchanged. The METRIC_* constant identifiers keep their
+  names; only their string values changed. Dashboards/alerts must be updated.
+- The log line for a lease evicted past max-processing-time now describes the entry as
+  "stalled".
+- Behaviour is otherwise identical to lib-data-stream-redis 1.6.0 (async non-blocking
+  dispatch, worker-scoped heartbeat lease, Model B hold-lease + scheduled re-poll).
+- See docs/superpowers/specs/2026-07-11-workqueue-rename-migration.md for the full migration.

@@ -1,5 +1,37 @@
 # lib-cmd-queue-redis changelog
 
+0.7.0 - 17 Jul 2026
+- Adopt the lib-data-workqueue / lib-data-workqueue-redis modules; no longer depends on
+  lib-data-stream-redis (which remains available as a standalone module).
+- MessageStream -> WorkQueue, AbstractMessageStream -> AbstractWorkQueue, StreamMetrics ->
+  QueueMetrics, NoopStreamMetrics -> NoopQueueMetrics; package io.seqera.data.stream.* ->
+  io.seqera.data.workqueue.* (MessageConsumer name unchanged, new package). No behavioural change.
+- Add CommandConfig.concurrency() (default 1000) to make the per-instance in-flight ceiling
+  configurable.
+- CommandQueue now takes a CommandConfig in its constructor and reads pollInterval() /
+  concurrency() from it directly; subclasses only implement name() (no more per-subclass
+  pollInterval/concurrency wiring). Constructor change: (target, config[, metrics]).
+- Rename CommandStatus.SUBMITTED -> PENDING and RUNNING -> PROCESSING (the latter to avoid
+  confusion with a downstream task's own "running" state). The dead, never-persisted PENDING
+  value is removed.
+- Wire compatibility: new state is serialized with the new names; legacy SUBMITTED/RUNNING
+  entries still decode via @JsonAlias, so command state persisted by earlier versions is read
+  correctly.
+- MIGRATION: upgrade with a ZERO-OVERLAP deploy — old and new replicas must never run
+  against the same Redis at once. Scaling to replicas=1 is NOT sufficient: a default k8s
+  rolling update still surges to 2 (maxSurge=1), so old and new briefly coexist. An old
+  replica cannot deserialize the new PROCESSING (hard failure) and decodes the new PENDING
+  to the removed dead constant (retries forever). Use a Recreate strategy (or maxSurge=0 /
+  maxUnavailable=1) so the old pod is gone before the new one starts.
+- ROLLBACK WARNING: new state persists with a 7-day TTL. Rolling back to <=0.6.0 while any
+  PENDING/PROCESSING entry is still live re-triggers the same break on the old code — wait out
+  the TTL (or flush the affected keys) before downgrading.
+- CommandResult.running() is deprecated in favour of CommandResult.processing() (identical
+  behaviour); the switch on command status now fails loud on any unexpected value.
+- Source-breaking for downstream references to CommandStatus.SUBMITTED/RUNNING (e.g. sched):
+  update to PENDING/PROCESSING. The running() helper remains (deprecated) so handler code compiles.
+- Requires lib-data-workqueue 1.0.0+ / lib-data-workqueue-redis 1.0.0+
+
 0.6.0 - 16 Jul 2026
 - Add error-tracking fields to CommandState for observability of a retry storm on a command that
   stays retryable (i.e. errors that do not terminally fail it, since a thrown handler is now
