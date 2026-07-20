@@ -142,13 +142,14 @@ workQueue.offer("user-activity", event)
 // Consume events
 class ActivityConsumer implements MessageConsumer<ActivityEvent> {
     @Override
-    boolean consume(ActivityEvent event) {
+    boolean accept(ActivityEvent event) {
         analyticsService.recordActivity(event)
         return true // Acknowledge message
     }
 }
 
-workQueue.consume("user-activity", new ActivityConsumer())
+// Register the consumer; the queue dispatches messages to it asynchronously
+workQueue.addConsumer("user-activity", new ActivityConsumer())
 ```
 
 ## Architecture
