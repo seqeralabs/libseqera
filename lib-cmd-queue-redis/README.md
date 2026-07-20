@@ -225,13 +225,13 @@ A quick command finishes in one delivery; a slow or external one flips to `PROCE
 and is driven to completion by repeated `checkStatus()` calls at `pollInterval`
 cadence. Handler exceptions transition the command to `FAILED` and ack. There is no
 per-command timeout and no per-command lock — the handler runs to completion on a
-virtual thread, and the underlying stream's per-message lease guarantees a single
+virtual thread, and the underlying work queue's per-message lease guarantees a single
 concurrent runner across replicas (see
 [`lib-data-workqueue-redis`](../lib-data-workqueue-redis/README.md)).
 
 ### Multi-replica behaviour
 
-The stream's per-message lease (a heartbeated Redis consumer-group entry) ensures a
+The work queue's per-message lease (a heartbeated Redis consumer-group entry) ensures a
 command is processed by exactly one live replica at a time; if that replica dies, the
 lease lapses and a peer reclaims the command. The store is the shared source of truth,
 so the terminal-state check keeps processing idempotent. Delivery is **at-least-once**,
