@@ -1,5 +1,8 @@
 # lib-jedis-pool changelog
 
+1.1.0 - 21 Jul 2026
+- Add redis.pool.testOnBorrow option to PING-validate connections on borrow and evict RESP-desynced connections
+
 1.0.0 - 12 Jan 2026
 - Initial release of lib-jedis-pool extracted from Wave project
 - Add JedisPoolFactory for creating configured JedisPool beans
