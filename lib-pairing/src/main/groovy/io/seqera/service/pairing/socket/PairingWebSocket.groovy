@@ -91,8 +91,10 @@ class PairingWebSocket {
                 .exceptionally(ex-> log.error("Failed to send message=${msg} - endpoint: ${endpoint} [sessionId: $session.id]"))
         })
 
-        // acquire a pairing key and send it to the remote client
-        final resp = this.pairingService.acquirePairingKey(service, endpoint)
+        // acquire a pairing key and send it to the remote client, recording the
+        // license token the remote service presented so requests declaring this
+        // endpoint can later be validated against the license binding
+        final resp = this.pairingService.acquirePairingKey(service, endpoint, token)
         final msg = new PairingResponse(
                 msgId: rndHex(),
                 pairingId: resp.pairingId,
