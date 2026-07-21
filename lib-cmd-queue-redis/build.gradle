@@ -32,8 +32,9 @@ dependencies {
     // JSON serialization
     implementation project(':lib-serde-jackson')
 
-    // Work queue
-    implementation project(':lib-data-workqueue')
+    // Work queue - 'api' because CommandQueue publicly extends AbstractWorkQueue and exposes
+    // WorkQueue / MessageConsumer from this module in its public API (consumers subclass it).
+    api project(':lib-data-workqueue')
     implementation project(':lib-data-workqueue-redis')
     implementation project(':lib-serde-moshi')
 

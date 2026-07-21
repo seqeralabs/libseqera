@@ -37,8 +37,9 @@ java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
-    sourceCompatibility = 17
-    targetCompatibility = 17
+    // Compile target (--release 17 / source-target) is set once in
+    // io.seqera.java-library-conventions, which every module applies. Keeping it
+    // there avoids duplicate/conflicting configureEach across sibling conventions.
 }
 
 test {
