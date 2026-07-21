@@ -34,10 +34,12 @@ class TestQueue extends AbstractWorkQueue<TestMessage> {
 
     TestQueue(WorkQueue<String> target) {
         super(target)
+        withHandlerExecutor(TestWorkerPool.INSTANCE)
     }
 
     TestQueue(WorkQueue<String> target, QueueMetrics metrics) {
         super(target, metrics)
+        withHandlerExecutor(TestWorkerPool.INSTANCE)
     }
 
     static TestQueue withRegistry(WorkQueue<String> target, MeterRegistry registry) {

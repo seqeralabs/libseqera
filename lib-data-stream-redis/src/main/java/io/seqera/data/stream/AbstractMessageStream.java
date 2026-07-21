@@ -20,9 +20,9 @@ package io.seqera.data.stream;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -148,16 +148,14 @@ public abstract class AbstractMessageStream<M> implements Closeable {
      */
     private final Map<String, Long> active = new ConcurrentHashMap<>();
 
-    /** Shared virtual-thread executor used when no handler executor is supplied. */
-    private static final ExecutorService DEFAULT_WORKERS = Executors.newVirtualThreadPerTaskExecutor();
-
     /**
-     * Executor that runs the message handlers, on virtual threads. Defaults to a shared
-     * virtual-thread-per-task executor; Micronaut consumers replace it with the injected
-     * {@code BLOCKING} executor via {@link #withHandlerExecutor}. Handler concurrency is
-     * bounded by {@link #slots}, not by this executor, so it is never sized or shut down here.
+     * Executor that runs the message handlers. Supplied by the consumer via
+     * {@link #withHandlerExecutor} before the first {@link #addConsumer} — there is no default,
+     * so {@link #startProcessing()} fails fast if it was never set. Micronaut consumers pass the
+     * injected {@code BLOCKING} executor. Handler concurrency is bounded by {@link #slots}, not by
+     * this executor, so it is never sized or shut down here.
      */
-    private volatile ExecutorService pool = DEFAULT_WORKERS;
+    private volatile ExecutorService pool;
 
     /**
      * Gates new intake: a permit is acquired when a lease is picked up and held for the
@@ -329,8 +327,10 @@ public abstract class AbstractMessageStream<M> implements Closeable {
      * consumer is registered.
      */
     private void startProcessing() {
+        // a handler executor must be supplied via withHandlerExecutor() before processing starts
+        Objects.requireNonNull(pool, "Handler executor not set - call withHandlerExecutor() before addConsumer()");
         // 'slots' — not the executor — bounds how many commands may be in flight at once;
-        // handlers run on cheap virtual threads, so the cap is a memory/heartbeat ceiling.
+        // the cap is a memory/heartbeat ceiling, independent of the executor's threading model.
         this.slots = new Semaphore(Math.max(1, concurrency()));
         this.scheduler = new ScheduledThreadPoolExecutor(1, daemonFactory(name() + "-repoll-" + count.get()));
         this.heartbeat = new ScheduledThreadPoolExecutor(1, daemonFactory(name() + "-heartbeat-" + count.get()));
@@ -340,18 +340,16 @@ public abstract class AbstractMessageStream<M> implements Closeable {
     }
 
     /**
-     * Supply the executor used to run message handlers. Micronaut-managed consumers pass the
-     * injected {@code @Named(TaskExecutors.BLOCKING)} {@link ExecutorService} (virtual-thread
-     * backed on JDK 21) <strong>before</strong> the first {@link #addConsumer}. When not
-     * supplied, a shared virtual-thread executor is used. The executor is never shut down by
-     * {@link #close()} (it is shared / container-managed).
+     * Supply the executor used to run message handlers. Consumers must call this
+     * <strong>before</strong> the first {@link #addConsumer} — there is no default executor.
+     * Micronaut-managed consumers pass the injected {@code @Named(TaskExecutors.BLOCKING)}
+     * {@link ExecutorService}. The executor is never shut down by {@link #close()}
+     * (it is shared / container-managed).
      *
-     * @param executor the shared handler executor; ignored if {@code null}
+     * @param executor the shared handler executor; must not be {@code null}
      */
-    public void withHandlerExecutor(@Nullable ExecutorService executor) {
-        if (executor != null) {
-            this.pool = executor;
-        }
+    public void withHandlerExecutor(ExecutorService executor) {
+        this.pool = Objects.requireNonNull(executor, "Handler executor cannot be null");
     }
 
     private static ThreadFactory daemonFactory(String prefix) {
