@@ -16,7 +16,7 @@
  */
 
 plugins {
-    id 'io.seqera.java-library-conventions'
+    id 'io.seqera.micronaut-library-conventions'
     id 'io.seqera.groovy-library-conventions'
     // Micronaut minimal lib
     // https://micronaut-projects.github.io/micronaut-gradle-plugin/latest/
@@ -34,7 +34,7 @@ dependencies {
     implementation "io.micronaut:micronaut-runtime:${micronautCoreVersion}"
 
     testImplementation testFixtures(project(':lib-fixtures-redis'))
-    testImplementation "org.apache.groovy:groovy:4.0.24"
+    testImplementation "org.apache.groovy:groovy:4.0.31"
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
     testImplementation 'org.testcontainers:testcontainers:1.21.4'

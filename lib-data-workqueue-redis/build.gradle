@@ -16,7 +16,7 @@
  */
 
 plugins {
-    id 'io.seqera.java-library-conventions'
+    id 'io.seqera.micronaut-library-conventions'
     id 'groovy'
     // Micronaut minimal lib
     // https://micronaut-projects.github.io/micronaut-gradle-plugin/latest/
@@ -37,10 +37,10 @@ dependencies {
 
     // Groovy dependencies only for tests
     testImplementation "io.micrometer:micrometer-core:1.12.4"
-    testImplementation "org.apache.groovy:groovy:4.0.24"
-    testImplementation "org.apache.groovy:groovy-nio:4.0.24"
-    testImplementation "org.apache.groovy:groovy-templates:4.0.24"
-    testImplementation "org.apache.groovy:groovy-json:4.0.24"
+    testImplementation "org.apache.groovy:groovy:4.0.31"
+    testImplementation "org.apache.groovy:groovy-nio:4.0.31"
+    testImplementation "org.apache.groovy:groovy-templates:4.0.31"
+    testImplementation "org.apache.groovy:groovy-json:4.0.31"
     testImplementation project(':lib-lang')
     testImplementation project(':lib-random')
     testImplementation project(':lib-serde')

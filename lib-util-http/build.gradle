@@ -16,7 +16,7 @@
  */
 
 plugins {
-    id 'io.seqera.java-library-conventions'
+    id 'io.seqera.micronaut-library-conventions'
     // Micronaut minimal lib
     // https://micronaut-projects.github.io/micronaut-gradle-plugin/latest/
     id "io.micronaut.minimal.library" version '4.5.3'
