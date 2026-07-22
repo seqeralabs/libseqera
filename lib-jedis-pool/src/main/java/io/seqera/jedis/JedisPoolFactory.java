@@ -61,6 +61,7 @@ public class JedisPoolFactory {
             @Value("${redis.pool.minIdle:0}") int minIdle,
             @Value("${redis.pool.maxIdle:10}") int maxIdle,
             @Value("${redis.pool.maxTotal:50}") int maxTotal,
+            @Value("${redis.pool.testOnBorrow:false}") boolean testOnBorrow,
             @Value("${redis.client.timeout:5000}") int timeout,
             @Nullable @Value("${redis.password}") String password
     ) {
@@ -70,14 +71,17 @@ public class JedisPoolFactory {
         }
         final int database = JedisURIHelper.getDBIndex(uri);
 
-        log.info("Creating Redis pool - uri={}; database={}; minIdle={}; maxIdle={}; maxTotal={}; timeout={}",
-                maskPassword(connection), database, minIdle, maxIdle, maxTotal, timeout);
+        log.info("Creating Redis pool - uri={}; database={}; minIdle={}; maxIdle={}; maxTotal={}; testOnBorrow={}; timeout={}",
+                maskPassword(connection), database, minIdle, maxIdle, maxTotal, testOnBorrow, timeout);
 
         // Pool config
         final JedisPoolConfig config = new JedisPoolConfig();
         config.setMinIdle(minIdle);
         config.setMaxIdle(maxIdle);
         config.setMaxTotal(maxTotal);
+        // PING-validate connections on borrow so a RESP-desynced connection is evicted
+        // instead of served to the next caller — see libseqera#92 / platform#11820
+        config.setTestOnBorrow(testOnBorrow);
 
         // Client config with database support
         final JedisClientConfig clientConfig = clientConfig(uri, password, timeout);

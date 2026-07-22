@@ -16,7 +16,7 @@ dependencies {
 
 - Full Redis URI parsing including database selection (`redis://host:6379/1`)
 - SSL/TLS support (`rediss://` scheme)
-- Configurable connection pool (minIdle, maxIdle, maxTotal)
+- Configurable connection pool (minIdle, maxIdle, maxTotal, testOnBorrow)
 - Optional password override via configuration
 - Micrometer metrics integration (when MeterRegistry is available)
 - Conditional activation via RedisActivator
@@ -31,6 +31,7 @@ redis:
     minIdle: 0                      # Default: 0
     maxIdle: 10                     # Default: 10
     maxTotal: 50                    # Default: 50
+    testOnBorrow: false             # Default: false — PING-validate connections on borrow
   client:
     timeout: 5000                   # Default: 5000ms
 ```

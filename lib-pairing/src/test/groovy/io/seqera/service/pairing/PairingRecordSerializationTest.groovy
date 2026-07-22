@@ -70,6 +70,41 @@ class PairingRecordSerializationTest extends Specification {
         decoded.expiration == null
     }
 
+    def 'should serialize and deserialize the license token'() {
+        given:
+        def encoder = new MoshiEncodeStrategy<PairingRecord>() {}
+        def record = new PairingRecord(
+                'tower',
+                'https://tower.example.com',
+                'pairing-123',
+                'private-key-data'.bytes,
+                'public-key-data'.bytes,
+                Instant.parse('2025-06-15T10:30:00Z'),
+                'checksum-abc'
+        )
+
+        when:
+        def json = encoder.encode(record)
+        def decoded = encoder.decode(json)
+
+        then:
+        decoded.token == 'checksum-abc'
+    }
+
+    def 'should default the token to null for records paired without one'() {
+        given:
+        def encoder = new MoshiEncodeStrategy<PairingRecord>() {}
+        // a record constructed without the token (e.g. persisted before the field existed)
+        def record = new PairingRecord('tower', 'endpoint', 'id', new byte[0], new byte[0], Instant.now())
+
+        when:
+        def json = encoder.encode(record)
+        def decoded = encoder.decode(json)
+
+        then:
+        decoded.token == null
+    }
+
     def 'should handle empty byte arrays'() {
         given:
         def encoder = new MoshiEncodeStrategy<PairingRecord>() {}
