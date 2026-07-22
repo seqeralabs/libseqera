@@ -33,7 +33,7 @@ repositories {
 java {
     // these settings apply to all jvm tooling, including groovy
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
     // Compile target (--release 17 / source-target) is set once in
     // io.seqera.java-library-conventions, which every module applies. Keeping it

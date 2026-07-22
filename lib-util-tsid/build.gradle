@@ -16,7 +16,7 @@
  */
 
 plugins {
-    id 'io.seqera.java-library-conventions'
+    id 'io.seqera.micronaut-library-conventions'
     id 'io.seqera.groovy-library-conventions'
     id "io.micronaut.minimal.library" version '4.5.3'
 }
@@ -30,7 +30,7 @@ dependencies {
     compileOnly "io.micronaut:micronaut-inject:${micronautCoreVersion}"
     implementation "org.slf4j:slf4j-api:2.0.12"
 
-    testImplementation "org.apache.groovy:groovy:4.0.24"
+    testImplementation "org.apache.groovy:groovy:4.0.31"
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
 }
