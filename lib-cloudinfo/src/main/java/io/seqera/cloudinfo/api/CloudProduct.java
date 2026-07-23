@@ -37,7 +37,16 @@ public class CloudProduct {
     private String category;
     private Integer cpusPerVm;
     private Float memPerVm;
-    private Integer gpusPerVm;
+    /**
+     * Number of GPUs (accelerators) per instance, as reported by CloudInfo.
+     * Modelled as a {@link Float} because fractional-GPU families report a
+     * fraction of a physical accelerator (e.g. AWS {@code g6f.2xlarge} reports
+     * {@code 0.25}); an integer field would truncate such values to {@code 0}
+     * and misclassify the instance as CPU-only. A value {@code > 0} (including
+     * a fraction) means the instance carries an accelerator. Null on legacy
+     * responses that do not populate it.
+     */
+    private Float gpusPerVm;
     private Boolean currentGen;
     private String ntwPerf;
     private String ntwPerfCategory;
@@ -101,11 +110,11 @@ public class CloudProduct {
         this.memPerVm = memPerVm;
     }
 
-    public Integer getGpusPerVm() {
+    public Float getGpusPerVm() {
         return gpusPerVm;
     }
 
-    public void setGpusPerVm(Integer gpusPerVm) {
+    public void setGpusPerVm(Float gpusPerVm) {
         this.gpusPerVm = gpusPerVm;
     }
 
