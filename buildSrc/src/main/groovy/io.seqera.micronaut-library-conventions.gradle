@@ -1,0 +1,39 @@
+/*
+ * Copyright 2026, Seqera Labs
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+plugins {
+    // Inherit the standard library setup (java-library, groovy, maven-publish,
+    // test deps, publishing) and its --release 17 default.
+    id 'io.seqera.java-library-conventions'
+}
+
+group = 'io.seqera'
+
+// Libraries that depend on Micronaut target Java 25: Micronaut runs on the Java 25
+// service runtime (and Micronaut 5 requires it), so these are never loaded by the
+// Nextflow Java 17 runtime. Override the java-library-conventions --release 17
+// default; --release is dropped since it cannot coexist with -source/-target on the
+// same javac task.
+tasks.withType(JavaCompile).configureEach {
+    options.release = null
+    sourceCompatibility = '25'
+    targetCompatibility = '25'
+}
+tasks.withType(GroovyCompile).configureEach {
+    sourceCompatibility = '25'
+    targetCompatibility = '25'
+}

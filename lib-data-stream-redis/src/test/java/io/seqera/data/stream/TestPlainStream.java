@@ -33,6 +33,7 @@ public class TestPlainStream extends AbstractMessageStream<String> {
 
     public TestPlainStream(MessageStream<String> target) {
         super(target);
+        withHandlerExecutor(TestWorkerPool.INSTANCE);
     }
 
     @Override

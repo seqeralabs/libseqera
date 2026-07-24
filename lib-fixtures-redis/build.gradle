@@ -16,7 +16,7 @@
  */
 
 plugins {
-    id 'io.seqera.java-library-conventions'
+    id 'io.seqera.micronaut-library-conventions'
     id 'io.seqera.groovy-library-conventions'
     id 'io.seqera.java-test-fixtures-conventions'
     id "io.micronaut.minimal.library" version '4.5.3'

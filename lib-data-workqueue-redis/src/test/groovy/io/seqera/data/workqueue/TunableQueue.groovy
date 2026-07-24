@@ -38,6 +38,7 @@ class TunableQueue extends AbstractWorkQueue<String> {
 
     TunableQueue(Map opts = [:], WorkQueue<String> target) {
         super(target)
+        withHandlerExecutor(TestWorkerPool.INSTANCE)
         this.workers = (opts.concurrency ?: 1) as int
         this.pollDelay = (opts.pollInterval ?: Duration.ofSeconds(1)) as Duration
         this.hbInterval = (opts.heartbeatInterval ?: Duration.ofSeconds(20)) as Duration
