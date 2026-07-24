@@ -61,6 +61,16 @@ class CloudProductTest extends Specification {
         ENCODER.decode('{"type":"m5.large","cpusPerVm":2}').gpusPerVm == null
     }
 
+    def 'whole gpusPerVm now serialises as a float (8.0, not 8)'() {
+        given:
+        def product = new CloudProduct()
+        product.type = 'p4d.24xlarge'
+        product.gpusPerVm = 8.0f
+
+        expect:
+        ENCODER.encode(product).contains('"gpusPerVm":8.0')
+    }
+
     def 'features field defaults to null on a freshly-constructed product'() {
         when:
         def product = new CloudProduct()

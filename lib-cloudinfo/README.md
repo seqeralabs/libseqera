@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-cloudinfo:1.2.2'
+    implementation 'io.seqera:lib-cloudinfo:2.0.0'
 }
 ```
 
