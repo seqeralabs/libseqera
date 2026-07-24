@@ -42,6 +42,35 @@ class CloudProductTest extends Specification {
         decoded.features == ['a100', 'gpu', 'nvidia', 'sched', 'ssd', 'x86']
     }
 
+    def 'fractional gpusPerVm survives Jackson decode (does not truncate to 0)'() {
+        given: 'a GPU instance reporting a fractional accelerator, e.g. AWS g6f.2xlarge'
+        def json = '{"type":"g6f.2xlarge","category":"GPU instance","cpusPerVm":8,"gpusPerVm":0.25}'
+
+        when:
+        def decoded = ENCODER.decode(json)
+
+        then:
+        decoded.type == 'g6f.2xlarge'
+        decoded.gpusPerVm == 0.25f
+        decoded.gpusPerVm > 0
+    }
+
+    def 'whole and absent gpusPerVm decode correctly'() {
+        expect:
+        ENCODER.decode('{"type":"p4d.24xlarge","gpusPerVm":8}').gpusPerVm == 8.0f
+        ENCODER.decode('{"type":"m5.large","cpusPerVm":2}').gpusPerVm == null
+    }
+
+    def 'whole gpusPerVm now serialises as a float (8.0, not 8)'() {
+        given:
+        def product = new CloudProduct()
+        product.type = 'p4d.24xlarge'
+        product.gpusPerVm = 8.0f
+
+        expect:
+        ENCODER.encode(product).contains('"gpusPerVm":8.0')
+    }
+
     def 'features field defaults to null on a freshly-constructed product'() {
         when:
         def product = new CloudProduct()

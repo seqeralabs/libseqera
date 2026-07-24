@@ -1,5 +1,8 @@
 # lib-cloudinfo changelog
 
+2.0.0 - 24 Jul 2026
+- BREAKING: type CloudProduct.gpusPerVm as Float instead of Integer. CloudInfo reports fractional GPU counts for fractional-GPU instance families (e.g. AWS g6f.2xlarge reports gpusPerVm=0.25), which the Integer field truncated to 0, making a real GPU instance indistinguishable from a CPU-only one for any `gpusPerVm > 0` check. Consumers that auto-unbox getGpusPerVm() to int (notably sched) must consume Float and treat `> 0` as GPU. Whole counts now serialise as 8.0 instead of 8 (PR #98, closes #97).
+
 1.2.2 - 6 Jul 2026
 - Add AcceleratorFeatures: provider-agnostic helpers over the accelerator-related CloudProduct.features tokens (hasGpu, isNvidia, hasFpga) plus the token constants (gpu, nvidia, amd, habana, fpga, xilinx). Centralises classification of CloudInfo-returned accelerator data with the model instead of duplicating it in consumers.
 
