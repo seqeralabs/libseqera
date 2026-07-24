@@ -78,6 +78,9 @@ import static io.seqera.data.workqueue.SleepHelper.sleep;
  * // Usage
  * MyWorkQueue queue = new MyWorkQueue(underlyingQueue);
  *
+ * // Supply the handler executor (mandatory, no default) before adding consumers
+ * queue.withHandlerExecutor(executorService);
+ *
  * // Add consumer for a specific queue
  * queue.addConsumer("user-events", event -> {
  *     processUserEvent(event);

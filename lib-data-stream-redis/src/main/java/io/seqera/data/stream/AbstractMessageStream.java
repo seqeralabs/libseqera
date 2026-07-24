@@ -78,6 +78,9 @@ import static io.seqera.data.stream.impl.SleepHelper.sleep;
  * // Usage
  * MyMessageStream stream = new MyMessageStream(underlyingStream);
  *
+ * // Supply the handler executor (mandatory, no default) before adding consumers
+ * stream.withHandlerExecutor(executorService);
+ *
  * // Add consumer for a specific stream
  * stream.addConsumer("user-events", event -> {
  *     processUserEvent(event);

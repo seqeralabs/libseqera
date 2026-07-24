@@ -173,7 +173,7 @@ finishes or the consumer dies.
  │  (PEL,   │   renew (XCLAIM … JUSTID)         │   • hand it to the executor    │
  │  group)  │◀───────────── heartbeat daemon ───┤     (never runs it inline)     │
  │          │        every claim-timeout/3      │                                │
- │          │   ack (XACK + XDEL)               │  worker (virtual thread)       │
+ │          │   ack (XACK + XDEL)               │  worker (executor thread)      │
  │          │◀──────────── on terminal ─────────┤   accept(msg):                 │
  └──────────┘                                   │    ├─ true  → ack + free slot  │
       ▲                                         │    └─ false → keep lease,      │
@@ -185,9 +185,9 @@ finishes or the consumer dies.
 **Three mechanisms:**
 
 1. **Async dispatch (no head-of-line blocking).** The dispatcher thread never runs a
-   handler; it hands each message to a worker executor and moves on. Handlers run on a
-   shared **virtual-thread** executor by default, or the Micronaut `@Named(BLOCKING)`
-   executor when supplied via `withHandlerExecutor(...)`. A `Semaphore` sized by
+   handler; it hands each message to a worker executor and moves on. Handlers run on the
+   executor supplied via `withHandlerExecutor(...)` — **mandatory, no default** (Micronaut
+   consumers inject the `@Named(BLOCKING)` executor). A `Semaphore` sized by
    `concurrency()` bounds how many messages are in flight at once (backpressure: excess
    messages stay in the stream).
 
