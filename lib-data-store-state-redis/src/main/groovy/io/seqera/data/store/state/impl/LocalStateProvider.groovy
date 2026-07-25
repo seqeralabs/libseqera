@@ -95,6 +95,30 @@ class LocalStateProvider implements StateProvider<String,String> {
     }
 
     @Override
+    synchronized boolean compareAndSet(String key, String expected, String value, Duration ttl) {
+        if( get(key) != expected )
+            return false
+        store.put(key, new Entry<>(value, ttl))
+        return true
+    }
+
+    @Override
+    synchronized boolean compareAndDelete(String key, String expected) {
+        if( get(key) != expected )
+            return false
+        store.remove(key)
+        return true
+    }
+
+    @Override
+    synchronized boolean putIfOwner(String ownerKey, String owner, String key, String value, Duration ttl) {
+        if( get(ownerKey) != owner )
+            return false
+        store.put(key, new Entry<>(value, ttl))
+        return true
+    }
+
+    @Override
     synchronized CountResult<String> putJsonIfAbsentAndIncreaseCount(String key, String json, Duration ttl, CountParams counterKey, String luaScript) {
         final counter = counterKey.key + '/' + counterKey.field
         final done = putIfAbsent0(key, json, ttl) == null

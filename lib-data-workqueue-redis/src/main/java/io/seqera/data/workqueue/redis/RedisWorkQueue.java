@@ -18,6 +18,7 @@
 package io.seqera.data.workqueue.redis;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,7 +38,6 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.StreamEntryID;
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.params.XAutoClaimParams;
-import redis.clients.jedis.params.XClaimParams;
 import redis.clients.jedis.params.XReadGroupParams;
 import redis.clients.jedis.resps.StreamEntry;
 
@@ -85,6 +85,17 @@ public class RedisWorkQueue implements WorkQueue<String> {
     private static final StreamEntryID STREAM_ENTRY_ZERO = new StreamEntryID("0-0");
 
     private static final String DATA_FIELD = "data";
+
+    /**
+     * Touch a pending entry only if this consumer still owns it. Without the ownership
+     * check, a stale handler could XCLAIM the entry back after a peer reclaimed it.
+     * The script uses Stream/PEL commands only.
+     */
+    private static final String RENEW_IF_OWNER_SCRIPT =
+            "local p=redis.call('XPENDING',KEYS[1],ARGV[1],ARGV[2],ARGV[2],1); " +
+            "if #p==1 and p[1][2]==ARGV[3] then " +
+            "return redis.call('XCLAIM',KEYS[1],ARGV[1],ARGV[3],0,ARGV[2],'JUSTID') " +
+            "else return {} end";
 
     @Inject
     private JedisPool pool;
@@ -149,12 +160,20 @@ public class RedisWorkQueue implements WorkQueue<String> {
      * The returned lease id is the Redis {@link StreamEntryID} of the delivered entry.
      */
     @Override
-    public Lease<String> receive(String queueId) {
+    public Lease<String> receiveNew(String queueId) {
         try (Jedis jedis = pool.getResource()) {
-            StreamEntry entry = claimMessage(jedis, queueId);
+            final StreamEntry entry = readMessage(jedis, queueId);
             if (entry == null) {
-                entry = readMessage(jedis, queueId);
+                return null;
             }
+            return new Lease<>(entry.getID().toString(), entry.getFields().get(DATA_FIELD));
+        }
+    }
+
+    @Override
+    public Lease<String> reclaim(String queueId) {
+        try (Jedis jedis = pool.getResource()) {
+            final StreamEntry entry = claimMessage(jedis, queueId);
             if (entry == null) {
                 return null;
             }
@@ -173,13 +192,10 @@ public class RedisWorkQueue implements WorkQueue<String> {
     @Override
     public void renewLease(String queueId, String leaseId) {
         try (Jedis jedis = pool.getResource()) {
-            jedis.xclaimJustId(
-                    queueId,
-                    config.getDefaultConsumerGroupName(),
-                    consumerName,
-                    0L,
-                    XClaimParams.xClaimParams(),
-                    new StreamEntryID(leaseId));
+            jedis.eval(
+                    RENEW_IF_OWNER_SCRIPT,
+                    Collections.singletonList(queueId),
+                    List.of(config.getDefaultConsumerGroupName(), leaseId, consumerName));
         }
     }
 
@@ -205,12 +221,13 @@ public class RedisWorkQueue implements WorkQueue<String> {
     /**
      * {@inheritDoc}
      *
-     * <p>No-op: the entry remains in the pending-entries list and becomes reclaimable
-     * by a peer consumer once its idle time exceeds the visibility timeout.
+     * <p>Touches the entry one final time and leaves it in the pending-entries list.
+     * It becomes reclaimable after a full visibility timeout without retaining any
+     * Java-side lifecycle state.
      */
     @Override
     public void release(String queueId, String leaseId) {
-        // no-op: entry stays in the PEL, reclaimable after the visibility timeout
+        renewLease(queueId, leaseId);
     }
 
     /**

@@ -24,7 +24,7 @@ import io.seqera.serde.encode.StringEncodingStrategy
 /**
  * A {@link AbstractWorkQueue} used by the async-processing tests. It carries a
  * String payload (identity encoding) and exposes the async knobs — concurrency,
- * poll interval, heartbeat interval and max-processing-time — as constructor options
+ * poll interval, heartbeat interval and handler-warning threshold — as constructor options
  * so each test can tune them independently.
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>

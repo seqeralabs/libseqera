@@ -127,10 +127,8 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
     private final String name0;
 
     /**
-     * A message picked up from a queue and held while it is processed. The
-     * {@code queueId} + {@code leaseId} pair identifies the delivered entry; the
-     * {@code message} is kept so a not-yet-terminal command can be re-invoked in-process
-     * (Model B) without re-reading it from the queue.
+     * One active handler invocation. It exists only while {@code accept()} is running,
+     * never for the full lifecycle of a non-terminal message.
      */
     private record InFlight(String queueId, String leaseId, String message) {
         String key() {
@@ -139,17 +137,14 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
     }
 
     /**
-     * Leases held from pickup to terminal/crash; every entry is heartbeated by the
-     * daemon so an alive consumer is never reclaimed. Keyed by {@code queueId|leaseId}.
+     * Handler invocations currently running. Every entry is heartbeated until that one
+     * invocation returns, allowing handler time to exceed the queue visibility timeout.
      */
-    private final Map<String, InFlight> inFlight = new ConcurrentHashMap<>();
+    private final Map<String, InFlight> active = new ConcurrentHashMap<>();
 
-    /**
-     * Subset of {@link #inFlight} whose {@code accept()} invocation is running right now,
-     * mapped to the wall-clock millis at which that invocation started. Used by the
-     * heartbeat daemon to enforce {@code max-processing-time} on a single invocation.
-     */
-    private final Map<String, Long> active = new ConcurrentHashMap<>();
+    private final Map<String, Long> activeSince = new ConcurrentHashMap<>();
+
+    private final java.util.Set<String> warned = ConcurrentHashMap.newKeySet();
 
     /**
      * Executor that runs the message handlers. Supplied by the consumer via
@@ -161,24 +156,20 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
     private volatile ExecutorService pool;
 
     /**
-     * Gates new intake: a permit is acquired when a lease is picked up and held for the
-     * whole lease lifetime (across re-polls), released on terminal ack / eviction /
-     * release. This bounds concurrent handlers to {@link #concurrency()} and reserves
-     * capacity so in-flight commands' re-polls are never starved by new intake.
+     * Bounds handler invocations, not live messages. A permit is held only from delivery
+     * until one {@code accept()} call returns.
      */
     private volatile Semaphore slots;
 
     /**
-     * Schedules delayed re-poll re-submissions for not-yet-terminal commands (Model B).
-     */
-    private volatile ScheduledExecutorService scheduler;
-
-    /**
-     * Renews every in-flight lease on a fixed cadence so an alive consumer keeps ownership.
+     * Renews every active invocation on a fixed cadence so a handler may safely run longer
+     * than the visibility timeout.
      */
     private volatile ScheduledExecutorService heartbeat;
 
     private volatile boolean closed;
+
+    private final AtomicInteger deliverySequence = new AtomicInteger();
 
     /**
      * Constructs a new queue without metrics instrumentation. Behavior is identical
@@ -225,19 +216,26 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
     /**
      * @return
      *      The time interval to await before trying to read again the queue
-     *      when no more entries are available. Also the cadence at which a
-     *      not-yet-terminal command is re-invoked in-process (Model B).
+     *      when no more entries are available. Redis retry cadence is governed
+     *      by the visibility timeout of the pending Stream entry.
      */
     protected abstract Duration pollInterval();
 
     /**
      * @return
-     *      The maximum number of message handlers that may run concurrently on this
-     *      instance (the worker pool size). Defaults to {@code 1}; subclasses may
-     *      override to enable parallel processing.
+     *      The maximum number of handler invocations that may run concurrently on this
+     *      instance. A non-terminal message releases its permit after each invocation.
      */
     protected int concurrency() {
         return 1;
+    }
+
+    /**
+     * Number of new-message delivery opportunities for each expired-message reclaim.
+     * Both paths fall back to the other when empty, so neither intake nor retry can starve.
+     */
+    protected int newToRetryRatio() {
+        return 3;
     }
 
     /**
@@ -254,9 +252,9 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
 
     /**
      * @return
-     *      The upper bound on a single {@code accept()} invocation before its lease is
-     *      released (safety valve); it does not interrupt the handler thread. Defaults
-     *      to {@code 15m}.
+     *      Duration after which a still-running invocation is reported as stalled.
+     *      This is an observability threshold only: the lease continues to be renewed,
+     *      because releasing it while the handler runs would create overlapping execution.
      */
     protected Duration maxProcessingTime() {
         final Duration d = queue.maxProcessingTime();
@@ -325,17 +323,15 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
     }
 
     /**
-     * Lazily create the worker pool, the re-poll scheduler, the heartbeat daemon and the
-     * capacity gate, then start the dispatcher thread. Invoked once, when the first
+     * Lazily create the heartbeat daemon and invocation-capacity gate, then start the
+     * dispatcher thread. Invoked once, when the first
      * consumer is registered.
      */
     private void startProcessing() {
         // a handler executor must be supplied via withHandlerExecutor() before processing starts
         Objects.requireNonNull(pool, "Handler executor not set - call withHandlerExecutor() before addConsumer()");
-        // 'slots' — not the executor — bounds how many commands may be in flight at once;
-        // the cap is a memory/heartbeat ceiling, independent of the executor's threading model.
+        // slots bound active handler calls, never the number of live queue entries
         this.slots = new Semaphore(Math.max(1, concurrency()));
-        this.scheduler = new ScheduledThreadPoolExecutor(1, daemonFactory(name() + "-repoll-" + count.get()));
         this.heartbeat = new ScheduledThreadPoolExecutor(1, daemonFactory(name() + "-heartbeat-" + count.get()));
         final long hb = heartbeatInterval().toMillis();
         this.heartbeat.scheduleAtFixedRate(this::heartbeatTick, hb, hb, TimeUnit.MILLISECONDS);
@@ -383,9 +379,8 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
 
     /**
      * The dispatcher loop (runs on the listener thread). It never runs a handler itself:
-     * for every queue that has free pool capacity it polls one message (without acking)
-     * and submits its processing to the worker pool, then sleeps for {@link #pollInterval()}
-     * when nothing was polled this cycle.
+     * for every queue that has free invocation capacity it selects fairly between new
+     * messages and expired pending messages, then submits one handler call to the pool.
      */
     protected void processMessages() {
         log.trace("Work queue - starting dispatcher thread");
@@ -393,9 +388,7 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
             try {
                 boolean polled = false;
                 for (Map.Entry<String, MessageConsumer<M>> entry : listeners.entrySet()) {
-                    // poll a queue only when a worker slot is free (backpressure); the
-                    // permit is held for the whole lease lifetime so re-polls of in-flight
-                    // commands are never starved by new intake
+                    // A permit is held for one handler invocation only.
                     if (!slots.tryAcquire()) {
                         break;
                     }
@@ -425,8 +418,8 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
     }
 
     /**
-     * Poll a single queue (a worker permit has already been acquired by the caller) and,
-     * if a message is available, register it as in-flight and submit it to the pool.
+     * Poll a single queue (an invocation permit has already been acquired by the caller)
+     * and submit one delivery to the pool.
      * If nothing is available the permit is released and {@code false} is returned.
      *
      * @return {@code true} if a message was polled and submitted, {@code false} otherwise
@@ -434,21 +427,22 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
     private boolean dispatchOne(String queueId) {
         boolean submitted = false;
         try {
-            final WorkQueue.Lease<String> lease = queue.receive(queueId);
+            final WorkQueue.Lease<String> lease = receiveFair(queueId);
             if (lease == null) {
                 metrics.recordOutcome(metrics.startSample(), queueId, Outcome.EMPTY);
                 return false;
             }
             final var e = new InFlight(queueId, lease.id(), lease.message());
-            // Guard against self-reclaim: if the heartbeat falls behind by more than the
-            // visibility timeout, this instance's own receive() (XAUTOCLAIM) can re-deliver an
-            // entry it is already processing. The reclaim only refreshed the lease idle time, so
-            // keep the live in-flight entry and drop the duplicate — otherwise a second handler
-            // runs concurrently and its permit leaks (the original remove() returns null).
-            if (inFlight.putIfAbsent(e.key(), e) != null) {
+            // Guard against a local self-reclaim after a delayed heartbeat.
+            if (active.putIfAbsent(e.key(), e) != null) {
                 return false;   // 'submitted' stays false → finally releases this permit
             }
-            submitRun(e);
+            activeSince.put(e.key(), System.currentTimeMillis());
+            if (!submitRun(e)) {
+                activeSince.remove(e.key());
+                active.remove(e.key());
+                return false;
+            }
             submitted = true;
             return true;
         }
@@ -461,33 +455,52 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
         }
     }
 
+    private WorkQueue.Lease<String> receiveFair(String queueId) {
+        final int ratio = Math.max(1, newToRetryRatio());
+        final boolean preferNew = Math.floorMod(deliverySequence.getAndIncrement(), ratio + 1) < ratio;
+        WorkQueue.Lease<String> result = preferNew
+                ? queue.receiveNew(queueId)
+                : queue.reclaim(queueId);
+        if (result == null) {
+            result = preferNew
+                    ? queue.reclaim(queueId)
+                    : queue.receiveNew(queueId);
+        }
+        return result;
+    }
+
     /**
      * Submit the processing of an in-flight lease to the worker pool. Swallows the
      * rejection that occurs when the pool is being shut down.
      */
-    private void submitRun(InFlight e) {
+    private boolean submitRun(InFlight e) {
         try {
             pool.execute(() -> run(e));
+            return true;
         }
         catch (RejectedExecutionException ex) {
             log.debug("Work queue - worker pool rejected task for entry={} (shutting down)", e.key());
+            return false;
         }
     }
 
     /**
-     * Runs a single {@code accept()} invocation on a worker thread. On {@code true}
-     * (terminal) it acks the message and drops the lease; on {@code false} (Model B,
-     * not-yet-terminal) it keeps the lease in-flight and schedules the next invocation
-     * after {@link #pollInterval()} — strictly serial per command, since the next
-     * invocation is scheduled only after this one returned.
+     * Runs exactly one {@code accept()} invocation. A terminal result is acknowledged;
+     * a non-terminal result is touched once and left in the PEL for reclaim after the
+     * visibility timeout. Either outcome releases the invocation permit.
      */
     private void run(InFlight e) {
-        final boolean accepted = invokeHandler(e);
-        if (accepted) {
-            acknowledge(e);
+        try {
+            final boolean accepted = invokeHandler(e);
+            if (accepted) {
+                acknowledge(e);
+            }
+            else if (!closed) {
+                retryLater(e);
+            }
         }
-        else if (shouldRepoll(e)) {
-            scheduleRepoll(e);
+        finally {
+            finishAttempt(e);
         }
     }
 
@@ -501,7 +514,6 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
         final long sample = metrics.startSample();
         boolean accepted = false;
         Outcome outcome = Outcome.ACTIVE;
-        active.put(e.key(), System.currentTimeMillis());
         try {
             accepted = processMessage(e.message(), consumer);
             outcome = accepted ? Outcome.PROCESSED : Outcome.ACTIVE;
@@ -511,7 +523,6 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
             log.error("Work queue - error processing entry={} - cause: {}", e.key(), t.getMessage(), t);
         }
         finally {
-            active.remove(e.key());
             metrics.recordOutcome(sample, e.queueId(), outcome);
         }
         return accepted;
@@ -525,78 +536,62 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
         catch (Throwable t) {
             log.error("Work queue - error acking entry={} - cause: {}", e.key(), t.getMessage(), t);
         }
-        finally {
-            releaseLease(e.key());
-        }
-    }
-
-    /** Whether a not-yet-terminal command should be re-polled: still owned and not shutting down. */
-    private boolean shouldRepoll(InFlight e) {
-        return !closed && inFlight.containsKey(e.key());
     }
 
     /**
-     * Keep the lease (the heartbeat keeps renewing it, so no reclaim/migration) and schedule
-     * the next in-process invocation after {@link #pollInterval()} — strictly serial, since
-     * it is scheduled only after the previous invocation returned.
+     * Reset the delivery idle time after a non-terminal result, then leave the entry in
+     * the Stream PEL. It becomes eligible for another invocation after visibility timeout.
      */
-    private void scheduleRepoll(InFlight e) {
+    private void retryLater(InFlight e) {
         try {
-            scheduler.schedule(() -> submitRun(e), pollInterval().toMillis(), TimeUnit.MILLISECONDS);
+            queue.release(e.queueId(), e.leaseId());
         }
-        catch (RejectedExecutionException ex) {
-            log.debug("Work queue - re-poll scheduler rejected entry={} (shutting down)", e.key());
+        catch (Throwable t) {
+            log.warn("Work queue - error touching retry entry={} - cause: {}", e.key(), t.getMessage());
         }
     }
 
-    /**
-     * Drop a lease from the in-flight set and free its capacity permit. This pair is the
-     * single invariant "a permit is held iff its key is in-flight"; returns {@code true} if
-     * this call performed the removal (so callers can log only a real eviction).
-     */
-    private boolean releaseLease(String key) {
-        if (inFlight.remove(key) != null) {
+    private void finishAttempt(InFlight e) {
+        final String key = e.key();
+        activeSince.remove(key);
+        warned.remove(key);
+        if (active.remove(key) != null) {
             slots.release();
-            return true;
         }
-        return false;
+        if (closed && active.isEmpty() && heartbeat != null) {
+            heartbeat.shutdown();
+        }
     }
 
     /**
-     * Heartbeat tick: renew every in-flight lease so an alive consumer keeps ownership,
-     * and release the lease of any single invocation that has exceeded
-     * {@link #maxProcessingTime()} (safety valve; does not interrupt the handler thread).
+     * Heartbeat every currently executing invocation. Long-running handlers are warned
+     * about, but never evicted while their thread remains active.
      */
     private void heartbeatTick() {
         final long now = System.currentTimeMillis();
         final long maxMillis = maxProcessingTime().toMillis();
-        for (InFlight e : inFlight.values()) {
+        for (InFlight e : active.values()) {
             final String key = e.key();
-            final long start = active.getOrDefault(key, now);
+            final long start = activeSince.getOrDefault(key, now);
             if (now - start > maxMillis) {
-                // a single invocation is stalled beyond the bound: stop renewing so the
-                // lease becomes reclaimable, and free its capacity permit
-                if (releaseLease(key)) {
-                    log.warn("Work queue - releasing lease of stalled entry={} after {} - reclaimable after visibility timeout",
+                if (warned.add(key)) {
+                    log.warn("Work queue - handler still active for entry={} after {}; continuing lease renewal to prevent overlap",
                             key, Duration.ofMillis(now - start));
                 }
             }
-            else {
-                try {
-                    queue.renewLease(e.queueId(), e.leaseId());
-                }
-                catch (Throwable t) {
-                    // swallow transient errors; the next tick retries
-                    log.warn("Work queue - error renewing lease for entry={} - cause: {}", key, t.getMessage());
-                }
+            try {
+                queue.renewLease(e.queueId(), e.leaseId());
+            }
+            catch (Throwable t) {
+                // swallow transient errors; the next tick retries
+                log.warn("Work queue - error renewing lease for entry={} - cause: {}", key, t.getMessage());
             }
         }
     }
 
     /**
-     * Shutdown orderly the queue: stop the dispatcher, cancel pending re-polls, drain
-     * the worker pool so active handlers finish and ack, release any remaining leases so
-     * they are redelivered, and finally stop the heartbeat daemon.
+     * Stop intake. Active handlers remain heartbeated until they finish; close never makes
+     * an entry reclaimable while its handler thread is still executing.
      */
     @Override
     public void close() {
@@ -612,26 +607,10 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
         catch (Exception e) {
             log.debug("Unexpected error while terminating {} - cause: {}", name0, e.getMessage());
         }
-        // 2. cancel pending scheduled re-polls
-        if (scheduler != null) {
-            scheduler.shutdownNow();
-        }
-        // 3. the handler executor is shared / container-managed — not shut down here;
-        //    any active handler finishes on its own (short-lived) and acks
-        // 4. release any lease still held so it is redelivered without waiting for lapse
-        for (InFlight e : inFlight.values()) {
-            if (inFlight.remove(e.key()) != null) {
-                try {
-                    queue.release(e.queueId(), e.leaseId());
-                }
-                catch (Throwable t) {
-                    log.debug("Work queue - error releasing entry={} on shutdown - cause: {}", e.key(), t.getMessage());
-                }
-            }
-        }
-        // 5. stop the heartbeat daemon last (any remaining leases lapse -> peers reclaim)
-        if (heartbeat != null) {
-            heartbeat.shutdownNow();
+        // The handler executor is shared/container-managed. Keep the heartbeat daemon alive
+        // until every active invocation completes; finishAttempt shuts it down at that point.
+        if (heartbeat != null && active.isEmpty()) {
+            heartbeat.shutdown();
         }
     }
 

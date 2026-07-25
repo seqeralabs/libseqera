@@ -29,6 +29,16 @@ import io.seqera.data.store.state.StateStore
  */
 interface StateProvider<K,V> extends StateStore<K,V> {
 
+    boolean compareAndSet(K key, V expected, V value, Duration ttl)
+
+    boolean compareAndDelete(K key, V expected)
+
+    /**
+     * Store a value only while an ownership key still contains the expected owner.
+     * The ownership check and value update must be atomic.
+     */
+    boolean putIfOwner(K ownerKey, V owner, K key, V value, Duration ttl)
+
     /**
      * Store a value in the cache only if does not exist. If the operation is successful
      * the counter identified by the key specified is incremented by 1 and the counter (new)

@@ -79,11 +79,8 @@ public abstract class CommandQueue extends AbstractWorkQueue<CommandMsg> {
     }
 
     /**
-     * Maximum number of commands in flight on this instance at once, from
-     * {@link CommandConfig#concurrency()}. Handlers run on virtual threads, so this is a
-     * memory/heartbeat ceiling rather than a thread count; commands beyond it wait in the
-     * queue (backpressure). Cross-replica single-runner exclusion is provided by the
-     * per-message lease, so no per-command lock is required.
+     * Maximum number of command-handler invocations running on this instance at once.
+     * Live commands do not retain permits between Stream deliveries.
      */
     @Override
     protected int concurrency() {

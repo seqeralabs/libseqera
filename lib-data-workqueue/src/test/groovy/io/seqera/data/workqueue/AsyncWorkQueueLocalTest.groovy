@@ -31,7 +31,7 @@ import spock.util.concurrent.PollingConditions
  * Async-processing behaviour of {@link AbstractWorkQueue} exercised over the
  * in-memory {@link LocalWorkQueue} backend, so these run WITHOUT Docker.
  *
- * Covers: non-blocking dispatch, concurrency, re-poll cadence, serial-per-command,
+ * Covers: non-blocking dispatch, invocation concurrency, local retry, serial-per-message,
  * backpressure, and concurrency==1 default.
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
@@ -87,8 +87,8 @@ class AsyncWorkQueueLocalTest extends Specification {
         queue.close()
     }
 
-    // a not-yet-terminal command is re-invoked at ~pollInterval (Model B)
-    def 'should re-poll a not-yet-terminal command at poll interval' () {
+    // Local queues have no PEL/visibility timeout, so RETRY is immediately re-offered.
+    def 'should release an invocation slot before retrying a non-terminal message' () {
         given:
         def poll = Duration.ofMillis(300)
         def target = new LocalWorkQueue()
@@ -103,16 +103,12 @@ class AsyncWorkQueueLocalTest extends Specification {
             return timestamps.size() >= 5
         })
         queue.offer(id, 'running')
+        queue.offer(id, 'other')
 
         then:
         new PollingConditions(timeout: 10).eventually {
-            assert timestamps.size() == 5
+            assert timestamps.size() >= 5
         }
-        and:
-        def times = timestamps.toList()
-        def gaps = (1..<times.size()).collect { times[it] - times[it-1] }
-        // each re-poll gap is ~pollInterval (allow generous slack for scheduling)
-        gaps.every { it >= 150 && it <= 1_500 }
 
         cleanup:
         queue.close()
@@ -219,7 +215,8 @@ class AsyncWorkQueueLocalTest extends Specification {
         def target = [
                 init      : { String q -> },
                 offer     : { String q, String m -> },
-                receive   : { String q -> deliveries.getAndIncrement() < 2 ? new WorkQueue.Lease<String>('dup-id', 'payload') : null },
+                receiveNew: { String q -> deliveries.getAndIncrement() < 2 ? new WorkQueue.Lease<String>('dup-id', 'payload') : null },
+                reclaim   : { String q -> null },
                 renewLease: { String q, String id -> },
                 ack       : { String q, String id -> acks.incrementAndGet() },
                 release   : { String q, String id -> },

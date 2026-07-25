@@ -179,4 +179,17 @@ class LocalStateProviderTest extends Specification {
         provider.get(k) == null
     }
 
+    def 'should update a value only for the current owner'() {
+        given:
+        def ownerKey = UUID.randomUUID().toString()
+        def valueKey = UUID.randomUUID().toString()
+        provider.put(ownerKey, 'owner-a', Duration.ofSeconds(1))
+
+        expect:
+        !provider.putIfOwner(ownerKey, 'owner-b', valueKey, 'stale', Duration.ofSeconds(1))
+        provider.get(valueKey) == null
+        provider.putIfOwner(ownerKey, 'owner-a', valueKey, 'current', Duration.ofSeconds(1))
+        provider.get(valueKey) == 'current'
+    }
+
 }

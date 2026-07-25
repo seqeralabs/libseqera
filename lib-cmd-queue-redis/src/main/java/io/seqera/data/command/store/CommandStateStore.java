@@ -16,6 +16,7 @@
  */
 package io.seqera.data.command.store;
 
+import java.time.Duration;
 import java.util.Optional;
 
 import io.seqera.data.command.CommandState;
@@ -33,6 +34,26 @@ public interface CommandStateStore {
      * @param state the command state to save
      */
     void save(CommandState state);
+
+    /**
+     * Persist a command only if its id is not already present.
+     */
+    boolean create(CommandState state);
+
+    boolean tryAcquireAttempt(String commandId, String owner, Duration ttl);
+
+    boolean renewAttempt(String commandId, String owner, Duration ttl);
+
+    boolean isAttemptOwner(String commandId, String owner);
+
+    boolean releaseAttempt(String commandId, String owner);
+
+    /**
+     * Persist state only if the supplied attempt still owns the command lease.
+     *
+     * @return true when saved; false when the attempt has lost ownership
+     */
+    boolean saveOwned(CommandState state, String owner);
 
     /**
      * Find a command state by ID.

@@ -16,9 +16,9 @@ dependencies {
 
 - Fire-and-forget command submission
 - Typed parameters and results with JSON serialization
-- Status transitions: `PENDING` → `PROCESSING` → `SUCCEEDED`/`FAILED`/`CANCELLED`
+- Status transitions: `PENDING` → `SUBMITTING` → `PROCESSING` → terminal
 - Non-blocking, concurrent handler execution on virtual threads (no per-command timeout)
-- Periodic status checking for async commands via in-process re-polling
+- Durable status checking via Redis Stream PEL redelivery
 - Command cancellation support
 - Persistent storage using Redis or in-memory backend
 
@@ -162,20 +162,19 @@ just transport; the store is the source of truth.
         ▼
   ┌──────────────┐  save() ┌──────────────────────────────────────────────┐
   │ CommandState │◀────────┤              CommandServiceImpl                │
-  │    store     │  find() │  processCommand(msg): load state, then         │──▶ execute()
-  │ (Redis/mem)  │────────▶│  dispatch the handler to a worker pool         │    checkStatus()
-  │              │         │  (off the dispatcher thread; virtual threads): │
-  └──────────────┘         │    • terminal     → ack (remove from queue)    │
-        ▲                  │    • processing() → keep lease, re-poll after  │
-        │ getState/Result  │                     pollInterval (in-process)  │
+  │    store     │  find() │  acquire renewable command-attempt guard,      │──▶ execute()
+  │ (Redis/mem)  │────────▶│  load state, invoke one handler operation:     │    checkStatus()
+  │              │         │    • terminal     → persist, then ack          │
+  └──────────────┘         │    • processing() → persist, return to PEL     │
+        ▲                  │    • duplicate    → guard rejects invocation   │
+        │ getState/Result  │                                                │
         │                  └───────────────────────┬────────────────────────┘
         │                       submit(msg)         │  addConsumer(processCommand)
         │                                           ▼
         │                     ┌────────────────────────────────────────────┐
         └─────────────────────│  CommandQueue (Redis work queue / in-mem.)  │
                               │  = AbstractWorkQueue: dispatcher + worker   │
-                              │  pool + heartbeat lease → exactly one live  │
-                              │  runner per command, no timeout             │
+                              │  pool + invocation heartbeat, at-least-once │
                               └────────────────────────────────────────────┘
 ```
 
@@ -196,9 +195,10 @@ implementations (useful for tests and single-node setups).
 
 ### Submit path
 
-`submit()` is fire-and-forget: it persists a `PENDING` `CommandState` to the
-store, then enqueues a `CommandMsg`, and returns the command id immediately. No
-handler runs on the caller's thread.
+`submit()` is fire-and-forget and idempotent by command id: only the first creation
+persists `PENDING`. A retry for an existing non-terminal command enqueues another
+`CommandMsg`, repairing the state-write/queue-offer failure window; the attempt guard
+collapses duplicate deliveries during processing.
 
 ### Processing loop
 
@@ -209,43 +209,43 @@ returns immediately, so a slow handler never blocks intake. The consumer returns
 boolean:
 
 - **`true`** → terminal; the message is acknowledged and removed.
-- **`false`** → not yet terminal; the command **keeps its lease** and `processCommand`
-  is re-invoked in-process after `pollInterval` (the poll loop for long-running commands).
+- **`false`** → not yet terminal; the invocation releases its thread and permit, and
+  the Stream PEL makes it eligible again after visibility timeout.
 
 For each delivery, `processCommand` loads the state and decides:
 
 1. **State missing or already terminal** → `true`; nothing to do (another replica finished it, or it was cancelled).
 2. **No handler registered** → mark `FAILED`, `true`.
-3. **State is `PENDING`** → run `handler.execute()`. Terminal result → apply, `true`;
-   `processing()` → mark `PROCESSING`, `false` (re-polled after `pollInterval`).
-4. **State is `PROCESSING`** → run `handler.checkStatus()`. Terminal → `true`;
+3. **State is `PENDING`** → persist `SUBMITTING`, then run `handler.execute()` using the
+   stable command id for external idempotency. Terminal result → apply, `true`;
+   `processing()` → mark `PROCESSING`, `false`.
+4. **State is `SUBMITTING`** → repeat idempotent `execute()` after an interrupted submission.
+5. **State is `PROCESSING`** → run `handler.checkStatus()`. Terminal → `true`;
    `processing()` → `false` (re-polled again).
 
 A quick command finishes in one delivery; a slow or external one flips to `PROCESSING`
-and is driven to completion by repeated `checkStatus()` calls at `pollInterval`
-cadence. Handler exceptions transition the command to `FAILED` and ack. There is no
-per-command timeout and no per-command lock — the handler runs to completion on a
-virtual thread, and the underlying work queue's per-message lease guarantees a single
-concurrent runner across replicas (see
+and is driven to completion by repeated `checkStatus()` calls at Stream visibility-timeout
+cadence. Handler exceptions remain retryable. A renewable, owner-checked attempt record
+in `CommandStateStore` prevents duplicate at-least-once deliveries from concurrently
+invoking or persisting the same command (see
 [`lib-data-workqueue-redis`](../lib-data-workqueue-redis/README.md)).
 
 ### Multi-replica behaviour
 
-The work queue's per-message lease (a heartbeated Redis consumer-group entry) ensures a
-command is processed by exactly one live replica at a time; if that replica dies, the
-lease lapses and a peer reclaims the command. The store is the shared source of truth,
-so the terminal-state check keeps processing idempotent. Delivery is **at-least-once**,
-so `execute()`/`checkStatus()` should be idempotent.
+The work queue provides at-least-once transport and heartbeats only while one handler call
+runs. The command store provides a second renewable attempt guard and terminal-state check.
+`execute()` must use `command.id()` as an external idempotency key wherever supported;
+no local state can make an uncooperative external side effect exactly once.
 
 ## Command Status Flow
 
 ```
-submit() ──▶ PENDING ──pickup──▶ PROCESSING ─┬─success──▶ SUCCEEDED
-                                             ├─error────▶ FAILED
-                                             └─cancel───▶ CANCELLED
+submit() ──▶ PENDING ──pickup──▶ SUBMITTING ──▶ PROCESSING ─┬─success──▶ SUCCEEDED
+                                                            ├─error────▶ FAILED
+                                                            └─cancel───▶ CANCELLED
 
-(new state persists as PENDING/PROCESSING; legacy SUBMITTED/RUNNING entries still decode.
-Upgrading across this rename requires a zero-overlap rollout — see changelog 0.7.0.)
+(new state persists as PENDING/SUBMITTING/PROCESSING; legacy SUBMITTED/RUNNING entries
+still decode. SUBMITTING is a new wire value; see the changelog before a mixed-version rollout.)
 ```
 
 ## Testing

@@ -1,5 +1,13 @@
 # lib-data-workqueue changelog
 
+Next
+- Concurrency now bounds active handler invocations rather than live message lifecycles.
+- Non-terminal entries are returned to the backend after each invocation; Redis entries
+  remain in the PEL and are reclaimed after visibility timeout.
+- Heartbeats exist only while a handler runs, allowing execution beyond visibility timeout.
+- max-processing-time is diagnostic and never releases a still-running handler.
+- Split new delivery from expired reclaim and select them fairly so retries cannot starve intake.
+
 1.0.0 - 11 Jul 2026
 - Initial release. This module is the redis-free split of lib-data-stream-redis 1.6.0,
   renamed to reflect the reliable work-queue semantics it actually implements (competing

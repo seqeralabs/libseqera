@@ -19,6 +19,7 @@ package io.seqera.data.workqueue
 
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -45,6 +46,48 @@ class AsyncWorkQueueRedisTest extends Specification implements RedisTestContaine
         // RedisTestContainer trait, so they share one Redis but each gets its own
         // RedisWorkQueue bean (distinct consumer name) => independent instances
         return ApplicationContext.run('test', 'redis')
+    }
+
+    def 'should admit all live messages while concurrency only bounds active invocations'() {
+        given:
+        def ctx = newContext()
+        def target = ctx.getBean(RedisWorkQueue)
+        def queue = new TunableQueue(target,
+                concurrency: 2,
+                pollInterval: Duration.ofMillis(50),
+                heartbeatInterval: Duration.ofMillis(300))
+        def id = "queue-${LongRndKey.rndHex()}"
+        def firstSeen = ConcurrentHashMap.<String>newKeySet()
+        def admitted = new CountDownLatch(20)
+        def active = new AtomicInteger()
+        def maxActive = new AtomicInteger()
+
+        when:
+        queue.addConsumer(id, { msg ->
+            def n = active.incrementAndGet()
+            maxActive.accumulateAndGet(n, Math::max)
+            try {
+                if (firstSeen.add(msg)) {
+                    admitted.countDown()
+                }
+                return false
+            }
+            finally {
+                active.decrementAndGet()
+            }
+        })
+        20.times { queue.offer(id, "task-$it".toString()) }
+
+        then: 'every task gets an invocation even though all remain non-terminal'
+        admitted.await(8, TimeUnit.SECONDS)
+        firstSeen.size() == 20
+
+        and: 'only handler calls, not live tasks, are bounded'
+        maxActive.get() <= 2
+
+        cleanup:
+        queue.close()
+        ctx.stop()
     }
 
     // single instance — a handler running longer than visibility-timeout is not
@@ -165,9 +208,8 @@ class AsyncWorkQueueRedisTest extends Specification implements RedisTestContaine
         ctxLive.stop()
     }
 
-    // a single invocation exceeding max-processing-time has its lease released
-    // (stops being renewed), so the message is reclaimed and re-delivered
-    def 'should release the lease of an invocation exceeding max-processing-time' () {
+    // max-processing-time is diagnostic only: releasing a live handler would overlap it.
+    def 'should continue renewing beyond max-processing-time without overlapping execution' () {
         given:
         def ctx = newContext()
         def target = ctx.getBean(RedisWorkQueue)
@@ -179,25 +221,28 @@ class AsyncWorkQueueRedisTest extends Specification implements RedisTestContaine
         def id = "queue-${LongRndKey.rndHex()}"
         def calls = new AtomicInteger()
         def hang = new CountDownLatch(1)
-        def redelivered = new CountDownLatch(1)
+        def completed = new CountDownLatch(1)
 
         when:
         queue.addConsumer(id, { msg ->
-            def n = calls.incrementAndGet()
-            if (n == 1) {
-                // first invocation hangs past max-processing-time (1s) -> lease released
-                hang.await()
-                return true
-            }
-            // the re-delivered invocation completes normally
-            redelivered.countDown()
+            calls.incrementAndGet()
+            hang.await()
+            completed.countDown()
             return true
         })
         queue.offer(id, 'hung')
 
-        then: 'the stalled invocation is evicted and the message is re-delivered'
-        redelivered.await(10, TimeUnit.SECONDS)
-        calls.get() >= 2
+        then: 'the live invocation remains the sole owner well beyond both timeouts'
+        sleep 3_000
+        calls.get() == 1
+
+        when:
+        hang.countDown()
+
+        then:
+        completed.await(5, TimeUnit.SECONDS)
+        sleep 1_500
+        calls.get() == 1
 
         cleanup:
         hang.countDown()

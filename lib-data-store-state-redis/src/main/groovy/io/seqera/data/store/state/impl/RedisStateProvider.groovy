@@ -39,6 +39,15 @@ import redis.clients.jedis.params.SetParams
 @CompileStatic
 class RedisStateProvider implements StateProvider<String,String> {
 
+    private static final String COMPARE_SET_SCRIPT =
+            "if redis.call('GET', KEYS[1]) == ARGV[1] then redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3]); return 1 else return 0 end"
+
+    private static final String COMPARE_DELETE_SCRIPT =
+            "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end"
+
+    private static final String PUT_IF_OWNER_SCRIPT =
+            "if redis.call('GET', KEYS[1]) == ARGV[1] then redis.call('SET', KEYS[2], ARGV[2], 'PX', ARGV[3]); return 1 else return 0 end"
+
     @Inject
     private JedisPool pool
 
@@ -77,6 +86,30 @@ class RedisStateProvider implements StateProvider<String,String> {
                 params.px(ttl.toMillis())
             final result = conn.set(key, value, params)
             return result == 'OK'
+        }
+    }
+
+    @Override
+    boolean compareAndSet(String key, String expected, String value, Duration ttl) {
+        try( Jedis conn=pool.getResource() ) {
+            final result = conn.eval(COMPARE_SET_SCRIPT, 1, key, expected, value, ttl.toMillis().toString())
+            return result == 1L
+        }
+    }
+
+    @Override
+    boolean compareAndDelete(String key, String expected) {
+        try( Jedis conn=pool.getResource() ) {
+            final result = conn.eval(COMPARE_DELETE_SCRIPT, 1, key, expected)
+            return result == 1L
+        }
+    }
+
+    @Override
+    boolean putIfOwner(String ownerKey, String owner, String key, String value, Duration ttl) {
+        try( Jedis conn=pool.getResource() ) {
+            final result = conn.eval(PUT_IF_OWNER_SCRIPT, 2, ownerKey, key, owner, value, ttl.toMillis().toString())
+            return result == 1L
         }
     }
 
