@@ -87,6 +87,13 @@ public record CommandState(
         );
     }
 
+    public CommandState submitting() {
+        return new CommandState(
+                id, type, CommandStatus.SUBMITTING, params,
+                result, error, 0, createdAt, startedAt, Instant.now(), completedAt
+        );
+    }
+
     /**
      * Transition to SUCCEEDED status with result.
      */

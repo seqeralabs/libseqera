@@ -162,15 +162,26 @@ public interface WorkQueue<M> {
     record Lease<M>(String id, M message) {}
 
     /**
-     * Receives one message (either newly delivered or reclaimed from a stalled consumer)
-     * <strong>without acknowledging</strong> it. The caller becomes responsible for
-     * eventually calling {@link #ack(String, String)} once processing terminates, or
-     * {@link #release(String, String)} to hand it back for later redelivery.
-     *
-     * @param queueId the unique identifier of the source queue; must not be null or empty
-     * @return a {@link Lease} for the delivered message, or {@code null} if none is available
+     * Receives one message that has never previously been delivered to the consumer group.
+     * The caller is responsible for acknowledging it or leaving it pending for retry.
      */
-    Lease<M> receive(String queueId);
+    Lease<M> receiveNew(String queueId);
+
+    /**
+     * Reclaims one pending message whose owner has stopped renewing it for longer than the
+     * implementation's visibility timeout.
+     */
+    Lease<M> reclaim(String queueId);
+
+    /**
+     * Receives one message, preferring an expired pending entry for compatibility with the
+     * original synchronous API. Asynchronous dispatchers should select explicitly between
+     * {@link #receiveNew(String)} and {@link #reclaim(String)} to provide intake fairness.
+     */
+    default Lease<M> receive(String queueId) {
+        final Lease<M> reclaimed = reclaim(queueId);
+        return reclaimed != null ? reclaimed : receiveNew(queueId);
+    }
 
     /**
      * Resets the idle time of the given lease (heartbeat), so that an alive consumer
@@ -216,12 +227,11 @@ public interface WorkQueue<M> {
     }
 
     /**
-     * Upper bound on a single {@code accept()} invocation before its lease is released
-     * (safety valve); it does not interrupt the handler thread. Returns {@code null}
-     * when the implementation has no lease concept, in which case the caller uses its
-     * own default.
+     * Observability threshold after which an active {@code accept()} invocation is reported
+     * as stalled. It never expires or releases the lease while the handler is still running.
+     * Returns {@code null} when the implementation supplies no threshold.
      *
-     * @return the maximum single-invocation processing time, or {@code null}
+     * @return the warning threshold for one handler invocation, or {@code null}
      */
     default Duration maxProcessingTime() {
         return null;

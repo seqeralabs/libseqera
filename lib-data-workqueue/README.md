@@ -56,7 +56,7 @@ stream key, e.g. `cmd-queue/v1`).
 |---|---|---|---|---|
 | `seqera.workqueue.entries` | Gauge | — | entries | Current queue backlog (Redis `XLEN`, polled at scrape time). |
 | `seqera.workqueue.messages` | Counter | `outcome` | messages | Total messages processed per outcome. |
-| `seqera.workqueue.processing` | Timer | `outcome` | seconds | Per-entry processing time. Includes the full lifecycle from the underlying `queue.consume(...)` entry through the consumer's `accept` and the Redis acknowledge/delete. Published as a Prometheus histogram (with buckets) so quantiles can be aggregated server-side across replicas via `histogram_quantile()`. |
+| `seqera.workqueue.processing` | Timer | `outcome` | seconds | Per-handler-invocation processing time. Published as a Prometheus histogram (with buckets) so quantiles can be aggregated server-side across replicas via `histogram_quantile()`. |
 
 The `outcome` tag takes one of three values:
 
@@ -154,11 +154,9 @@ workQueue.addConsumer("user-activity", new ActivityConsumer())
 
 ## Architecture
 
-`AbstractWorkQueue` runs handlers **asynchronously and concurrently** while
-guaranteeing that a given message is processed by exactly one *live* consumer at a
-time. A message is owned by its consumer for as long as the handler keeps working —
-independent of how long that takes — and ownership is relinquished only when the work
-finishes or the consumer dies.
+`AbstractWorkQueue` is an at-least-once transport. `concurrency()` bounds active
+handler invocations, not the number of live messages. A non-terminal message consumes
+no Java thread or semaphore permit between invocations.
 
 ```
   offer(msg)                                    ┌──────────────────────────────┐
@@ -171,11 +169,11 @@ finishes or the consumer dies.
  │  group)  │◀──────────── heartbeat daemon ────┤     (never runs it inline)    │
  │          │      every visibility-timeout/3    │                               │
  │          │   ack (XACK + XDEL)                │  worker (executor thread)     │
- │          │◀──────────── on terminal ─────────┤   accept(msg):                │
- └──────────┘                                   │    ├─ true  → ack + free slot │
-      ▲                                         │    └─ false → keep lease,     │
-      │ reclaimed by a peer only if the owner   │       re-run after pollInterval│
-      │ dies (heartbeat stops → idle > visibility-timeout) via the re-poll sched │
+ │          │◀──────────── on terminal ─────────┤   one accept(msg) call:       │
+ └──────────┘                                   │    ├─ true  → ack             │
+      ▲                                         │    └─ false → leave in PEL    │
+      │ retry/dead-owner reclaim after          │  then always free the slot    │
+      │ idle > visibility-timeout               │                               │
       └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -185,27 +183,23 @@ finishes or the consumer dies.
    handler; it hands each message to a worker executor and moves on. Handlers run on the
    executor supplied via `withHandlerExecutor(...)` — **mandatory, no default** (Micronaut
    consumers inject the `@Named(BLOCKING)` executor). A `Semaphore` sized by
-   `concurrency()` bounds how many messages are in flight at once (backpressure: excess
-   messages stay in the queue).
+   `concurrency()` bounds how many handler calls run at once.
 
 2. **Heartbeat lease (single live runner + safe long handlers).** While a message is in
    flight, a daemon renews its Redis consumer-group entry (`XCLAIM … JUSTID`) every
    `visibility-timeout / 3`, pinning its idle time near zero so no peer's `XAUTOCLAIM` can
    reclaim it — no matter how long the handler runs. If the owning process dies, the
    heartbeat stops, idle time crosses the visibility timeout, and a peer reclaims the message
-   (real dead-consumer failover). A `max-processing-time` safety valve stops renewing a
-   single invocation that runs pathologically long (logged as *stalled*), without
-   interrupting its thread.
+   (real dead-consumer failover). `max-processing-time` is a warning threshold only:
+   renewal continues while the handler thread is active, preventing timeout-driven overlap.
 
-3. **In-process re-poll for not-yet-terminal work.** When a handler returns `false` (work
-   in progress), the message keeps its lease and the handler is **re-invoked in-process**
-   after `pollInterval` via a scheduler — Redis is not re-read. This makes the re-poll
-   cadence independent of `visibility-timeout` (which then governs only failover). The next
-   invocation is scheduled only after the previous one returns, so a given message is
-   never processed by two overlapping invocations.
+3. **Stream-owned retry.** When a handler returns `false`, the entry is touched once and
+   left in the Redis PEL. Its thread and permit are released immediately. A later
+   `XAUTOCLAIM` starts the next invocation after `visibility-timeout`. New delivery and
+   expired reclaim are selected with a weighted policy so retries cannot freeze intake.
 
-Delivery is **at-least-once** (a crash/pause beyond `visibility-timeout`, or the
-`max-processing-time` valve, can hand a still-running message to a peer), so consumers
+Delivery is **at-least-once** (a crash, partition, or pause beyond
+`visibility-timeout` can hand a still-running message to a peer), so consumers
 must be idempotent. The in-memory `LocalWorkQueue` has no pending-entries list, so it
 has no lease/heartbeat (renewLease is a no-op); it still benefits from async, concurrent dispatch.
 
@@ -213,11 +207,12 @@ has no lease/heartbeat (renewLease is a no-op); it still benefits from async, co
 
 | Knob | Where | Default | Governs |
 |---|---|---|---|
-| `pollInterval()` | `AbstractWorkQueue` | — (subclass) | Idle backoff **and** in-process re-poll cadence |
-| `concurrency()` | `AbstractWorkQueue` | `1` | Max in-flight messages (semaphore ceiling) |
-| `getVisibilityTimeout()` | `RedisWorkQueueConfig` | — | Dead-consumer failover window |
+| `pollInterval()` | `AbstractWorkQueue` | — (subclass) | Idle dispatcher backoff |
+| `concurrency()` | `AbstractWorkQueue` | `1` | Max concurrent handler invocations |
+| `newToRetryRatio()` | `AbstractWorkQueue` | `3` | Fair selection between new and expired entries |
+| `getVisibilityTimeout()` | `RedisWorkQueueConfig` | — | Retry cadence and dead-consumer failover |
 | `getHeartbeatInterval()` | `RedisWorkQueueConfig` | `visibility-timeout / 3` | Lease renewal cadence |
-| `getMaxProcessingTime()` | `RedisWorkQueueConfig` | `15m` | Upper bound on a single `accept()` before its lease is released |
+| `getMaxProcessingTime()` | `RedisWorkQueueConfig` | `15m` | Long-handler warning threshold |
 
 ## Testing
 

@@ -45,12 +45,22 @@ public interface CommandConfig {
     }
 
     /**
-     * Maximum number of commands that may be in flight on a single instance at once.
-     * Handlers run on virtual threads, so this is a memory/heartbeat ceiling (the underlying
-     * work queue's in-flight semaphore), not a thread-pool size; commands beyond it wait in
-     * the queue (backpressure). Effective minimum is 1.
+     * Maximum number of handler invocations that may run concurrently on one instance.
+     * A non-terminal command releases its permit between Stream deliveries.
      */
     default int concurrency() {
         return 1000;
+    }
+
+    /**
+     * Distributed state-guard lifetime for one handler invocation. The guard is renewed
+     * periodically while the invocation runs.
+     */
+    default Duration attemptLease() {
+        return Duration.ofMinutes(5);
+    }
+
+    default Duration attemptHeartbeat() {
+        return attemptLease().dividedBy(3);
     }
 }

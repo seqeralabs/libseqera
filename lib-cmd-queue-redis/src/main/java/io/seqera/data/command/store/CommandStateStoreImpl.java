@@ -38,11 +38,14 @@ import io.seqera.serde.encode.StringEncodingStrategy;
 public class CommandStateStoreImpl extends AbstractStateStore<CommandState> implements CommandStateStore {
 
     private static final String PREFIX = "cmd-state/v1";
+    private static final String ATTEMPT_PREFIX = "cmd-attempt/v1:";
 
     private final Duration ttl;
+    private final StateProvider<String, String> provider;
 
     public CommandStateStoreImpl(StateProvider<String, String> provider, StringEncodingStrategy<CommandState> encodingStrategy, Duration ttl) {
         super(provider, encodingStrategy);
+        this.provider = provider;
         this.ttl = ttl;
     }
 
@@ -64,6 +67,41 @@ public class CommandStateStoreImpl extends AbstractStateStore<CommandState> impl
     @Override
     public void save(CommandState state) {
         put(state.id(), state);
+    }
+
+    @Override
+    public boolean create(CommandState state) {
+        return putIfAbsent(state.id(), state, ttl);
+    }
+
+    @Override
+    public boolean tryAcquireAttempt(String commandId, String owner, Duration lease) {
+        return provider.putIfAbsent(ATTEMPT_PREFIX + commandId, owner, lease);
+    }
+
+    @Override
+    public boolean renewAttempt(String commandId, String owner, Duration lease) {
+        return provider.compareAndSet(ATTEMPT_PREFIX + commandId, owner, owner, lease);
+    }
+
+    @Override
+    public boolean isAttemptOwner(String commandId, String owner) {
+        return owner.equals(provider.get(ATTEMPT_PREFIX + commandId));
+    }
+
+    @Override
+    public boolean releaseAttempt(String commandId, String owner) {
+        return provider.compareAndDelete(ATTEMPT_PREFIX + commandId, owner);
+    }
+
+    @Override
+    public boolean saveOwned(CommandState state, String owner) {
+        return provider.putIfOwner(
+                ATTEMPT_PREFIX + state.id(),
+                owner,
+                key0(state.id()),
+                serialize(state),
+                ttl);
     }
 
 }

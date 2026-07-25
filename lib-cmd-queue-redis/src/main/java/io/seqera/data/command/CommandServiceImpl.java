@@ -18,8 +18,13 @@ package io.seqera.data.command;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import io.micronaut.scheduling.TaskExecutors;
 import io.seqera.data.command.store.CommandStateStore;
@@ -35,13 +40,14 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Processing runs on the shared worker pool of the underlying message stream, so
  * neither {@code execute()} nor {@code checkStatus()} blocks the dispatcher loop and no
- * per-command timeout is needed. Cross-replica single-runner exclusion comes from the
- * stream's per-message lease.
+ * per-command timeout is needed. Cross-replica single-runner exclusion and stale-writer
+ * fencing come from the command attempt guard in the state store.
  *
  * <p>Processing flow:
  * <ul>
  *   <li>If command is already PROCESSING → call checkStatus()</li>
- *   <li>If command is still PENDING → call execute()</li>
+ *   <li>If command is PENDING → persist SUBMITTING, then call execute()</li>
+ *   <li>If command is SUBMITTING after redelivery → repeat execute() with the stable command ID</li>
  *   <li>If result is PROCESSING → mark as PROCESSING and return false (re-polled later)</li>
  *   <li>If result is terminal → apply result and return true (message removed from queue)</li>
  *   <li>If the handler throws → return false so the message is retried; a throw is treated as
@@ -61,10 +67,19 @@ public class CommandServiceImpl implements CommandService {
     private CommandQueue queue;
 
     @Inject
+    private CommandConfig config;
+
+    @Inject
     @Named(TaskExecutors.BLOCKING)
     private ExecutorService blockingExecutor;
 
     private final Map<String, CommandRegistration<?, ?>> handlers = new ConcurrentHashMap<>();
+
+    private final ScheduledExecutorService attemptHeartbeat = Executors.newSingleThreadScheduledExecutor(r -> {
+        final Thread thread = new Thread(r, "command-attempt-heartbeat");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private volatile boolean started = false;
 
@@ -75,7 +90,7 @@ public class CommandServiceImpl implements CommandService {
             return;
         }
         started = true;
-        // run handlers on the shared Micronaut BLOCKING (virtual-thread) executor
+        // run handlers on the shared Micronaut BLOCKING executor
         queue.withHandlerExecutor(blockingExecutor);
         queue.addConsumer(this::processCommand);
         log.info("Command service started - consuming commands");
@@ -97,8 +112,14 @@ public class CommandServiceImpl implements CommandService {
         final var state = CommandState.submitted(command.id(), command.type(), command.params());
 
         // Persist to storage and submit to queue
-        store.save(state);
-        queue.submit(CommandMsg.of(command.id(), command.type()));
+        final boolean created = store.create(state);
+        final CommandState existing = created ? state : store.findById(command.id()).orElse(null);
+        // Re-enqueue a pre-existing non-terminal command so a caller retry can repair the
+        // state-created/queue-offer failure window. Duplicate messages are fenced by the
+        // command attempt guard and terminal-state check.
+        if (created || (existing != null && !existing.status().isTerminal())) {
+            queue.submit(CommandMsg.of(command.id(), command.type()));
+        }
 
         log.debug("Command submitted: id={}, type={}", command.id(), command.type());
         return command.id();
@@ -119,18 +140,24 @@ public class CommandServiceImpl implements CommandService {
 
     @Override
     public boolean cancel(String commandId) {
-        final var state = store.findById(commandId).orElse(null);
-        if (state == null) {
+        final String owner = UUID.randomUUID().toString();
+        if (!store.tryAcquireAttempt(commandId, owner, config.attemptLease())) {
             return false;
         }
-
-        if (state.status().isTerminal()) {
-            return false;
+        try {
+            final var state = store.findById(commandId).orElse(null);
+            if (state == null || state.status().isTerminal()) {
+                return false;
+            }
+            if (!store.saveOwned(state.cancelled(), owner)) {
+                return false;
+            }
+            log.info("Command cancelled: id={}", commandId);
+            return true;
         }
-
-        store.save(state.cancelled());
-        log.info("Command cancelled: id={}", commandId);
-        return true;
+        finally {
+            store.releaseAttempt(commandId, owner);
+        }
     }
 
     @Override
@@ -185,6 +212,37 @@ public class CommandServiceImpl implements CommandService {
      * @return true to acknowledge (remove from queue), false to retry later
      */
     private boolean processCommand(CommandMsg msg) {
+        final String owner = UUID.randomUUID().toString();
+        if (!store.tryAcquireAttempt(msg.commandId(), owner, config.attemptLease())) {
+            log.debug("Command attempt already active, retaining delivery: id={}", msg.commandId());
+            return false;
+        }
+        final ScheduledFuture<?> renewer = attemptHeartbeat.scheduleAtFixedRate(
+                () -> renewAttempt(msg.commandId(), owner),
+                config.attemptHeartbeat().toMillis(),
+                config.attemptHeartbeat().toMillis(),
+                TimeUnit.MILLISECONDS);
+        try {
+            return processCommandOwned(msg, owner);
+        }
+        finally {
+            renewer.cancel(false);
+            store.releaseAttempt(msg.commandId(), owner);
+        }
+    }
+
+    private void renewAttempt(String commandId, String owner) {
+        try {
+            if (!store.renewAttempt(commandId, owner, config.attemptLease())) {
+                log.warn("Command attempt ownership lost while handler is active: id={}", commandId);
+            }
+        }
+        catch (Throwable e) {
+            log.warn("Unable to renew command attempt: id={}; cause={}", commandId, e.getMessage());
+        }
+    }
+
+    private boolean processCommandOwned(CommandMsg msg, String owner) {
         // Step 1: Load command state from persistent storage
         var state = store.findById(msg.commandId()).orElse(null);
         if (state == null) {
@@ -204,14 +262,14 @@ public class CommandServiceImpl implements CommandService {
         final var registration = getHandler(state.type());
         if (registration == null) {
             log.error("No handler for command type: {}", state.type());
-            store.save(state.failed("No handler for type: " + state.type()));
+            saveOwned(state.failed("No handler for type: " + state.type()), owner);
             return true;
         }
 
         // Step 4: Delegate to the type-capturing helper method
         // This pattern allows Java to infer concrete type parameters (P, R) from the
         // CommandRegistration, enabling type-safe handler invocation without raw types.
-        return processCommandWithHandler(msg, state, registration);
+        return processCommandWithHandler(msg, state, registration, owner);
     }
 
     /**
@@ -223,7 +281,8 @@ public class CommandServiceImpl implements CommandService {
      * <p>Runs directly on the shared worker pool thread (no timeout, no extra executor):
      * <ol>
      *   <li>If command is already PROCESSING → call {@code checkStatus()} to poll for completion</li>
-     *   <li>If command is still PENDING → call {@code execute()}</li>
+     *   <li>If command is PENDING → persist SUBMITTING, then call {@code execute()}</li>
+     *   <li>If command is SUBMITTING → repeat {@code execute()} with the stable command ID</li>
      *   <li>If result status is PROCESSING → mark PROCESSING and return false (re-polled later)</li>
      *   <li>If result status is terminal → update state and return true (done)</li>
      * </ol>
@@ -238,21 +297,26 @@ public class CommandServiceImpl implements CommandService {
     private <P, R> boolean processCommandWithHandler(
             CommandMsg msg,
             CommandState state,
-            CommandRegistration<P, R> registration) {
+            CommandRegistration<P, R> registration,
+            String owner) {
 
         // Reconstruct the typed Command object from persisted state
         // Uses Class.cast() internally for type-safe conversion
+        if (state.status() == CommandStatus.PENDING) {
+            state = state.submitting();
+            saveOwned(state, owner);
+        }
         final Command<P> command = toCommand(state, registration);
         final CommandHandler<P, R> handler = registration.handler();
 
         try {
-            // Branch on the command status. Only PENDING and PROCESSING are reachable here
+            // Branch on the command status. Only SUBMITTING and PROCESSING are reachable here
             // (processCommand already acked terminal states); any other value is a bug or a
             // newly-added status and must fail loudly rather than be silently executed. Both
             // execute() and checkStatus() run on the shared worker pool, so a slow handler
             // does not block the loop.
             final CommandResult<R> result = switch (state.status()) {
-                case PENDING -> handler.execute(command);
+                case SUBMITTING -> handler.execute(command);
                 case PROCESSING -> handler.checkStatus(command, state);
                 default -> throw new IllegalStateException("Unexpected command status: " + state.status() + " - id=" + state.id());
             };
@@ -262,11 +326,11 @@ public class CommandServiceImpl implements CommandService {
                 // Handler explicitly returned PROCESSING (e.g., async job not yet complete)
                 // Ensure state reflects PROCESSING status for accurate reporting
                 if (state.status() != CommandStatus.PROCESSING) {
-                    store.save(state.started());
+                    saveOwned(state.started(), owner);
                 } else if (state.errorsCount() > 0) {
                     // Recovered after one or more transient errors — reset the streak. Single write,
                     // and only when there is something to reset, so healthy re-polls stay write-free.
-                    store.save(state.clearErrors());
+                    saveOwned(state.clearErrors(), owner);
                 }
                 return false; // Keep in queue - re-polled and will call checkStatus()
             }
@@ -274,7 +338,7 @@ public class CommandServiceImpl implements CommandService {
             // Terminal result (SUCCEEDED, FAILED, or CANCELLED)
             // Apply the result to transition to terminal state
             final CommandState newState = state.applyResult(result);
-            store.save(newState);
+            saveOwned(newState, owner);
             log.debug("Command completed: id={}, status={}", state.id(), newState.status());
             return true; // Remove from queue - processing complete
 
@@ -288,7 +352,7 @@ public class CommandServiceImpl implements CommandService {
             // non-terminal, stranding the work. Deciding a command has *permanently* failed is
             // delegated to the domain layer that owns the entity state (see seqeralabs/sched#712).
             log.error("Command processing errored, will retry: id={}", msg.commandId(), e);
-            recordError(state, e);
+            recordError(state, e, owner);
             return false; // Keep in queue - redelivered / re-polled
         }
     }
@@ -299,11 +363,17 @@ public class CommandServiceImpl implements CommandService {
      * command that stays retryable. A failure to persist this must not change control flow: the
      * command is kept in the queue and retried regardless.
      */
-    private void recordError(CommandState state, Exception e) {
+    private void recordError(CommandState state, Exception e, String owner) {
         try {
-            store.save(state.withError(e.getMessage() != null ? e.getMessage() : e.toString()));
+            saveOwned(state.withError(e.getMessage() != null ? e.getMessage() : e.toString()), owner);
         } catch (Exception fail) {
             log.warn("Failed to record command error state: id={}", state.id(), fail);
+        }
+    }
+
+    private void saveOwned(CommandState state, String owner) {
+        if (!store.saveOwned(state, owner)) {
+            throw new IllegalStateException("Command attempt ownership lost: id=" + state.id());
         }
     }
 }

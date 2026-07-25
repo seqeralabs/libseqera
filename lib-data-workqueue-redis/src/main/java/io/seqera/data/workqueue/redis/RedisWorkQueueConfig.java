@@ -119,10 +119,9 @@ public interface RedisWorkQueueConfig {
     }
 
     /**
-     * Returns the upper bound on a single {@code accept()} invocation before its
-     * lease is released (safety valve). This bounds one handler invocation, not the
-     * total lease lifetime; past this bound the heartbeat daemon stops renewing the
-     * lease so it becomes reclaimable. Defaults to {@code 15m}.
+     * Returns the duration after which a still-running {@code accept()} invocation is
+     * reported as stalled. Renewal continues while the handler is active to prevent
+     * timeout-driven overlap. Defaults to {@code 15m}.
      *
      * @return the maximum single-invocation processing time duration
      */

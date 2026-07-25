@@ -1,5 +1,14 @@
 # lib-cmd-queue-redis changelog
 
+Next
+- Add renewable, owner-checked command attempt guards in CommandStateStore. Duplicate
+  at-least-once deliveries cannot concurrently invoke or persist the same command.
+- Add SUBMITTING state before the initial external call. Retries use the stable command id
+  as their idempotency key until PROCESSING is durably recorded.
+- Make submit idempotent by command id and serialize cancellation with handler attempts.
+- Command retries now come from the Redis Stream PEL after visibility timeout; no command
+  lifecycle remains scheduled in AbstractWorkQueue.
+
 0.7.0 - 17 Jul 2026
 - Adopt the lib-data-workqueue / lib-data-workqueue-redis modules; no longer depends on
   lib-data-stream-redis (which remains available as a standalone module).

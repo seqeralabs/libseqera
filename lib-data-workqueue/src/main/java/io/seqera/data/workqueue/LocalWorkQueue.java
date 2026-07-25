@@ -90,7 +90,7 @@ public class LocalWorkQueue implements WorkQueue<String> {
      * the lease id is simply the message value itself (used to re-offer it on release).
      */
     @Override
-    public Lease<String> receive(String queueId) {
+    public Lease<String> receiveNew(String queueId) {
         final var message = delegate
                 .get(queueId)
                 .poll();
@@ -98,6 +98,11 @@ public class LocalWorkQueue implements WorkQueue<String> {
             return null;
         }
         return new Lease<>(message, message);
+    }
+
+    @Override
+    public Lease<String> reclaim(String queueId) {
+        return null;
     }
 
     /**

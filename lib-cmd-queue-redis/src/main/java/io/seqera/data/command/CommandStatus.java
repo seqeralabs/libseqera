@@ -31,6 +31,11 @@ public enum CommandStatus {
     /** In the queue, awaiting first processing (legacy wire name: {@code "SUBMITTED"}). */
     @JsonAlias("SUBMITTED")
     PENDING,
+    /**
+     * Initial external submission may have started. Redelivery repeats execute with the
+     * stable command id as idempotency key until PROCESSING is durably recorded.
+     */
+    SUBMITTING,
     /** Being processed by a handler (legacy wire name: {@code "RUNNING"}). */
     @JsonAlias("RUNNING")
     PROCESSING,
