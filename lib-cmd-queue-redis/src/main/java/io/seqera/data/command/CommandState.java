@@ -14,7 +14,6 @@
  * limitations under the License.
  *
  */
-
 package io.seqera.data.command;
 
 import java.time.Instant;
@@ -26,6 +25,28 @@ import io.micronaut.core.annotation.Nullable;
  * Persistent state of a command, stored as JSON in the database.
  * Uses @JsonTypeInfo to preserve type information for params and result
  * during serialization, enabling proper deserialization without explicit type knowledge.
+ *
+ * <p>{@code errorsCount} counts processing errors that did <em>not</em> terminally fail the
+ * command — a handler that threw is retried (see {@code CommandServiceImpl}), so this records how
+ * many consecutive times it has thrown, for observability of a retry storm on an otherwise
+ * non-terminal command. {@code error} holds the message of the most recent error, transient or
+ * terminal — check {@code status == FAILED} to tell a terminal failure from a transient one, not
+ * {@code error != null}. {@code modifiedAt} is refreshed on every state write, giving a
+ * last-touched timestamp.
+ *
+ * @param id command id
+ * @param type command type discriminator
+ * @param status current lifecycle status
+ * @param params command parameters (polymorphic, type preserved via {@code @JsonTypeInfo})
+ * @param result terminal result payload, if any (polymorphic)
+ * @param error message of the most recent error, transient or terminal (nullable); terminal only
+ *        when {@code status == FAILED}
+ * @param errorsCount number of consecutive processing errors since the last successful
+ *        processing; reset to 0 on any successful transition or recovery
+ * @param createdAt when the command was first submitted
+ * @param startedAt when the command first transitioned to RUNNING (nullable)
+ * @param modifiedAt when the command state was last written (nullable for pre-existing records)
+ * @param completedAt when the command reached a terminal state (nullable)
  */
 public record CommandState(
         String id,
@@ -36,8 +57,10 @@ public record CommandState(
         @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS)
         @Nullable Object result,
         @Nullable String error,
+        int errorsCount,
         Instant createdAt,
         @Nullable Instant startedAt,
+        @Nullable Instant modifiedAt,
         @Nullable Instant completedAt
 ) {
 
@@ -45,19 +68,22 @@ public record CommandState(
      * Create a new submitted command state.
      */
     public static CommandState submitted(String id, String type, Object params) {
+        final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.SUBMITTED, params,
-                null, null, Instant.now(), null, null
+                null, null, 0, now, null, now, null
         );
     }
 
     /**
-     * Transition to RUNNING status.
+     * Transition to RUNNING status. A successful (non-throwing) transition, so the
+     * consecutive-error streak is reset.
      */
     public CommandState started() {
+        final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.RUNNING, params,
-                result, error, createdAt, Instant.now(), completedAt
+                result, error, 0, createdAt, now, now, completedAt
         );
     }
 
@@ -65,9 +91,10 @@ public record CommandState(
      * Transition to SUCCEEDED status with result.
      */
     public CommandState completed(Object result) {
+        final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.SUCCEEDED, params,
-                result, null, createdAt, startedAt, Instant.now()
+                result, null, 0, createdAt, startedAt, now, now
         );
     }
 
@@ -75,9 +102,10 @@ public record CommandState(
      * Transition to FAILED status with error.
      */
     public CommandState failed(String error) {
+        final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.FAILED, params,
-                null, error, createdAt, startedAt, Instant.now()
+                null, error, errorsCount, createdAt, startedAt, now, now
         );
     }
 
@@ -85,9 +113,33 @@ public record CommandState(
      * Transition to CANCELLED status.
      */
     public CommandState cancelled() {
+        final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.CANCELLED, params,
-                null, null, createdAt, startedAt, Instant.now()
+                null, null, 0, createdAt, startedAt, now, now
+        );
+    }
+
+    /**
+     * Record a non-terminal processing error: keep the current status (the command stays retryable),
+     * increment the consecutive-error count, capture the message, and refresh {@code modifiedAt}.
+     * Called when a handler throws and the command is kept in the queue for retry.
+     */
+    public CommandState withError(String message) {
+        return new CommandState(
+                id, type, status, params,
+                result, message, errorsCount + 1, createdAt, startedAt, Instant.now(), completedAt
+        );
+    }
+
+    /**
+     * Clear the consecutive-error streak after a recovery, without changing status. Refreshes
+     * {@code modifiedAt}. {@code error} is retained as a historical marker of the last error seen.
+     */
+    public CommandState clearErrors() {
+        return new CommandState(
+                id, type, status, params,
+                result, error, 0, createdAt, startedAt, Instant.now(), completedAt
         );
     }
 
