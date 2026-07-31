@@ -7,6 +7,7 @@ micronaut:
 # Command queue configuration
 command:
   poll-interval: 100ms
+  execute-timeout: 1s
   state:
     ttl: 1h
 

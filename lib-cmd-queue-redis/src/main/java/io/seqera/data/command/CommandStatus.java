@@ -17,23 +17,16 @@
 
 package io.seqera.data.command;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
-
 /**
  * Status of a command in the queue.
- *
- * <p>Wire compatibility: {@code PENDING} and {@code PROCESSING} are the renamed forms of the
- * former {@code SUBMITTED} and {@code RUNNING}. New state is serialized with the new names,
- * while the legacy names are still accepted on read via {@link JsonAlias}, so command state
- * persisted by earlier versions continues to deserialize. Do not remove those aliases.
  */
 public enum CommandStatus {
-    /** In the queue, awaiting first processing (legacy wire name: {@code "SUBMITTED"}). */
-    @JsonAlias("SUBMITTED")
+    /** Created, not yet submitted to queue */
     PENDING,
-    /** Being processed by a handler (legacy wire name: {@code "RUNNING"}). */
-    @JsonAlias("RUNNING")
-    PROCESSING,
+    /** In queue, waiting for pickup */
+    SUBMITTED,
+    /** Being executed */
+    RUNNING,
     /** Completed successfully */
     SUCCEEDED,
     /** Completed with error */
