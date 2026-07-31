@@ -47,6 +47,9 @@ import org.slf4j.LoggerFactory;
  *   </li>
  *   <li>If result is RUNNING → return false (message stays in queue for retry)</li>
  *   <li>If result is terminal → return true (message removed from queue)</li>
+ *   <li>If the handler throws → return false so the message is retried; a throw is treated as
+ *       transient, never as a terminal failure (deciding permanent failure is the domain
+ *       layer's job, see seqeralabs/sched#712)</li>
  * </ul>
  */
 @Singleton
@@ -278,6 +281,10 @@ public class CommandServiceImpl implements CommandService {
                 // Ensure state reflects RUNNING status for accurate reporting
                 if (state.status() != CommandStatus.RUNNING) {
                     store.save(state.started());
+                } else if (state.errorsCount() > 0) {
+                    // Recovered after one or more transient errors — reset the streak. Single write,
+                    // and only when there is something to reset, so healthy re-polls stay write-free.
+                    store.save(state.clearErrors());
                 }
                 return false; // Keep in queue - will retry and call checkStatus()
             }
@@ -290,10 +297,17 @@ public class CommandServiceImpl implements CommandService {
             return true; // Remove from queue - processing complete
 
         } catch (Exception e) {
-            // Unexpected exception during processing - mark as FAILED
-            log.error("Command processing failed: id={}", msg.commandId(), e);
-            store.save(state.failed(e.getMessage()));
-            return true; // Remove from queue - no point retrying a crashed handler
+            // A thrown handler is a transient/retryable condition, NOT a terminal command
+            // outcome: keep the message in the queue (return false) so the stream layer retains
+            // its lease and re-polls it. A genuine command failure is signalled by returning a
+            // FAILED CommandResult (handled above), never by throwing. Persisting FAILED + acking
+            // here would turn a transient/infra error (e.g. the Postgres pool closing during
+            // shutdown) into a permanent FAILED command while the domain entity is left
+            // non-terminal, stranding the work. Deciding a command has *permanently* failed is
+            // delegated to the domain layer that owns the entity state (see seqeralabs/sched#712).
+            log.error("Command processing errored, will retry: id={}", msg.commandId(), e);
+            recordError(state, e);
+            return false; // Keep in queue - redelivered / re-polled
         }
     }
 
@@ -332,5 +346,35 @@ public class CommandServiceImpl implements CommandService {
             future.cancel(true);
             throw new RuntimeException("Command execution failed", e);
         }
+    }
+
+    /**
+     * Best-effort: record a non-terminal processing error on the command state — increment the
+     * consecutive-error count and capture the message — for observability of a retry storm on a
+     * command that stays retryable. A failure to persist this must not change control flow: the
+     * command is kept in the queue and retried regardless.
+     */
+    private void recordError(CommandState state, Exception e) {
+        try {
+            store.save(state.withError(rootMessage(e)));
+        } catch (Exception fail) {
+            log.warn("Failed to record command error state: id={}", state.id(), fail);
+        }
+    }
+
+    /**
+     * The most specific message available for a processing error. {@link #executeWithTimeout}
+     * wraps a handler exception in a generic {@code RuntimeException("Command execution failed")},
+     * so the root cause's message is recorded instead — otherwise every transient error on the
+     * execute() path would read "Command execution failed" and the field would be useless for
+     * diagnosing a retry storm. The checkStatus() path throws directly, where the root cause is
+     * the exception itself.
+     */
+    private static String rootMessage(Throwable e) {
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        return root.getMessage() != null ? root.getMessage() : root.toString();
     }
 }
