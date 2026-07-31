@@ -1,5 +1,18 @@
 # lib-data-stream-redis changelog
 
+1.5.1 - 31 Jul 2026
+- Add awaitQuiescent(Duration): stop claiming new messages and wait for the dispatcher to
+  finish the cycle already in progress, so a consumer can complete its work — and any writes
+  it is making — while its collaborators are still alive.
+- close() now drains cooperatively first and only interrupts a dispatcher that overran the new
+  closeTimeout(). Interrupt was previously the primary mechanism, and interrupting a thread
+  parked in a Redis read can hand a RESP-desynced connection back to the pool (libseqera#92).
+  Cooperative shutdown removes that cause instead of relying on the redis.pool.testOnBorrow
+  mitigation, which defaults to false.
+- Poll-interval and error-backoff sleeps are sliced so neither delays a shutdown.
+- An interrupt is now recognised in the dispatcher catch arm and exits the loop, rather than
+  being logged as a stream error and retried after a backoff.
+
 REVERTED - 2.0.0 (11 Jul 2026)
 - 2.0.0 was released and has been reverted; this module is back at 1.5.0. It brought async,
   non-blocking consumer processing with a heartbeat lease and the poll/renew/ack/release SPI

@@ -16,6 +16,7 @@
  */
 package io.seqera.data.command;
 
+import java.time.Duration;
 import java.util.Optional;
 
 /**
@@ -97,6 +98,34 @@ public interface CommandService {
     /**
      * Stop consuming commands from the queue.
      * Called during shutdown to gracefully stop processing.
+     *
+     * <p>This releases the queue immediately and does not wait for handler executions already in
+     * progress. Prefer {@link #drain(Duration)} when those executions depend on resources — a
+     * database connection pool, for instance — that are about to be torn down.
      */
     void stop();
+
+    /**
+     * Stop claiming new commands and wait for the ones already being handled to finish.
+     *
+     * <p>Intended to be called while the rest of the application is still alive, so that a handler
+     * mid-execution can complete its work and record its outcome instead of failing against
+     * resources that have already been closed. On return the queue is released, as with
+     * {@link #stop()}.
+     *
+     * <p>Deliberately framework-agnostic: the caller decides what triggers it and how the timeout
+     * relates to any container-level shutdown budget.
+     *
+     * @param timeout
+     *      how long to wait for in-flight commands to finish
+     * @return
+     *      {@code true} if nothing was left running, {@code false} if the timeout was reached with
+     *      commands still in flight — the caller may then log, report, or proceed regardless
+     */
+    boolean drain(Duration timeout);
+
+    /**
+     * @return the number of command handler executions currently in progress
+     */
+    int activeCommands();
 }

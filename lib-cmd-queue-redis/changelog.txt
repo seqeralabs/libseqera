@@ -1,5 +1,20 @@
 # lib-cmd-queue-redis changelog
 
+0.4.1 - 31 Jul 2026
+- Add CommandService.drain(Duration) and activeCommands(). drain() quiesces the dispatcher,
+  waits for in-flight handler executions, then releases the queue — in that order, so a caller
+  can let handlers finish before tearing down resources they depend on. Returns false when the
+  timeout elapsed with work still running, leaving the caller to decide what to do.
+- The in-flight count is taken around the task submitted to the executor rather than around
+  Future.get, because executeWithTimeout abandons the future on overrun while the handler keeps
+  running. That abandoned execution is exactly what a drain has to wait for, and it cannot be
+  observed from the shared, container-managed executor.
+- Deliberately framework-agnostic: drain() takes a timeout and returns a boolean, leaving the
+  trigger and the budget to the caller. This module targets Micronaut 4.8, which predates the
+  4.9 graceful-shutdown API.
+- stop() is unchanged and remains the immediate-release path.
+- Requires lib-data-stream-redis 1.5.1 for awaitQuiescent.
+
 REVERTED - 0.5.0, 0.5.1, 0.6.0, 0.7.0 (13 - 18 Jul 2026)
 - These releases have been reverted; this module is back at 0.4.0 and to its
   lib-data-stream-redis dependency:
