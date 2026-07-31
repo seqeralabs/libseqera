@@ -16,6 +16,7 @@
  */
 package io.seqera.data.command;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.micronaut.scheduling.TaskExecutors;
 import io.seqera.data.command.store.CommandStateStore;
@@ -74,6 +76,22 @@ public class CommandServiceImpl implements CommandService {
 
     private volatile boolean started = false;
 
+    /**
+     * Handler invocations submitted to {@link #executor} that have not returned yet.
+     *
+     * <p>This is deliberately not derived from {@link #executor}: that pool is shared and
+     * container-managed, so its queue says nothing about this service. It also has to be counted
+     * around the submitted task rather than around {@link Future#get}, because
+     * {@link #executeWithTimeout} abandons the future on overrun while the handler keeps running —
+     * which is exactly the work a drain must wait for.
+     */
+    private final AtomicInteger inflight = new AtomicInteger();
+
+    /**
+     * Granularity at which {@link #drain(Duration)} re-checks {@link #inflight}.
+     */
+    private static final long DRAIN_POLL_MILLIS = 50;
+
     @Override
     public void start() {
         if (started) {
@@ -93,6 +111,48 @@ public class CommandServiceImpl implements CommandService {
         started = false;
         queue.close();
         log.info("Command service stopped");
+    }
+
+    @Override
+    public boolean drain(Duration timeout) {
+        if (!started) {
+            return activeCommands() == 0;
+        }
+        started = false;
+        final long deadline = System.currentTimeMillis() + Math.max(0, timeout.toMillis());
+
+        // 1. Stop claiming new commands and let the dispatcher finish the message it holds. This
+        //    does not release the stream, so an in-progress handler can still acknowledge.
+        queue.awaitQuiescent(timeout);
+
+        // 2. Wait for handler executions abandoned by executeWithTimeout() that are still running.
+        //    These are the ones that matter: they are mid-flight against the database, and letting
+        //    them finish here is the whole point of draining before the context tears down.
+        while (inflight.get() > 0 && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(Math.min(DRAIN_POLL_MILLIS, Math.max(1, deadline - System.currentTimeMillis())));
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+
+        final int remaining = inflight.get();
+        // 3. Release the stream. Done last so steps 1-2 ran with every collaborator still usable.
+        queue.close();
+
+        if (remaining > 0) {
+            log.warn("Command service drained with {} command(s) still running after {}", remaining, timeout);
+            return false;
+        }
+        log.info("Command service drained - no command left in flight");
+        return true;
+    }
+
+    @Override
+    public int activeCommands() {
+        return inflight.get();
     }
 
     @Override
@@ -331,8 +391,18 @@ public class CommandServiceImpl implements CommandService {
      * @throws RuntimeException if the handler throws an exception
      */
     private <P, R> CommandResult<R> executeWithTimeout(CommandHandler<P, R> handler, Command<P> command) {
-        // Submit handler execution to thread pool for async execution
-        final Future<CommandResult<R>> future = executor.submit(() -> handler.execute(command));
+        // Submit handler execution to thread pool for async execution. The counter is decremented
+        // inside the task, not after future.get(), so an execution abandoned on timeout below is
+        // still counted for as long as it actually runs — see the inflight field javadoc.
+        inflight.incrementAndGet();
+        final Future<CommandResult<R>> future = executor.submit(() -> {
+            try {
+                return handler.execute(command);
+            }
+            finally {
+                inflight.decrementAndGet();
+            }
+        });
 
         try {
             // Block until result is available or timeout expires

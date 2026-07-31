@@ -101,6 +101,12 @@ public abstract class AbstractMessageStream<M> implements Closeable {
 
     private static final AtomicInteger count = new AtomicInteger();
 
+    /**
+     * Granularity at which an in-loop pause re-checks {@link #closing}, so a cooperative
+     * shutdown is not held up for a whole poll interval or backoff delay.
+     */
+    private static final long PAUSE_SLICE_MILLIS = 50;
+
     private final Map<String, MessageConsumer<M>> listeners = new ConcurrentHashMap<>();
 
     private final ExponentialAttempt attempt = new ExponentialAttempt();
@@ -111,7 +117,14 @@ public abstract class AbstractMessageStream<M> implements Closeable {
 
     private final StreamMetrics metrics;
 
-    private Thread thread;
+    private volatile Thread thread;
+
+    /**
+     * Set by {@link #awaitQuiescent(Duration)} to stop the dispatcher from claiming further
+     * messages. The dispatcher observes it at the head of its loop and at every pause slice,
+     * so it exits at a safe point rather than being interrupted mid-call.
+     */
+    private volatile boolean closing;
 
     private final String name0;
 
@@ -276,7 +289,10 @@ public abstract class AbstractMessageStream<M> implements Closeable {
      */
     protected void processMessages() {
         log.trace("Message stream - starting listener thread");
-        while (!Thread.currentThread().isInterrupted()) {
+        // `closing` is checked first so a cooperative shutdown claims no further message; the
+        // cycle already in progress below always runs to completion, which is what lets a
+        // consumer finish its work (and its database writes) before the context tears down.
+        while (!closing && !Thread.currentThread().isInterrupted()) {
             try {
                 final var count = new AtomicInteger();
                 for (Map.Entry<String, MessageConsumer<M>> entry : listeners.entrySet()) {
@@ -289,40 +305,109 @@ public abstract class AbstractMessageStream<M> implements Closeable {
                 // if no message was sent, sleep for a while before retrying
                 if (count.get() == 0) {
                     log.trace("Message stream - await before checking for new messages");
-                    Thread.sleep(pollInterval().toMillis());
+                    pause(pollInterval().toMillis());
                 }
             }
-            catch (InterruptedException e) {
-                log.debug("Message streaming interrupt exception - cause: {}", e.getMessage());
-                Thread.currentThread().interrupt();
-                break;
-            }
             catch (Throwable e) {
+                // A forced stop (close() fallback) surfaces as an interrupt, possibly wrapped by
+                // the underlying client. Treat it as "exit now", not as a stream error to retry:
+                // logging it at ERROR with a backoff would turn every hard shutdown into noise.
+                if (e instanceof InterruptedException || Thread.currentThread().isInterrupted()) {
+                    log.debug("Message stream {} interrupted - exiting listener thread", name0);
+                    Thread.currentThread().interrupt();
+                    break;
+                }
                 final var d0 = attempt.delay();
                 log.error("Unexpected error on message stream {} (await: {}) - cause: {}", name0, d0, e.getMessage(), e);
-                sleep(d0.toMillis());
+                pause(d0.toMillis());
             }
         }
         log.trace("Message stream - exiting listener thread");
     }
 
     /**
-     * Shutdown orderly the stream
+     * Sleep up to {@code millis}, returning early once {@link #closing} is set or the thread is
+     * interrupted. Used instead of a single long sleep so neither the poll interval nor an
+     * exponential backoff delay can hold up a cooperative shutdown.
+     */
+    private void pause(long millis) {
+        final long deadline = System.currentTimeMillis() + millis;
+        long remaining;
+        while (!closing
+                && !Thread.currentThread().isInterrupted()
+                && (remaining = deadline - System.currentTimeMillis()) > 0) {
+            sleep(Math.min(PAUSE_SLICE_MILLIS, remaining));
+        }
+    }
+
+    /**
+     * Stop claiming new messages and wait for the dispatcher to finish the cycle it is running.
+     *
+     * <p>This is the cooperative half of {@link #close()}, exposed separately so a caller can
+     * drain the stream while its collaborators — a database connection pool, for instance — are
+     * still usable, and only then release resources.
+     *
+     * <p>Safe to call more than once, and safe to call before any consumer was registered.
+     *
+     * @param timeout
+     *      how long to wait for the dispatcher to exit
+     * @return
+     *      {@code true} if the dispatcher stopped within the timeout, {@code false} if it is
+     *      still running, in which case the caller decides whether to force a stop
+     */
+    public boolean awaitQuiescent(Duration timeout) {
+        closing = true;
+        final Thread t = thread;
+        if (t == null) {
+            return true;
+        }
+        try {
+            t.join(Math.max(1, timeout.toMillis()));
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return !t.isAlive();
+    }
+
+    /**
+     * Shutdown orderly the stream.
+     *
+     * <p>Cooperative first: {@link #awaitQuiescent(Duration)} lets the dispatcher finish the
+     * message it is holding and leave the loop at a safe point. Interrupting a thread parked in a
+     * Redis read can hand a RESP-desynced connection back to the pool (libseqera#92), so the
+     * interrupt below is a fallback for a dispatcher that overran {@link #closeTimeout()}, not the
+     * normal path.
+     *
+     * <p>Callers that need the drain to complete while other beans are still alive should call
+     * {@link #awaitQuiescent(Duration)} themselves, ahead of this method.
      */
     @Override
     public void close() {
         if (thread == null) {
             return;
         }
-        // interrupt the thread
+        if (awaitQuiescent(closeTimeout())) {
+            return;
+        }
+        log.warn("Message stream {} did not stop within {} - forcing interrupt", name0, closeTimeout());
         thread.interrupt();
-        // wait for the termination
         try {
             thread.join(1_000);
         }
         catch (Exception e) {
             log.debug("Unexpected error while terminating {} - cause: {}", name0, e.getMessage());
         }
+    }
+
+    /**
+     * How long {@link #close()} waits for a cooperative stop before interrupting the dispatcher.
+     * Subclasses may override to align with an application-level shutdown budget.
+     *
+     * @return the cooperative close timeout, {@code 10s} by default
+     */
+    protected Duration closeTimeout() {
+        return Duration.ofSeconds(10);
     }
 
     public int length(String streamId) {
