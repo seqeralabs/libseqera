@@ -1,5 +1,23 @@
 # lib-cmd-queue-redis changelog
 
+0.4.1 - 31 Jul 2026
+- Fix: a handler that throws is no longer treated as a terminal command failure. The catch in
+  CommandServiceImpl.processCommandWithHandler now returns false — keeping the message unacked so
+  the stream layer re-polls it — instead of persisting FAILED and acking (which removed the
+  message from the queue). A transient/infra error (e.g. the Postgres connection pool closing
+  during pod shutdown) previously became a permanent FAILED command while the domain entity was
+  left non-terminal, stranding the work with an empty queue and no retry (seqeralabs/sched#712).
+  A genuine command failure must be signalled by returning a FAILED CommandResult, never by
+  throwing; deciding a command has *permanently* failed is delegated to the domain layer that
+  owns the entity state.
+- This restores the fix originally released as 0.5.1 (#87), which was dropped by the revert to
+  0.4.0 below. It is independent of the async/heartbeat-lease model that revert removed: on this
+  synchronous version, returning false means RedisMessageStream.consume skips xack/xdel, so the
+  entry stays in the PEL for XAUTOCLAIM to hand to a live consumer. The catch does not persist
+  started(), so status stays SUBMITTED and the next delivery re-enters execute().
+- Unchanged: a returned FAILED CommandResult is still terminal, and an unknown command type is
+  still failed and acked (no handler exists to retry).
+
 REVERTED - 0.5.0, 0.5.1, 0.6.0, 0.7.0 (13 - 18 Jul 2026)
 - These releases have been reverted; this module is back at 0.4.0 and to its
   lib-data-stream-redis dependency:
