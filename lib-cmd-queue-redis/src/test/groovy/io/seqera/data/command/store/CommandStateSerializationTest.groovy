@@ -20,7 +20,6 @@ import java.time.Instant
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import groovy.transform.Canonical
-import io.seqera.data.command.CommandState
 import io.seqera.data.command.CommandStatus
 import io.seqera.serde.jackson.JacksonEncodingStrategy
 import spock.lang.Specification
@@ -146,7 +145,7 @@ class CommandStateSerializationTest extends Specification {
         decoded.result.deleted
     }
 
-    def 'should handle null result for processing commands'() {
+    def 'should handle null result for running commands'() {
         given:
         def encoder = new JacksonEncodingStrategy<TypedCommandState<?, ?>>() {}
         def now = Instant.now()
@@ -154,7 +153,7 @@ class CommandStateSerializationTest extends Specification {
         def state = new TypedCommandState<>(
                 'cmd-xyz',
                 'create-job',
-                CommandStatus.PROCESSING,
+                CommandStatus.RUNNING,
                 params,
                 null,  // No result yet
                 null,
@@ -171,61 +170,6 @@ class CommandStateSerializationTest extends Specification {
         decoded.params instanceof CreateJobParams
         decoded.params.image == 'ubuntu:22.04'
         decoded.result == null
-        decoded.status == CommandStatus.PROCESSING
-    }
-
-    def 'new state uses the new wire names but legacy names still decode (compatibility)'() {
-        given:
-        def encoder = new JacksonEncodingStrategy<TypedCommandState<?, ?>>() {}
-        def now = Instant.now()
-        def params = new CreateJobParams('ubuntu:22.04', 'sleep 60', 2, 1024)
-
-        when: 'a PENDING / PROCESSING state is encoded'
-        def pendingJson = encoder.encode(new TypedCommandState<>('c1', 't', CommandStatus.PENDING, params, null, null, now, null, null))
-        def processingJson = encoder.encode(new TypedCommandState<>('c2', 't', CommandStatus.PROCESSING, params, null, null, now, now, null))
-
-        then: 'new values are written with the NEW names'
-        pendingJson.contains('"PENDING"')
-        processingJson.contains('"PROCESSING"')
-
-        and: 'they round-trip'
-        encoder.decode(pendingJson).status == CommandStatus.PENDING
-        encoder.decode(processingJson).status == CommandStatus.PROCESSING
-
-        and: 'legacy entries written by earlier versions still decode to the renamed constants'
-        encoder.decode(pendingJson.replace('"PENDING"', '"SUBMITTED"')).status == CommandStatus.PENDING
-        encoder.decode(processingJson.replace('"PROCESSING"', '"RUNNING"')).status == CommandStatus.PROCESSING
-    }
-
-    def 'should decode legacy JSON without error-tracking fields into the real record'() {
-        given: 'the encoder as wired by CommandStateStoreFactory'
-        def encoder = new JacksonEncodingStrategy<CommandState>() {}
-        def now = Instant.now()
-        and: 'old-format JSON, before errorsCount/modifiedAt existed'
-        def paramsClass = CreateJobParams.name
-        def legacyJson = """\
-            {
-                "id": "cmd-legacy",
-                "type": "create-job",
-                "status": "RUNNING",
-                "params": {"@class": "${paramsClass}", "image": "alpine:latest", "command": "echo hi", "cpu": 1, "memory": 512},
-                "result": null,
-                "error": null,
-                "createdAt": "${now}",
-                "startedAt": "${now}",
-                "completedAt": null
-            }""".stripIndent()
-
-        when:
-        def decoded = encoder.decode(legacyJson)
-
-        then: 'existing fields survive (legacy wire name "RUNNING" decodes to PROCESSING via @JsonAlias)'
-        decoded.id() == 'cmd-legacy'
-        decoded.status() == CommandStatus.PROCESSING
-        decoded.params() instanceof CreateJobParams
-        decoded.params().image == 'alpine:latest'
-        and: 'new fields default without a stored value — safe rolling deploy'
-        decoded.errorsCount() == 0
-        decoded.modifiedAt() == null
+        decoded.status == CommandStatus.RUNNING
     }
 }

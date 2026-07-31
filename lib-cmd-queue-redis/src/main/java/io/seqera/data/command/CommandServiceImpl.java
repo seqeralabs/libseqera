@@ -20,6 +20,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import io.micronaut.scheduling.TaskExecutors;
 import io.seqera.data.command.store.CommandStateStore;
@@ -33,26 +36,26 @@ import org.slf4j.LoggerFactory;
  * Implementation of the command service.
  * Handles queue consumption and command execution with proper multi-replica support.
  *
- * <p>Processing runs on the shared worker pool of the underlying message stream, so
- * neither {@code execute()} nor {@code checkStatus()} blocks the dispatcher loop and no
- * per-command timeout is needed. Cross-replica single-runner exclusion comes from the
- * stream's per-message lease.
- *
  * <p>Processing flow:
  * <ul>
- *   <li>If command is already PROCESSING → call checkStatus()</li>
- *   <li>If command is still PENDING → call execute()</li>
- *   <li>If result is PROCESSING → mark as PROCESSING and return false (re-polled later)</li>
- *   <li>If result is terminal → apply result and return true (message removed from queue)</li>
- *   <li>If the handler throws → return false so the message is retried; a throw is treated as
- *       transient, never as a terminal failure (deciding permanent failure is the domain
- *       layer's job, see seqeralabs/sched#712)</li>
+ *   <li>If command is already RUNNING → call checkStatus() synchronously</li>
+ *   <li>If command is not RUNNING → execute asynchronously with 1-second timeout:
+ *       <ul>
+ *         <li>If completes within timeout → process result immediately</li>
+ *         <li>If times out → mark as RUNNING, retry later via queue</li>
+ *       </ul>
+ *   </li>
+ *   <li>If result is RUNNING → return false (message stays in queue for retry)</li>
+ *   <li>If result is terminal → return true (message removed from queue)</li>
  * </ul>
  */
 @Singleton
 public class CommandServiceImpl implements CommandService {
 
     private static final Logger log = LoggerFactory.getLogger(CommandServiceImpl.class);
+
+    @Inject
+    private CommandConfig config;
 
     @Inject
     private CommandStateStore store;
@@ -62,7 +65,7 @@ public class CommandServiceImpl implements CommandService {
 
     @Inject
     @Named(TaskExecutors.BLOCKING)
-    private ExecutorService blockingExecutor;
+    private ExecutorService executor;
 
     private final Map<String, CommandRegistration<?, ?>> handlers = new ConcurrentHashMap<>();
 
@@ -75,8 +78,6 @@ public class CommandServiceImpl implements CommandService {
             return;
         }
         started = true;
-        // run handlers on the shared Micronaut BLOCKING (virtual-thread) executor
-        queue.withHandlerExecutor(blockingExecutor);
         queue.addConsumer(this::processCommand);
         log.info("Command service started - consuming commands");
     }
@@ -220,11 +221,16 @@ public class CommandServiceImpl implements CommandService {
      * <p>This helper method captures the type parameters {@code <P, R>} from the
      * {@link CommandRegistration}, allowing type-safe interaction with the handler.
      *
-     * <p>Runs directly on the shared worker pool thread (no timeout, no extra executor):
+     * <p>Processing flow:
      * <ol>
-     *   <li>If command is already PROCESSING → call {@code checkStatus()} to poll for completion</li>
-     *   <li>If command is still PENDING → call {@code execute()}</li>
-     *   <li>If result status is PROCESSING → mark PROCESSING and return false (re-polled later)</li>
+     *   <li>If command is already RUNNING → call {@code checkStatus()} to poll for completion</li>
+     *   <li>If command is not yet RUNNING → call {@code execute()} with timeout:
+     *       <ul>
+     *         <li>If completes within timeout → process the result immediately</li>
+     *         <li>If times out → mark as RUNNING, return false to retry later</li>
+     *       </ul>
+     *   </li>
+     *   <li>If result status is RUNNING → return false (keep in queue for polling)</li>
      *   <li>If result status is terminal → update state and return true (done)</li>
      * </ol>
      *
@@ -246,29 +252,34 @@ public class CommandServiceImpl implements CommandService {
         final CommandHandler<P, R> handler = registration.handler();
 
         try {
-            // Branch on the command status. Only PENDING and PROCESSING are reachable here
-            // (processCommand already acked terminal states); any other value is a bug or a
-            // newly-added status and must fail loudly rather than be silently executed. Both
-            // execute() and checkStatus() run on the shared worker pool, so a slow handler
-            // does not block the loop.
-            final CommandResult<R> result = switch (state.status()) {
-                case PENDING -> handler.execute(command);
-                case PROCESSING -> handler.checkStatus(command, state);
-                default -> throw new IllegalStateException("Unexpected command status: " + state.status() + " - id=" + state.id());
-            };
+            CommandResult<R> result;
+
+            // Branch based on current command status
+            if (state.status() == CommandStatus.RUNNING) {
+                // Command was previously marked as RUNNING (long-running async operation)
+                // Call checkStatus() to poll the external system for completion
+                result = handler.checkStatus(command, state);
+            } else {
+                // Command not yet running (status is SUBMITTED)
+                // Execute with timeout to avoid blocking the queue processor indefinitely
+                result = executeWithTimeout(handler, command);
+
+                // Timeout case: execute() is still running in background thread
+                // Mark state as RUNNING so next delivery will call checkStatus() instead
+                if (result == null) {
+                    store.save(state.started());
+                    return false; // Keep in queue - will retry and call checkStatus()
+                }
+            }
 
             // Handler returned a result - check if command is still in progress
-            if (result.status() == CommandStatus.PROCESSING) {
-                // Handler explicitly returned PROCESSING (e.g., async job not yet complete)
-                // Ensure state reflects PROCESSING status for accurate reporting
-                if (state.status() != CommandStatus.PROCESSING) {
+            if (result.status() == CommandStatus.RUNNING) {
+                // Handler explicitly returned RUNNING (e.g., async job not yet complete)
+                // Ensure state reflects RUNNING status for accurate reporting
+                if (state.status() != CommandStatus.RUNNING) {
                     store.save(state.started());
-                } else if (state.errorsCount() > 0) {
-                    // Recovered after one or more transient errors — reset the streak. Single write,
-                    // and only when there is something to reset, so healthy re-polls stay write-free.
-                    store.save(state.clearErrors());
                 }
-                return false; // Keep in queue - re-polled and will call checkStatus()
+                return false; // Keep in queue - will retry and call checkStatus()
             }
 
             // Terminal result (SUCCEEDED, FAILED, or CANCELLED)
@@ -279,31 +290,47 @@ public class CommandServiceImpl implements CommandService {
             return true; // Remove from queue - processing complete
 
         } catch (Exception e) {
-            // A thrown handler is a transient/retryable condition, NOT a terminal command
-            // outcome: keep the message in the queue (return false) so the stream layer retains
-            // its lease and re-polls it. A genuine command failure is signalled by returning a
-            // FAILED CommandResult (handled above), never by throwing. Persisting FAILED + acking
-            // here would turn a transient/infra error (e.g. the Postgres pool closing during
-            // shutdown) into a permanent FAILED command while the domain entity is left
-            // non-terminal, stranding the work. Deciding a command has *permanently* failed is
-            // delegated to the domain layer that owns the entity state (see seqeralabs/sched#712).
-            log.error("Command processing errored, will retry: id={}", msg.commandId(), e);
-            recordError(state, e);
-            return false; // Keep in queue - redelivered / re-polled
+            // Unexpected exception during processing - mark as FAILED
+            log.error("Command processing failed: id={}", msg.commandId(), e);
+            store.save(state.failed(e.getMessage()));
+            return true; // Remove from queue - no point retrying a crashed handler
         }
     }
 
     /**
-     * Best-effort: record a non-terminal processing error on the command state — increment the
-     * consecutive-error count and capture the message — for observability of a retry storm on a
-     * command that stays retryable. A failure to persist this must not change control flow: the
-     * command is kept in the queue and retried regardless.
+     * Execute a command handler with a timeout.
+     *
+     * <p>Submits the handler's {@code execute()} method to a thread pool and waits
+     * up to {@code config.executeTimeout()} for completion. This prevents slow handlers from
+     * blocking the queue processor thread.
+     *
+     * <p>Timeout behavior: If the handler doesn't complete within the timeout,
+     * this method returns {@code null} but the handler continues executing in the
+     * background. The caller should mark the command as RUNNING and retry later
+     * via {@code checkStatus()}.
+     *
+     * @param handler The command handler to execute
+     * @param command The command with parameters
+     * @param <P> The command parameter type
+     * @param <R> The command result type
+     * @return The result if completed within timeout, or {@code null} if timed out
+     * @throws RuntimeException if the handler throws an exception
      */
-    private void recordError(CommandState state, Exception e) {
+    private <P, R> CommandResult<R> executeWithTimeout(CommandHandler<P, R> handler, Command<P> command) {
+        // Submit handler execution to thread pool for async execution
+        final Future<CommandResult<R>> future = executor.submit(() -> handler.execute(command));
+
         try {
-            store.save(state.withError(e.getMessage() != null ? e.getMessage() : e.toString()));
-        } catch (Exception fail) {
-            log.warn("Failed to record command error state: id={}", state.id(), fail);
+            // Block until result is available or timeout expires
+            return future.get(config.executeTimeout().toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            // Handler is taking longer than allowed - let it continue in background
+            // Caller will mark as RUNNING and poll via checkStatus() on retry
+            return null;
+        } catch (Exception e) {
+            // Handler threw an exception - cancel the future and propagate
+            future.cancel(true);
+            throw new RuntimeException("Command execution failed", e);
         }
     }
 }

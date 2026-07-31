@@ -31,7 +31,7 @@ import java.time.Instant
 /**
  * End-to-end tests for the CommandService.
  */
-@MicronautTest(packages = ["io.seqera.data.workqueue"], transactional = false)
+@MicronautTest(packages = ["io.seqera.data.stream"], transactional = false)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CommandServiceTest extends Specification implements TestPropertyProvider {
 
@@ -158,8 +158,8 @@ class CommandServiceTest extends Specification implements TestPropertyProvider {
         sleep(500)
         def state = commandService.getState(command.id()).orElseThrow()
 
-        then: 'status is PROCESSING'
-        state.status() == CommandStatus.PROCESSING
+        then: 'status is RUNNING'
+        state.status() == CommandStatus.RUNNING
 
         when: 'wait for periodic checker'
         sleep(3000)
@@ -170,43 +170,6 @@ class CommandServiceTest extends Specification implements TestPropertyProvider {
         def result = commandService.getResult(command.id(), TestResult).orElseThrow()
         result.message == 'Slow done'
         result.processedValue == 99
-    }
-
-    def 'should retry a handler that throws instead of failing it terminally'() {
-        given: 'a command whose handler throws on the first attempt, then succeeds'
-        def params = new TestParams(7, 'flaky')
-        def command = new TestCommand(TsidCreator.getTsid().toLowerCase(), 'test', params)
-
-        when: 'command is submitted'
-        commandService.submit(command)
-
-        and: 'wait for the first (throwing) attempt to be retried'
-        sleep(3000)
-        def state = commandService.getState(command.id()).orElseThrow()
-
-        then: 'the throw was treated as transient and retried to success, not persisted as FAILED'
-        state.status() == CommandStatus.SUCCEEDED
-        commandService.getResult(command.id(), TestResult).orElseThrow().message == 'Recovered'
-
-        and: 'the consecutive-error streak is reset once the command recovers'
-        state.errorsCount() == 0
-    }
-
-    def 'should track consecutive errors and last message without failing a still-retryable command'() {
-        given: 'a handler that always throws'
-        def params = new TestParams(0, 'always-throw')
-        def command = new TestCommand(TsidCreator.getTsid().toLowerCase(), 'test', params)
-
-        when: 'command is submitted and retried a few times'
-        commandService.submit(command)
-        sleep(2000)
-        def state = commandService.getState(command.id()).orElseThrow()
-
-        then: 'the command stays retryable while the error streak and last message are recorded'
-        !state.status().isTerminal()
-        state.errorsCount() >= 1
-        state.error() == 'Persistent boom'
-        state.modifiedAt() != null
     }
 
     def 'should handle unknown command type'() {
@@ -276,7 +239,6 @@ class TestCommand implements Command<TestParams> {
 
 class TestCommandHandler implements CommandHandler<TestParams, TestResult> {
     private Instant startTime
-    private final java.util.concurrent.atomic.AtomicInteger flakyAttempts = new java.util.concurrent.atomic.AtomicInteger()
 
     @Override
     String type() { 'test' }
@@ -289,21 +251,9 @@ class TestCommandHandler implements CommandHandler<TestParams, TestResult> {
             return CommandResult.failure('Intentional failure')
         }
 
-        if (params.mode == 'flaky') {
-            // throw on the first attempt (simulating a transient/infra error), succeed on retry
-            if (flakyAttempts.getAndIncrement() == 0) {
-                throw new RuntimeException('Transient failure')
-            }
-            return CommandResult.success(new TestResult('Recovered', params.value))
-        }
-
-        if (params.mode == 'always-throw') {
-            throw new RuntimeException('Persistent boom')
-        }
-
         if (params.mode == 'slow') {
             startTime = Instant.now()
-            return CommandResult.processing()
+            return CommandResult.running()
         }
 
         def result = new TestResult('Processed', params.value)
@@ -321,6 +271,6 @@ class TestCommandHandler implements CommandHandler<TestParams, TestResult> {
             }
         }
 
-        return CommandResult.processing()
+        return CommandResult.running()
     }
 }

@@ -16,8 +16,10 @@
  */
 package io.seqera.data.command;
 
+import java.time.Duration;
+
 import io.micronaut.context.annotation.Factory;
-import io.seqera.data.workqueue.WorkQueue;
+import io.seqera.data.stream.MessageStream;
 import jakarta.inject.Singleton;
 
 /**
@@ -25,13 +27,18 @@ import jakarta.inject.Singleton;
  */
 class TestCommandQueue extends CommandQueue {
 
-    TestCommandQueue(WorkQueue<String> target, CommandConfig config) {
-        super(target, config);
+    TestCommandQueue(MessageStream<String> target) {
+        super(target);
     }
 
     @Override
     protected String name() {
         return "test-command-queue";
+    }
+
+    @Override
+    protected Duration pollInterval() {
+        return Duration.ofMillis(100);
     }
 }
 
@@ -42,7 +49,7 @@ class TestCommandQueue extends CommandQueue {
 class TestCommandQueueFactory {
 
     @Singleton
-    CommandQueue commandQueue(WorkQueue<String> target, CommandConfig config) {
-        return new TestCommandQueue(target, config);
+    CommandQueue commandQueue(MessageStream<String> target) {
+        return new TestCommandQueue(target);
     }
 }

@@ -1,18 +1,5 @@
 # lib-data-stream-redis
 
-> **⚠️ Deprecated.** This module is frozen and kept only for existing consumers; no further
-> changes will be made here. You have two paths:
->
-> - **Move to [`lib-data-workqueue`](../lib-data-workqueue/README.md) +
->   [`lib-data-workqueue-redis`](../lib-data-workqueue-redis/README.md)** — the split/rename of
->   this library with aligned vocabulary (`poll`→`receive`, `renew`→`renewLease`,
->   `claim-timeout`→`visibility-timeout`). `workqueue 1.0.0` ≡ this library's `2.0.0` behaviour
->   (async, at-least-once, heartbeat lease — handlers must be idempotent). Recommended for new
->   code. See the [migration guide](../docs/superpowers/specs/2026-07-11-workqueue-rename-migration.md).
-> - **Stay on `lib-data-stream-redis:1.5.x`** — the last *synchronous* release (handler runs on
->   the listener thread, exactly-once-per-poll). Pin `1.5.x` if you don't want the `2.0.0`
->   async/at-least-once rewrite and aren't ready to adopt the idempotency requirement.
-
 Message streaming with Redis Streams and local implementations for persistent event processing.
 
 ## Installation
@@ -21,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-data-stream-redis:2.0.0'
+    implementation 'io.seqera:lib-data-stream-redis:1.5.0'
 }
 ```
 
@@ -154,78 +141,6 @@ class ActivityConsumer implements MessageConsumer<ActivityEvent> {
 
 messageStream.consume("user-activity", new ActivityConsumer())
 ```
-
-## Architecture
-
-`AbstractMessageStream` runs handlers **asynchronously and concurrently** while
-guaranteeing that a given message is processed by exactly one *live* consumer at a
-time. A message is owned by its consumer for as long as the handler keeps working —
-independent of how long that takes — and ownership is relinquished only when the work
-finishes or the consumer dies.
-
-```
-  offer(msg)                                    ┌────────────────────────────────┐
-      │                                         │      AbstractMessageStream     │
-      ▼                                         │                                │
- ┌──────────┐   poll (XREADGROUP / XAUTOCLAIM)  │  dispatcher thread             │
- │  Redis   │◀──────────────────────────────────┤   • acquire a semaphore slot   │
- │  stream  │                                   │   • poll one message           │
- │  (PEL,   │   renew (XCLAIM … JUSTID)         │   • hand it to the executor    │
- │  group)  │◀───────────── heartbeat daemon ───┤     (never runs it inline)     │
- │          │        every claim-timeout/3      │                                │
- │          │   ack (XACK + XDEL)               │  worker (executor thread)      │
- │          │◀──────────── on terminal ─────────┤   accept(msg):                 │
- └──────────┘                                   │    ├─ true  → ack + free slot  │
-      ▲                                         │    └─ false → keep lease,      │
-      │ reclaimed by a peer only if the owner   │       re-run after pollInterval│
-      │ dies (heartbeat stops → idle > claim-timeout)  via the re-poll scheduler │
-      └──────────────────────────────────────────────────────────────────────────┘
-```
-
-**Three mechanisms:**
-
-1. **Async dispatch (no head-of-line blocking).** The dispatcher thread never runs a
-   handler; it hands each message to a worker executor and moves on. Handlers run on the
-   executor supplied via `withHandlerExecutor(...)` — **mandatory, no default** (Micronaut
-   consumers inject the `@Named(BLOCKING)` executor). A `Semaphore` sized by
-   `concurrency()` bounds how many messages are in flight at once (backpressure: excess
-   messages stay in the stream).
-
-2. **Heartbeat lease (single live runner + safe long handlers).** While a message is in
-   flight, a daemon renews its Redis consumer-group entry (`XCLAIM … JUSTID`) every
-   `claim-timeout / 3`, pinning its idle time near zero so no peer's `XAUTOCLAIM` can
-   reclaim it — no matter how long the handler runs. If the owning process dies, the
-   heartbeat stops, idle time crosses `claim-timeout`, and a peer reclaims the message
-   (real dead-consumer failover). A `max-processing-time` safety valve stops renewing a
-   single invocation that runs pathologically long, without interrupting its thread.
-
-3. **In-process re-poll for not-yet-terminal work.** When a handler returns `false` (work
-   in progress), the message keeps its lease and the handler is **re-invoked in-process**
-   after `pollInterval` via a scheduler — Redis is not re-read. This makes the re-poll
-   cadence independent of `claim-timeout` (which then governs only failover).
-
-   The re-poll is scheduled **after the handler returns** — a fixed *delay*, not a fixed
-   *rate*. So a handler that runs **longer than `pollInterval` never overlaps itself**: the
-   next call starts `pollInterval` after the previous one finished, and a given message is
-   processed by at most one invocation at a time (regardless of how slow the handler is).
-   The *only* exception is an invocation that exceeds `max-processing-time` — the safety
-   valve then stops renewing the lease so a concurrent reclaim becomes possible (see below),
-   which is why handlers must be idempotent.
-
-Delivery is **at-least-once** (a crash/pause beyond `claim-timeout`, or the
-`max-processing-time` valve, can hand a still-running message to a peer), so consumers
-must be idempotent. The in-memory `LocalMessageStream` has no pending-entries list, so it
-has no lease/heartbeat (renew is a no-op); it still benefits from async, concurrent dispatch.
-
-### Configuration
-
-| Knob | Where | Default | Governs |
-|---|---|---|---|
-| `pollInterval()` | `AbstractMessageStream` | — (subclass) | Idle backoff **and** in-process re-poll cadence |
-| `concurrency()` | `AbstractMessageStream` | `1` | Max in-flight messages (semaphore ceiling) |
-| `getClaimTimeout()` | `RedisStreamConfig` | — | Dead-consumer failover window |
-| `getHeartbeatInterval()` | `RedisStreamConfig` | `claim-timeout / 3` | Lease renewal cadence |
-| `getMaxProcessingTime()` | `RedisStreamConfig` | `15m` | Upper bound on a single `accept()` before its lease is released |
 
 ## Testing
 

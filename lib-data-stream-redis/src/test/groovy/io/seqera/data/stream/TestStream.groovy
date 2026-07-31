@@ -34,12 +34,10 @@ class TestStream extends AbstractMessageStream<TestMessage> {
 
     TestStream(MessageStream<String> target) {
         super(target)
-        withHandlerExecutor(TestWorkerPool.INSTANCE)
     }
 
     TestStream(MessageStream<String> target, StreamMetrics metrics) {
         super(target, metrics)
-        withHandlerExecutor(TestWorkerPool.INSTANCE)
     }
 
     static TestStream withRegistry(MessageStream<String> target, MeterRegistry registry) {
