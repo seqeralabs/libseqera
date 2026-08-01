@@ -124,6 +124,35 @@ class LocalStateProvider implements StateProvider<String,String> {
     }
 
     @Override
+    synchronized boolean replaceIf(String key, String expected, String value) {
+        final entry = validEntry(key)
+        if( entry==null || entry.value != expected )
+            return false
+        // preserve the remaining time-to-live of the existing entry
+        final remaining = entry.ttl==null ? null : Duration.between(Instant.now(), entry.ts.plus(entry.ttl))
+        store.put(key, new Entry<>(value, remaining))
+        return true
+    }
+
+    @Override
+    synchronized boolean replaceIf(String key, String expected, String value, Duration ttl) {
+        final entry = validEntry(key)
+        if( entry==null || entry.value != expected )
+            return false
+        store.put(key, new Entry<>(value, ttl))
+        return true
+    }
+
+    private Entry<String> validEntry(String key) {
+        final entry = store.get(key)
+        if( entry?.isExpired() ) {
+            store.remove(key)
+            return null
+        }
+        return entry
+    }
+
+    @Override
     void remove(String key) {
         store.remove(key)
     }

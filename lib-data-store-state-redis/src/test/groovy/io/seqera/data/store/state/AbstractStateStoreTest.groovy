@@ -103,6 +103,21 @@ class AbstractStateStoreTest extends Specification {
         store.get(key) == new MyObject('this','that')
     }
 
+    def 'should replace a value only when the current one matches' () {
+        given:
+        def store = new MyCacheStore(provider)
+        def key = UUID.randomUUID().toString()
+        store.put(key, new MyObject('a','b'))
+
+        expect: 'a mismatching expected value is not replaced'
+        !store.replaceIf(key, new MyObject('x','y'), new MyObject('c','d'))
+        store.get(key) == new MyObject('a','b')
+
+        and: 'a matching expected value is replaced'
+        store.replaceIf(key, new MyObject('a','b'), new MyObject('c','d'))
+        store.get(key) == new MyObject('c','d')
+    }
+
     def 'should get and put a value' () {
         given:
         def store = new MyCacheStore(provider)

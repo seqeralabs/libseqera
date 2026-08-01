@@ -179,4 +179,46 @@ class LocalStateProviderTest extends Specification {
         provider.get(k) == null
     }
 
+    def 'should replace a value only when the current one matches' () {
+        given:
+        def k = UUID.randomUUID().toString()
+
+        expect: 'a missing key is not replaced'
+        !provider.replaceIf(k, 'foo', 'bar')
+
+        when:
+        provider.put(k, 'foo')
+        then: 'a mismatching expected value is not replaced'
+        !provider.replaceIf(k, 'other', 'bar')
+        provider.get(k) == 'foo'
+
+        and: 'a matching expected value is replaced'
+        provider.replaceIf(k, 'foo', 'bar')
+        provider.get(k) == 'bar'
+    }
+
+    def 'should preserve or reset the ttl on replace' () {
+        given:
+        def TTL = 300
+        def k1 = UUID.randomUUID().toString()
+        def k2 = UUID.randomUUID().toString()
+
+        when: 'replace without ttl preserves the remaining expiry'
+        provider.put(k1, 'foo', Duration.ofMillis(TTL))
+        provider.replaceIf(k1, 'foo', 'bar')
+        then:
+        provider.get(k1) == 'bar'
+        and:
+        sleep(TTL * 2)
+        provider.get(k1) == null
+
+        when: 'replace with ttl resets the expiry'
+        provider.put(k2, 'foo', Duration.ofMillis(TTL))
+        sleep(Math.round(TTL * 0.66))
+        provider.replaceIf(k2, 'foo', 'bar', Duration.ofMillis(TTL))
+        sleep(Math.round(TTL * 0.66))
+        then: 'the entry is alive beyond the original expiry'
+        provider.get(k2) == 'bar'
+    }
+
 }
