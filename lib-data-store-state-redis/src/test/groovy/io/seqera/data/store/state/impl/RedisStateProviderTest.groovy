@@ -21,6 +21,9 @@ import spock.lang.Shared
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.Callable
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
 
 import io.micronaut.context.ApplicationContext
 import io.seqera.fixtures.redis.RedisTestContainer
@@ -191,5 +194,78 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         result.count == 3
     }
 
+    def 'should replace a value only when the current one matches' () {
+        given:
+        def k = UUID.randomUUID().toString()
+
+        expect: 'a missing key is not replaced'
+        !provider.replaceIf(k, 'foo', 'bar')
+
+        when:
+        provider.put(k, 'foo')
+        then: 'a mismatching expected value is not replaced'
+        !provider.replaceIf(k, 'other', 'bar')
+        provider.get(k) == 'foo'
+
+        and: 'a matching expected value is replaced'
+        provider.replaceIf(k, 'foo', 'bar')
+        provider.get(k) == 'bar'
+    }
+
+    def 'should preserve or reset the ttl on replace' () {
+        given:
+        def TTL = 600
+        def HALF = Math.round(TTL * 0.66)
+        def k1 = UUID.randomUUID().toString()
+        def k2 = UUID.randomUUID().toString()
+
+        when: 'replace without ttl preserves the remaining expiry'
+        provider.put(k1, 'foo', Duration.ofMillis(TTL))
+        sleep(HALF)
+        provider.replaceIf(k1, 'foo', 'bar')
+        then:
+        provider.get(k1) == 'bar'
+        and: 'the entry expires at the original deadline, not TTL after the replace'
+        sleep(HALF)
+        provider.get(k1) == null
+
+        when: 'replace with ttl resets the expiry'
+        provider.put(k2, 'foo', Duration.ofMillis(TTL))
+        sleep(HALF)
+        provider.replaceIf(k2, 'foo', 'bar', Duration.ofMillis(TTL))
+        sleep(HALF)
+        then: 'the entry is alive beyond the original expiry'
+        provider.get(k2) == 'bar'
+    }
+
+    def 'should let exactly one concurrent replace succeed' () {
+        given:
+        def THREADS = 16
+        def ROUNDS = 10
+        def pool = Executors.newFixedThreadPool(THREADS)
+
+        when:
+        def winsPerRound = (1..ROUNDS).collect { round ->
+            final k = UUID.randomUUID().toString()
+            provider.put(k, 'v0')
+            final barrier = new CyclicBarrier(THREADS)
+            final futures = (0..<THREADS).collect { i ->
+                pool.submit({
+                    barrier.await()
+                    // note: the replacement value must differ from the expected one,
+                    // otherwise the winner leaves the value unchanged and a second
+                    // writer's compare-and-swap legitimately matches again
+                    provider.replaceIf(k, 'v0', "w$i".toString())
+                } as Callable<Boolean>)
+            }
+            return futures.count { it.get() } as int
+        }
+
+        then: 'exactly one writer wins every round'
+        winsPerRound == [1] * ROUNDS
+
+        cleanup:
+        pool.shutdown()
+    }
 
 }

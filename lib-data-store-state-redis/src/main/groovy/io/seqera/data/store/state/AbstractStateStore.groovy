@@ -148,6 +148,36 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
         return new CountResult<V>( result.succeed, updated, result.count)
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The comparison is performed on the serialized form of the expected value,
+     * so the configured encoding strategy must be deterministic.
+     */
+    @Override
+    boolean replaceIf(String key, V expected, V value) {
+        final result = delegate.replaceIf(key0(key), serialize(expected), serialize(value))
+        if( result && value instanceof RequestIdAware ) {
+            delegate.put(requestId0(value.getRequestId()), key, getDuration())
+        }
+        return result
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The comparison is performed on the serialized form of the expected value,
+     * so the configured encoding strategy must be deterministic.
+     */
+    @Override
+    boolean replaceIf(String key, V expected, V value, Duration ttl) {
+        final result = delegate.replaceIf(key0(key), serialize(expected), serialize(value), ttl)
+        if( result && value instanceof RequestIdAware ) {
+            delegate.put(requestId0(value.getRequestId()), key, ttl)
+        }
+        return result
+    }
+
     @Override
     void remove(String key) {
         delegate.remove(key0(key))

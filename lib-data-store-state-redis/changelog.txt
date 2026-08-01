@@ -1,5 +1,15 @@
 # lib-data-store-state-redis changelog
 
+1.1.0 - 1 Aug 2026
+- Add replaceIf compare-and-swap write to StateStore, StateProvider and AbstractStateStore (#104)
+- Atomic via a Lua script in RedisStateProvider (requires Redis 6.0+ for SET KEEPTTL);
+  via ConcurrentHashMap.replace in LocalStateProvider
+- Two variants: replaceIf(key, expected, value) preserves the entry's remaining TTL;
+  replaceIf(key, expected, value, ttl) resets the TTL to the given duration
+- Missing key or mismatching current value returns false; comparison is on the serialized form
+- Rewrite the README against the actual API: it documented delete/incr/exists/keys methods
+  that never existed, and omitted putIfAbsentAndCount and findByRequestId
+
 1.0.0 - 4 Nov 2024
 - Initial release of lib-data-store-state-redis extracted from Wave project
 - Refactor package from io.seqera.wave.store.state to io.seqera.data.store.state

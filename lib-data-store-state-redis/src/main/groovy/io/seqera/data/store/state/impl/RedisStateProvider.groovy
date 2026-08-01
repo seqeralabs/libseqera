@@ -81,6 +81,39 @@ class RedisStateProvider implements StateProvider<String,String> {
     }
 
     /*
+     * Replace the value at KEYS[1] only if it currently equals ARGV[1] (compare-and-swap).
+     * An empty ARGV[3] preserves the remaining TTL (KEEPTTL), otherwise the TTL is reset
+     * to ARGV[3] milliseconds. A missing key never matches.
+     */
+    static private final String REPLACE_IF = '''
+        if redis.call('GET', KEYS[1]) == ARGV[1] then
+            if ARGV[3] == '' then
+                redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
+            else
+                redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+            end
+            return 1
+        end
+        return 0
+        '''
+
+    @Override
+    boolean replaceIf(String key, String expected, String value) {
+        return replaceIf0(key, expected, value, '')
+    }
+
+    @Override
+    boolean replaceIf(String key, String expected, String value, Duration ttl) {
+        return replaceIf0(key, expected, value, ttl.toMillis().toString())
+    }
+
+    private boolean replaceIf0(String key, String expected, String value, String ttlMillis) {
+        try( Jedis conn=pool.getResource() ) {
+            return conn.eval(REPLACE_IF, 1, key, expected, value, ttlMillis) == 1L
+        }
+    }
+
+    /*
      * Set a value only the specified key does not exists, if the value can be set
      * the counter identified by the key provided via 'KEYS[2]' is incremented by 1,
      *
