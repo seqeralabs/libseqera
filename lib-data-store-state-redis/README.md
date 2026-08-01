@@ -27,6 +27,14 @@ stateStore.put("task-123", state, Duration.ofMinutes(30))
 // Retrieve state
 MyState retrieved = stateStore.get("task-123")
 
+// Compare-and-swap: replace only if the stored value still matches the one read.
+// Returns false if the key is missing or another writer changed it in between.
+def current = stateStore.get("task-123")
+def updated = current.withStatus("done")
+if( !stateStore.replaceIf("task-123", current, updated) ) {
+    // lost the race, re-read and retry
+}
+
 // Delete state
 stateStore.delete("task-123")
 

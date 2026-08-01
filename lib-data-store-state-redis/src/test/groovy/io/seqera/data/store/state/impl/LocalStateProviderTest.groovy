@@ -20,6 +20,9 @@ package io.seqera.data.store.state.impl
 import spock.lang.Specification
 
 import java.time.Duration
+import java.util.concurrent.Callable
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
 
 import io.micronaut.test.extensions.spock.annotation.MicronautTest
 import io.seqera.data.store.state.CountParams
@@ -199,26 +202,58 @@ class LocalStateProviderTest extends Specification {
 
     def 'should preserve or reset the ttl on replace' () {
         given:
-        def TTL = 300
+        def TTL = 600
+        def HALF = Math.round(TTL * 0.66)
         def k1 = UUID.randomUUID().toString()
         def k2 = UUID.randomUUID().toString()
 
         when: 'replace without ttl preserves the remaining expiry'
         provider.put(k1, 'foo', Duration.ofMillis(TTL))
+        sleep(HALF)
         provider.replaceIf(k1, 'foo', 'bar')
         then:
         provider.get(k1) == 'bar'
-        and:
-        sleep(TTL * 2)
+        and: 'the entry expires at the original deadline, not TTL after the replace'
+        sleep(HALF)
         provider.get(k1) == null
 
         when: 'replace with ttl resets the expiry'
         provider.put(k2, 'foo', Duration.ofMillis(TTL))
-        sleep(Math.round(TTL * 0.66))
+        sleep(HALF)
         provider.replaceIf(k2, 'foo', 'bar', Duration.ofMillis(TTL))
-        sleep(Math.round(TTL * 0.66))
+        sleep(HALF)
         then: 'the entry is alive beyond the original expiry'
         provider.get(k2) == 'bar'
+    }
+
+    def 'should let exactly one concurrent replace succeed' () {
+        given:
+        def THREADS = 16
+        def ROUNDS = 10
+        def pool = Executors.newFixedThreadPool(THREADS)
+
+        when:
+        def winsPerRound = (1..ROUNDS).collect { round ->
+            final k = UUID.randomUUID().toString()
+            provider.put(k, 'v0')
+            final barrier = new CyclicBarrier(THREADS)
+            final futures = (0..<THREADS).collect { i ->
+                pool.submit({
+                    barrier.await()
+                    // note: the replacement value must differ from the expected one,
+                    // otherwise the winner leaves the value unchanged and a second
+                    // writer's compare-and-swap legitimately matches again
+                    provider.replaceIf(k, 'v0', "w$i".toString())
+                } as Callable<Boolean>)
+            }
+            return futures.count { it.get() } as int
+        }
+
+        then: 'exactly one writer wins every round'
+        winsPerRound == [1] * ROUNDS
+
+        cleanup:
+        pool.shutdown()
     }
 
 }

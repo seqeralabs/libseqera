@@ -2,8 +2,9 @@
 
 1.1.0 - 1 Aug 2026
 - Add replaceIf compare-and-swap write to StateStore, StateProvider and AbstractStateStore (#104)
-- Atomic via a Lua script in RedisStateProvider; synchronized in LocalStateProvider
-- Two variants: replaceIf(key, expected, value) preserves the entry's remaining TTL (KEEPTTL);
+- Atomic via a Lua script in RedisStateProvider (requires Redis 6.0+ for SET KEEPTTL);
+  via ConcurrentHashMap.replace in LocalStateProvider
+- Two variants: replaceIf(key, expected, value) preserves the entry's remaining TTL;
   replaceIf(key, expected, value, ttl) resets the TTL to the given duration
 - Missing key or mismatching current value returns false; comparison is on the serialized form
 

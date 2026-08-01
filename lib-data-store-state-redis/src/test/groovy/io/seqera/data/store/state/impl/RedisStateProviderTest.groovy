@@ -214,24 +214,26 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
 
     def 'should preserve or reset the ttl on replace' () {
         given:
-        def TTL = 300
+        def TTL = 600
+        def HALF = Math.round(TTL * 0.66)
         def k1 = UUID.randomUUID().toString()
         def k2 = UUID.randomUUID().toString()
 
         when: 'replace without ttl preserves the remaining expiry'
         provider.put(k1, 'foo', Duration.ofMillis(TTL))
+        sleep(HALF)
         provider.replaceIf(k1, 'foo', 'bar')
         then:
         provider.get(k1) == 'bar'
-        and:
-        sleep(TTL * 2)
+        and: 'the entry expires at the original deadline, not TTL after the replace'
+        sleep(HALF)
         provider.get(k1) == null
 
         when: 'replace with ttl resets the expiry'
         provider.put(k2, 'foo', Duration.ofMillis(TTL))
-        sleep(Math.round(TTL * 0.66))
+        sleep(HALF)
         provider.replaceIf(k2, 'foo', 'bar', Duration.ofMillis(TTL))
-        sleep(Math.round(TTL * 0.66))
+        sleep(HALF)
         then: 'the entry is alive beyond the original expiry'
         provider.get(k2) == 'bar'
     }

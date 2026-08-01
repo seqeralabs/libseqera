@@ -124,23 +124,23 @@ class LocalStateProvider implements StateProvider<String,String> {
     }
 
     @Override
-    synchronized boolean replaceIf(String key, String expected, String value) {
+    boolean replaceIf(String key, String expected, String value) {
         final entry = validEntry(key)
         if( entry==null || entry.value != expected )
             return false
         // preserve the remaining time-to-live of the existing entry
         final remaining = entry.ttl==null ? null : Duration.between(Instant.now(), entry.ts.plus(entry.ttl))
-        store.put(key, new Entry<>(value, remaining))
-        return true
+        // compare-and-swap on the entry instance itself, so a concurrent write
+        // landing in between makes this replace fail instead of overwriting it
+        return store.replace(key, entry, new Entry<>(value, remaining))
     }
 
     @Override
-    synchronized boolean replaceIf(String key, String expected, String value, Duration ttl) {
+    boolean replaceIf(String key, String expected, String value, Duration ttl) {
         final entry = validEntry(key)
         if( entry==null || entry.value != expected )
             return false
-        store.put(key, new Entry<>(value, ttl))
-        return true
+        return store.replace(key, entry, new Entry<>(value, ttl))
     }
 
     private Entry<String> validEntry(String key) {
