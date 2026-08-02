@@ -33,7 +33,7 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory(meterRegistry: Mock(MeterRegistry))
 
         when:
-        def pool = factory.createRedisPool(URI_STRING, MIN_IDLE, MAX_IDLE, MAX_TOTAL, false, TIMEOUT, 'password')
+        def pool = factory.createRedisPool(URI_STRING, MIN_IDLE, MAX_IDLE, MAX_TOTAL, false, -1, TIMEOUT, 'password')
 
         then:
         pool != null
@@ -75,7 +75,7 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory(meterRegistry: Mock(MeterRegistry))
 
         when:
-        factory.createRedisPool(URI_STRING, 0, 10, 50, false, 5000, null)
+        factory.createRedisPool(URI_STRING, 0, 10, 50, false, -1, 5000, null)
 
         then:
         def e = thrown(InvalidURIException)
@@ -92,7 +92,7 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory()
 
         when:
-        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, ON_BORROW, 5000, null)
+        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, ON_BORROW, -1, 5000, null)
 
         then:
         pool.testOnBorrow == ON_BORROW
@@ -104,12 +104,31 @@ class JedisPoolFactoryTest extends Specification {
         ON_BORROW << [true, false]
     }
 
+    def 'should bound the borrow wait when max wait is configured'() {
+        given:
+        def factory = new JedisPoolFactory()
+
+        when:
+        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, false, MAX_WAIT, 5000, null)
+
+        then:
+        pool.maxWaitDuration == java.time.Duration.ofMillis(EXPECTED)
+
+        cleanup:
+        pool?.close()
+
+        where:
+        MAX_WAIT | EXPECTED
+        2000     | 2000      // bounded: an exhausted pool fails the borrow after 2s instead of blocking forever
+        -1       | -1        // default: block indefinitely - the pre-existing commons-pool2 behavior, unchanged
+    }
+
     def 'should create pool without meter registry'() {
         given:
         def factory = new JedisPoolFactory()
 
         when:
-        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, false, 5000, null)
+        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, false, -1, 5000, null)
 
         then:
         pool != null

@@ -1,5 +1,9 @@
 # lib-jedis-pool changelog
 
+1.2.0 - 2 Aug 2026
+- Add redis.pool.maxWait option bounding a borrow against an exhausted pool (millis);
+  default -1 preserves the pre-existing unbounded blocking behavior
+
 1.1.0 - 21 Jul 2026
 - Add redis.pool.testOnBorrow option to PING-validate connections on borrow and evict RESP-desynced connections
 
