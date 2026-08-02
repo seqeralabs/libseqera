@@ -17,6 +17,7 @@
 package io.seqera.jedis;
 
 import java.net.URI;
+import java.time.Duration;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micronaut.context.annotation.Factory;
@@ -62,6 +63,7 @@ public class JedisPoolFactory {
             @Value("${redis.pool.maxIdle:10}") int maxIdle,
             @Value("${redis.pool.maxTotal:50}") int maxTotal,
             @Value("${redis.pool.testOnBorrow:false}") boolean testOnBorrow,
+            @Value("${redis.pool.maxWait:-1}") long maxWait,
             @Value("${redis.client.timeout:5000}") int timeout,
             @Nullable @Value("${redis.password}") String password
     ) {
@@ -71,8 +73,8 @@ public class JedisPoolFactory {
         }
         final int database = JedisURIHelper.getDBIndex(uri);
 
-        log.info("Creating Redis pool - uri={}; database={}; minIdle={}; maxIdle={}; maxTotal={}; testOnBorrow={}; timeout={}",
-                maskPassword(connection), database, minIdle, maxIdle, maxTotal, testOnBorrow, timeout);
+        log.info("Creating Redis pool - uri={}; database={}; minIdle={}; maxIdle={}; maxTotal={}; testOnBorrow={}; maxWait={}; timeout={}",
+                maskPassword(connection), database, minIdle, maxIdle, maxTotal, testOnBorrow, maxWait, timeout);
 
         // Pool config
         final JedisPoolConfig config = new JedisPoolConfig();
@@ -82,6 +84,13 @@ public class JedisPoolFactory {
         // PING-validate connections on borrow so a RESP-desynced connection is evicted
         // instead of served to the next caller — see libseqera#92 / platform#11820
         config.setTestOnBorrow(testOnBorrow);
+        // Bound on a borrow against an exhausted pool, in milliseconds. The commons-pool2
+        // default (-1) blocks INDEFINITELY: a borrower on an exhausted pool never throws,
+        // which can silently freeze periodic work (e.g. a single-threaded scheduler whose
+        // tick borrows a connection — sched PR #913 review). Set a bound so exhaustion
+        // surfaces as an exception the caller can retry, not an invisible hang. -1 keeps
+        // the pre-existing unbounded behavior.
+        config.setMaxWait(Duration.ofMillis(maxWait));
 
         // Client config with database support
         final JedisClientConfig clientConfig = clientConfig(uri, password, timeout);
