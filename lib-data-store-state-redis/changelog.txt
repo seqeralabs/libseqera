@@ -3,8 +3,10 @@
 1.2.0 - 3 Aug 2026
 - Add VersionAware interface: a value carries its own optimistic-concurrency version -
   version() accessor plus withVersion(long) copy method (#107)
-- Change replaceIf signature to replaceIf(key, value[, ttl]): the write witness is the
-  value's own version - the swap lands only when the stored version still equals it
+- Add VersionedStateStore, a state store for VersionAware value types offering a
+  versioned compare-and-swap write replaceIf(key, value[, ttl]): the write witness is
+  the value's own version - the swap lands only when the stored version still equals
+  it; AbstractStateStore keeps its pre-existing contract unchanged (#107)
 - Versions are unique time-sorted identifiers (TSID) stamped by the store on every
   write path, put() included, so any write invalidates every outstanding witness -
   no put-is-creation-only invariant and no ABA across a remove-and-recreate
@@ -19,11 +21,18 @@
   the decoded value via withVersion - so the frame is the single source of truth for
   the version, the value type need not serialize its version field, and the decoder
   always receives exactly the payload the encoder produced
+- Reads are resilient to foreign data that merely resembles a frame: version digits
+  that overflow a long - which no store-written frame can carry - fall back to
+  decoding the stored form as-is at version 0, never a read failure; a plain
+  AbstractStateStore never frames nor strips, so a genuine @v property of a
+  non-versioned value is always preserved
 - Entries written before versioning carry no frame, count as version 0, and are adopted
   transparently by their first successful replace
-- The raw stored-form compare-and-swap is removed; StateProvider's replaceIf is
-  re-signed to the versioned form (key, expectedVersion, value) and no byte-level
-  CAS remains anywhere in the API
+- The raw stored-form compare-and-swap added in 1.1.0 is removed - a breaking change:
+  the provider-level CAS is re-signed to the versioned form (key, expectedVersion,
+  value) and moves to the new standalone VersionProvider capability interface,
+  implemented by both providers alongside StateProvider, which keeps its pre-existing
+  contract; no byte-level CAS remains anywhere in the API
 
 1.1.0 - 1 Aug 2026
 - Add replaceIf compare-and-swap write to StateStore, StateProvider and AbstractStateStore (#104)

@@ -62,11 +62,24 @@ store.clear()
 
 ### Compare-and-swap
 
-A value type opts into optimistic concurrency by implementing `VersionAware` — it
-carries its own version. Read the value, transform it (the version rides along), and
-write it back conditionally with `replaceIf`:
+A store opts into optimistic concurrency by extending `VersionedStateStore` instead of
+`AbstractStateStore`; its value type must implement `VersionAware` — it carries its own
+version. Read the value, transform it (the version rides along), and write it back
+conditionally with `replaceIf`:
 
 ```groovy
+@Singleton
+@CompileStatic
+class MyStateStore extends VersionedStateStore<MyState> {
+
+    // the provider must also implement VersionProvider - both implementations do
+    MyStateStore(StateProvider<String,String> provider) {
+        super(provider, new MoshiEncodeStrategy<MyState>() {})
+    }
+
+    // getPrefix / getDuration as above
+}
+
 class MyState implements VersionAware<MyState> {
     // ... domain fields ...
     long version
@@ -100,8 +113,12 @@ encoding strategy: it is stripped symmetrically on read — the decoder receives
 the payload the encoder produced — and its version is injected into the decoded value
 through `withVersion`, making the frame the single source of truth for the version; the
 value type does not need to serialize its version field. Versioned values must serialize
-to a JSON object. Values stored before versioning carry no frame, count as version `0`,
-and are adopted by their first successful replace. Requires Redis 6.0 or later.
+to a JSON object, and their leading `@v` property is reserved for the store; a plain
+`AbstractStateStore` never frames nor strips, so a genuine `@v` property of a
+non-versioned value is always preserved, and on a versioned store a head that merely
+resembles a frame but cannot be one (version digits that do not fit a long) never fails
+a read. Values stored before versioning carry no frame, count as version `0`, and are
+adopted by their first successful replace. Requires Redis 6.0 or later.
 
 ### Atomic counters
 

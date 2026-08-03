@@ -39,7 +39,7 @@ import org.luaj.vm2.lib.jse.JsePlatform
 @Requires(missingProperty = 'redis.uri')
 @Singleton
 @CompileStatic
-class LocalStateProvider implements StateProvider<String,String> {
+class LocalStateProvider implements StateProvider<String,String>, VersionProvider<String,String> {
 
     private static class Entry<V> {
         final V value

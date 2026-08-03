@@ -37,7 +37,7 @@ import redis.clients.jedis.params.SetParams
 @Requires(bean = RedisActivator)
 @Singleton
 @CompileStatic
-class RedisStateProvider implements StateProvider<String,String> {
+class RedisStateProvider implements StateProvider<String,String>, VersionProvider<String,String> {
 
     @Inject
     private JedisPool pool

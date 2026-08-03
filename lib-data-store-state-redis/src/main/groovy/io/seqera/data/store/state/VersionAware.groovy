@@ -20,7 +20,7 @@ package io.seqera.data.store.state
 /**
  * Contract for values that carry their own optimistic-concurrency version: the version
  * is read together with the value, travels through the caller's domain transitions, and
- * acts as the write witness for {@code AbstractStateStore#replaceIf} — a conditional
+ * acts as the write witness for {@code VersionedStateStore#replaceIf} — a conditional
  * write lands only when the stored version still equals the one the caller read.
  *
  * <p>The version is a unique time-sorted identifier (TSID) stamped by the store on

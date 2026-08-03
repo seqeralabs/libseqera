@@ -76,29 +76,7 @@ class AbstractStateStoreTest extends Specification {
         }
     }
 
-    @Canonical
-    static class PlainObject {
-        String field1
-    }
-
-    static class PlainStore extends AbstractStateStore<PlainObject> {
-
-        PlainStore(StateProvider<String, String> provider) {
-            super(provider, new MoshiEncodeStrategy<PlainObject>() {})
-        }
-
-        @Override
-        protected String getPrefix() {
-            return 'test/v1'
-        }
-
-        @Override
-        protected Duration getDuration() {
-            return Duration.ofSeconds(10)
-        }
-    }
-
-    static class MyCacheStore extends AbstractStateStore<MyObject> {
+    static class MyCacheStore extends VersionedStateStore<MyObject> {
 
         MyCacheStore(StateProvider<String, String> provider) {
             super(provider, new MoshiEncodeStrategy<MyObject>() {})
@@ -416,7 +394,7 @@ class AbstractStateStoreTest extends Specification {
         }
     }
 
-    static class NotJsonStore extends AbstractStateStore<MyObject> {
+    static class NotJsonStore extends VersionedStateStore<MyObject> {
 
         NotJsonStore(StateProvider<String, String> provider) {
             super(provider, new NotJsonEncoder())
@@ -433,7 +411,7 @@ class AbstractStateStoreTest extends Specification {
         }
     }
 
-    static class NonDeterministicStore extends AbstractStateStore<MyObject> {
+    static class NonDeterministicStore extends VersionedStateStore<MyObject> {
 
         NonDeterministicStore(StateProvider<String, String> provider) {
             super(provider, new NonDeterministicEncoder())
@@ -475,7 +453,7 @@ class AbstractStateStoreTest extends Specification {
         }
     }
 
-    static class VersionlessStore extends AbstractStateStore<MyObject> {
+    static class VersionlessStore extends VersionedStateStore<MyObject> {
 
         VersionlessStore(StateProvider<String, String> provider) {
             super(provider, new VersionlessEncoder())
@@ -505,7 +483,7 @@ class AbstractStateStoreTest extends Specification {
         }
     }
 
-    static class EmptyJsonStore extends AbstractStateStore<MyObject> {
+    static class EmptyJsonStore extends VersionedStateStore<MyObject> {
 
         EmptyJsonStore(StateProvider<String, String> provider) {
             super(provider, new EmptyJsonEncoder())
@@ -520,6 +498,91 @@ class AbstractStateStoreTest extends Specification {
         protected Duration getDuration() {
             return Duration.ofSeconds(10)
         }
+    }
+
+    /**
+     * A non-versioned type whose serialized form legitimately begins with a {@code @v}
+     * property — byte-wise indistinguishable from a version frame. The store must not
+     * mistake it for one: it only frames {@link VersionAware} values.
+     */
+    @Canonical
+    static class AtVObject {
+        Long atV
+        String field1
+    }
+
+    static class AtVEncoder implements StringEncodingStrategy<AtVObject> {
+
+        @Override
+        String encode(AtVObject value) {
+            return value.field1 != null
+                    ? '{"@v":' + value.atV + ',"field1":"' + value.field1 + '"}'
+                    : '{"@v":' + value.atV + '}'
+        }
+
+        @Override
+        AtVObject decode(String encoded) {
+            final v = (encoded =~ /"@v":(\d+)/)
+            final f1 = (encoded =~ /"field1":"([^"]*)"/)
+            return new AtVObject(
+                    v.find() ? v.group(1) as Long : null,
+                    f1.find() ? f1.group(1) : null )
+        }
+    }
+
+    static class AtVStore extends AbstractStateStore<AtVObject> {
+
+        AtVStore(StateProvider<String, String> provider) {
+            super(provider, new AtVEncoder())
+        }
+
+        @Override
+        protected String getPrefix() {
+            return 'test/v1'
+        }
+
+        @Override
+        protected Duration getDuration() {
+            return Duration.ofSeconds(10)
+        }
+    }
+
+    def 'should not strip a frame-looking property from a non-versioned value' () {
+        given:
+        def store = new AtVStore(provider)
+        def key = UUID.randomUUID().toString()
+
+        when: 'a non-versioned value whose first serialized property is literally @v'
+        store.put(key, new AtVObject(5L, 'a'))
+        then: 'the stored form carries the property as plain user data - no frame is added'
+        provider.get(store.key0(key)) == '{"@v":5,"field1":"a"}'
+        and: 'the read gives the property back instead of swallowing it as a frame'
+        store.get(key) == new AtVObject(5L, 'a')
+    }
+
+    def 'should not decode a frame-looking non-versioned entry to an empty object' () {
+        given:
+        def store = new AtVStore(provider)
+        def key = UUID.randomUUID().toString()
+        and: 'a foreign entry that is exactly what an empty-payload frame looks like'
+        provider.put(store.key0(key), '{"@v":5}', Duration.ofSeconds(10))
+
+        expect: 'the property is user data, not a frame around an empty object'
+        store.get(key) == new AtVObject(5L, null)
+    }
+
+    def 'should treat a frame whose version does not fit a long as user data' () {
+        given:
+        def store = new MyCacheStore(provider)
+        def key = UUID.randomUUID().toString()
+        and: 'a foreign entry whose head resembles a frame but overflows a long'
+        provider.put(store.key0(key), '{"@v":99999999999999999999,"field1":"a","field2":"b"}', Duration.ofSeconds(10))
+
+        when:
+        def value = store.get(key)
+        then: 'the read degrades to an unframed decode instead of throwing'
+        value == new MyObject('a', 'b')
+        value.version() == 0
     }
 
     def 'should strip the frame on read and recover the version from it' () {
@@ -625,13 +688,9 @@ class AbstractStateStoreTest extends Specification {
         provider.get(store.key0(key)) =~ /^\{"@v":\d+,/
     }
 
-    def 'should reject a value type that does not implement VersionAware' () {
-        given:
-        def store = new PlainStore(provider)
-        store.put('k1', new PlainObject('a'))
-
-        when:
-        store.replaceIf('k1', new PlainObject('b'))
+    def 'should reject a provider that does not support versioned writes' () {
+        when: 'a versioned store is built on a provider that is not a VersionProvider'
+        new MyCacheStore(Stub(StateProvider))
         then:
         thrown(IllegalArgumentException)
     }
