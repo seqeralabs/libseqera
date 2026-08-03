@@ -22,8 +22,8 @@ import java.util.regex.Pattern
 
 import com.github.f4b6a3.tsid.TsidCreator
 import groovy.transform.CompileStatic
+import groovy.util.logging.Slf4j
 import io.seqera.data.store.state.impl.StateProvider
-import io.seqera.data.store.state.impl.VersionParser
 import io.seqera.data.store.state.impl.VersionProvider
 import io.seqera.serde.encode.StringEncodingStrategy
 /**
@@ -46,6 +46,7 @@ import io.seqera.serde.encode.StringEncodingStrategy
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
+@Slf4j
 @CompileStatic
 abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractStateStore<V> {
 
@@ -90,15 +91,43 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
     @Override
     protected V deserialize(String encoded) {
         final matcher = FRAME_PATTERN.matcher(encoded)
-        if( !matcher.find() )
-            return super.deserialize(encoded).withVersion(0)
-        final version = VersionParser.parseVersion(matcher.group(1))
-        if( version == null )
-            return super.deserialize(encoded).withVersion(0)
-        final payload = matcher.group(2) == ','
-                ? '{' + encoded.substring(matcher.end())
-                : '{}'
-        return super.deserialize(payload).withVersion(version)
+        if( !matcher.find() ) {
+            log.debug("State entry carries no version frame - reading it as version 0")
+            return decode(encoded).withVersion(0)
+        }
+        final version = parseVersion(matcher.group(1))
+        if( version == null ) {
+            log.debug("State entry version frame is not parseable - reading it as unframed at version 0")
+            return decode(encoded).withVersion(0)
+        }
+        String payload
+        if( matcher.group(2) == ',' ) {
+            payload = '{' + encoded.substring(matcher.end())
+        }
+        else {
+            log.debug("State entry carries no payload past the version frame - decoding it as an empty object")
+            payload = '{}'
+        }
+        return decode(payload).withVersion(version)
+    }
+
+    private V decode(String payload) {
+        return super.deserialize(payload)
+    }
+
+    /**
+     * Parse the digits captured from a leading {@code {"@v":N} frame, or {@code null}
+     * when they do not fit a signed 64-bit long — no store-written frame can carry
+     * them, so the entry counts as unframed.
+     */
+    private static Long parseVersion(String digits) {
+        try {
+            return Long.valueOf(digits)
+        }
+        catch( NumberFormatException ignored ) {
+            log.warn("Version frame digits do not fit a long - no store-written frame can carry them; offending value: ${digits.take(80)}")
+            return null
+        }
     }
 
     /**

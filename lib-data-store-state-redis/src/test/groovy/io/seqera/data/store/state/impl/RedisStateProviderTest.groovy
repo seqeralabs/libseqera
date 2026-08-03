@@ -225,38 +225,30 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         provider.get(k) == '{"@v":1,"x":"a"}'
     }
 
-    def 'should parse the version of a non-canonical head numerically' () {
+    def 'should never match a non-canonical version head' () {
         given:
         def k1 = UUID.randomUUID().toString()
         def k2 = UUID.randomUUID().toString()
         def k3 = UUID.randomUUID().toString()
-        def k4 = UUID.randomUUID().toString()
 
         when: 'a head with leading-zero version digits'
         provider.put(k1, '{"@v":007,"x":"a"}')
-        then: 'the version is the numeric value of the digits'
+        then: 'no witness matches it - not even the numeric value of the digits'
+        !provider.replaceIf(k1, 7, '{"@v":8,"x":"b"}', Duration.ofSeconds(10))
         !provider.replaceIf(k1, 0, '{"@v":8,"x":"b"}', Duration.ofSeconds(10))
-        provider.replaceIf(k1, 7, '{"@v":8,"x":"b"}', Duration.ofSeconds(10))
-        provider.get(k1) == '{"@v":8,"x":"b"}'
-
-        when: 'a head whose 19-digit version exceeds the long range'
-        provider.put(k2, '{"@v":9999999999999999999,"x":"a"}')
-        then: 'it counts as version zero and is adopted by it'
-        !provider.replaceIf(k2, 9, '{"@v":1,"x":"b"}', Duration.ofSeconds(10))
-        provider.replaceIf(k2, 0, '{"@v":1,"x":"b"}', Duration.ofSeconds(10))
-        provider.get(k2) == '{"@v":1,"x":"b"}'
+        provider.get(k1) == '{"@v":007,"x":"a"}'
 
         when: 'a head whose version digits overflow a long'
-        provider.put(k3, '{"@v":99999999999999999999,"x":"a"}')
-        then: 'it counts as version zero and is adopted by it'
-        provider.replaceIf(k3, 0, '{"@v":1,"x":"b"}', Duration.ofSeconds(10))
-        provider.get(k3) == '{"@v":1,"x":"b"}'
+        provider.put(k2, '{"@v":99999999999999999999,"x":"a"}')
+        then: 'no witness matches it and nothing is thrown'
+        !provider.replaceIf(k2, 0, '{"@v":1,"x":"b"}', Duration.ofSeconds(10))
+        provider.get(k2) == '{"@v":99999999999999999999,"x":"a"}'
 
         when: 'a head carrying the largest version a store can write'
-        provider.put(k4, '{"@v":9223372036854775807,"x":"a"}')
-        then: 'it still matches exactly'
-        provider.replaceIf(k4, Long.MAX_VALUE, '{"@v":1,"x":"b"}', Duration.ofSeconds(10))
-        provider.get(k4) == '{"@v":1,"x":"b"}'
+        provider.put(k3, '{"@v":9223372036854775807,"x":"a"}')
+        then: 'it matches exactly'
+        provider.replaceIf(k3, Long.MAX_VALUE, '{"@v":1,"x":"b"}', Duration.ofSeconds(10))
+        provider.get(k3) == '{"@v":1,"x":"b"}'
     }
 
     def 'should reset the ttl on versioned replace' () {

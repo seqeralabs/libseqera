@@ -713,7 +713,7 @@ class AbstractStateStoreTest extends Specification {
         store.findByRequestId(recId) == new MyState(recId, 'value')
     }
 
-    def 'should adopt a foreign entry whose version overflows a long' () {
+    def 'should read a foreign overflow head at version zero without adopting it' () {
         given:
         def store = new MyCacheStore(provider)
         def key = UUID.randomUUID().toString()
@@ -723,11 +723,11 @@ class AbstractStateStoreTest extends Specification {
         when: 'the version recovered on read acts as the witness'
         def value = store.get(key)
         def done = store.replaceIf(key, new MyObject('c', 'd', value.version()))
-        then:
-        done
-        store.get(key) == new MyObject('c', 'd')
-        and: 'the adopted entry is framed'
-        provider.get(store.key0(key)) =~ /^\{"@v":\d+,/
+        then: 'the read degrades to version zero but the replace never matches the foreign head'
+        value.version() == 0
+        !done
+        and: 'the entry is left untouched'
+        provider.get(store.key0(key)) == '{"@v":99999999999999999999,"field1":"a","field2":"b"}'
     }
 
     def 'should reject a provider that does not support versioned writes' () {

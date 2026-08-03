@@ -125,17 +125,21 @@ class LocalStateProvider implements StateProvider<String,String>, VersionProvide
 
     private static final java.util.regex.Pattern VERSION_HEAD = ~/^\{"@v":(\d+)[,}]/
 
-    private static long versionOf(String value) {
-        final matcher = VERSION_HEAD.matcher(value)
-        if( !matcher.find() )
-            return 0L
-        return VersionParser.parseVersion(matcher.group(1)) ?: 0L
+    /*
+     * Mirror of the Lua script in RedisStateProvider: only the head of the stored form
+     * is inspected, and the captured digits are compared literally against the canonical
+     * decimal rendering of the expected version - no parsing; an unframed value counts
+     * as version '0'.
+     */
+    private static String versionOf(String value) {
+        final matcher = VERSION_HEAD.matcher(value.take(28))
+        return matcher.find() ? matcher.group(1) : '0'
     }
 
     @Override
     boolean replaceIf(String key, long expected, String value, Duration ttl) {
         final entry = validEntry(key)
-        if( entry==null || versionOf(entry.value) != expected )
+        if( entry==null || versionOf(entry.value) != String.valueOf(expected) )
             return false
         // compare-and-swap on the entry instance itself, so a concurrent write
         // landing in between makes this replace fail instead of overwriting it

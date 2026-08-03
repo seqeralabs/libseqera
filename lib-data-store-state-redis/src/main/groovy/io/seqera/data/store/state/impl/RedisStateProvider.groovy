@@ -87,17 +87,15 @@ class RedisStateProvider implements StateProvider<String,String>, VersionProvide
      * of the stored value is inspected (GETRANGE), so the cost is independent of the
      * payload size.
      *
-     * The comparison mirrors VersionParser#parseVersion string-wise, since Lua numbers
-     * are doubles and cannot hold a 64-bit version: leading zeros are insignificant and
-     * digits that do not fit a signed long count as version 0 - the same as no frame at
-     * all, which also covers frames too long to terminate within the inspected head.
+     * The digits are compared literally against the canonical decimal form of the
+     * expected version - the only form a store-written frame can carry - so foreign
+     * data whose head merely resembles a frame never matches and is left untouched;
+     * LocalStateProvider mirrors the same comparison.
      */
     static private final String REPLACE_IF = '''
         local head = redis.call('GETRANGE', KEYS[1], 0, 27)
         if head == '' then return 0 end
         local ver = string.match(head, '^{"@v":(%d+)[,}]') or '0'
-        ver = string.match(ver, '^0*(%d+)$')
-        if #ver > 19 or (#ver == 19 and ver > '9223372036854775807') then ver = '0' end
         if ver ~= ARGV[1] then return 0 end
         redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
         return 1

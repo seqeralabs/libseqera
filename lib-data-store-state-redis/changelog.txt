@@ -33,11 +33,11 @@
   always shares the entry's ttl, so the findByRequestId index can never expire out of
   step with its entry; no time-to-live-preserving variant exists (and the Redis 6
   KEEPTTL requirement is gone with it)
-- Non-canonical frame digits carry the same version everywhere: the semantics are
-  numeric - leading zeros are insignificant, digits overflowing a long count as
-  version 0 - shared via a single parser (VersionParser) by the read path and the
-  local provider, and mirrored string-wise by the Redis compare-and-swap script, so
-  the version witnessed on read always matches the version the CAS compares
+- The compare-and-swap matches the frame digits literally against the canonical decimal
+  form of the expected version - the only form a store-written frame can carry - in both
+  providers, with no version parsing anywhere in the CAS path: foreign data whose head
+  merely resembles a frame never matches and is left untouched, while reads degrade to
+  version 0 with a warning when the digits do not fit a long, never a read failure
 - The raw stored-form compare-and-swap added in 1.1.0 is removed and 1.1.0 is revoked
   (see below): the provider-level CAS is re-signed to the versioned form (key,
   expectedVersion, value) and moves to the new standalone VersionProvider capability

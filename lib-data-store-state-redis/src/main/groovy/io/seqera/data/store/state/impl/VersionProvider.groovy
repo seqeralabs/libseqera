@@ -33,9 +33,11 @@ interface VersionProvider<K,V> {
      * the leading {@code {"@v":N} frame of the stored form equals the expected one
      * (versioned compare-and-swap), resetting the entry time-to-live to the specified
      * duration. A stored form without the frame counts as version 0; a missing key never
-     * matches. The whole operation is a single atomic server-side call, and only the
-     * head of the stored value is inspected, so the cost is independent of the payload
-     * size.
+     * matches. The frame digits are compared literally against the canonical decimal
+     * form of the expected version — the only form a store-written frame can carry — so
+     * foreign data whose head merely resembles a frame never matches. The whole operation
+     * is a single atomic server-side call, and only the head of the stored value is
+     * inspected, so the cost is independent of the payload size.
      *
      * @param key The key of the entry to be replaced
      * @param expected The version the stored form is expected to carry
