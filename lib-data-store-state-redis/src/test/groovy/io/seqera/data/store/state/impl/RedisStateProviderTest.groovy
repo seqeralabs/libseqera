@@ -194,95 +194,21 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         result.count == 3
     }
 
-    def 'should replace a value only when the current one matches' () {
-        given:
-        def k = UUID.randomUUID().toString()
-
-        expect: 'a missing key is not replaced'
-        !provider.replaceIf(k, 'foo', 'bar')
-
-        when:
-        provider.put(k, 'foo')
-        then: 'a mismatching expected value is not replaced'
-        !provider.replaceIf(k, 'other', 'bar')
-        provider.get(k) == 'foo'
-
-        and: 'a matching expected value is replaced'
-        provider.replaceIf(k, 'foo', 'bar')
-        provider.get(k) == 'bar'
-    }
-
-    def 'should preserve or reset the ttl on replace' () {
-        given:
-        def TTL = 600
-        def HALF = Math.round(TTL * 0.66)
-        def k1 = UUID.randomUUID().toString()
-        def k2 = UUID.randomUUID().toString()
-
-        when: 'replace without ttl preserves the remaining expiry'
-        provider.put(k1, 'foo', Duration.ofMillis(TTL))
-        sleep(HALF)
-        provider.replaceIf(k1, 'foo', 'bar')
-        then:
-        provider.get(k1) == 'bar'
-        and: 'the entry expires at the original deadline, not TTL after the replace'
-        sleep(HALF)
-        provider.get(k1) == null
-
-        when: 'replace with ttl resets the expiry'
-        provider.put(k2, 'foo', Duration.ofMillis(TTL))
-        sleep(HALF)
-        provider.replaceIf(k2, 'foo', 'bar', Duration.ofMillis(TTL))
-        sleep(HALF)
-        then: 'the entry is alive beyond the original expiry'
-        provider.get(k2) == 'bar'
-    }
-
-    def 'should let exactly one concurrent replace succeed' () {
-        given:
-        def THREADS = 16
-        def ROUNDS = 10
-        def pool = Executors.newFixedThreadPool(THREADS)
-
-        when:
-        def winsPerRound = (1..ROUNDS).collect { round ->
-            final k = UUID.randomUUID().toString()
-            provider.put(k, 'v0')
-            final barrier = new CyclicBarrier(THREADS)
-            final futures = (0..<THREADS).collect { i ->
-                pool.submit({
-                    barrier.await()
-                    // note: the replacement value must differ from the expected one,
-                    // otherwise the winner leaves the value unchanged and a second
-                    // writer's compare-and-swap legitimately matches again
-                    provider.replaceIf(k, 'v0', "w$i".toString())
-                } as Callable<Boolean>)
-            }
-            return futures.count { it.get() } as int
-        }
-
-        then: 'exactly one writer wins every round'
-        winsPerRound == [1] * ROUNDS
-
-        cleanup:
-        pool.shutdown()
-    }
-
     def 'should replace a value only when the stored version matches' () {
         given:
         def k = UUID.randomUUID().toString()
 
         expect: 'a missing key is not replaced'
-        !provider.replaceIfVersion(k, 0, '{"@v":1,"x":"a"}')
+        !provider.replaceIf(k, 0, '{"@v":1,"x":"a"}')
 
         when:
         provider.put(k, '{"@v":3,"x":"a"}')
         then: 'a mismatching version is not replaced'
-        !provider.replaceIfVersion(k, 2, '{"@v":3,"x":"b"}')
+        !provider.replaceIf(k, 2, '{"@v":3,"x":"b"}')
         provider.get(k) == '{"@v":3,"x":"a"}'
 
         and: 'a matching version is replaced'
-        provider.replaceIfVersion(k, 3, '{"@v":4,"x":"b"}')
+        provider.replaceIf(k, 3, '{"@v":4,"x":"b"}')
         provider.get(k) == '{"@v":4,"x":"b"}'
     }
 
@@ -292,10 +218,10 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         provider.put(k, '{"x":"legacy"}')
 
         expect: 'a non-zero version does not match an unframed value'
-        !provider.replaceIfVersion(k, 7, '{"@v":8,"x":"a"}')
+        !provider.replaceIf(k, 7, '{"@v":8,"x":"a"}')
 
         and: 'version zero adopts it'
-        provider.replaceIfVersion(k, 0, '{"@v":1,"x":"a"}')
+        provider.replaceIf(k, 0, '{"@v":1,"x":"a"}')
         provider.get(k) == '{"@v":1,"x":"a"}'
     }
 
@@ -309,7 +235,7 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         when: 'replace without ttl preserves the remaining expiry'
         provider.put(k1, '{"@v":1,"x":"a"}', Duration.ofMillis(TTL))
         sleep(HALF)
-        provider.replaceIfVersion(k1, 1, '{"@v":2,"x":"b"}')
+        provider.replaceIf(k1, 1, '{"@v":2,"x":"b"}')
         then:
         provider.get(k1) == '{"@v":2,"x":"b"}'
         and: 'the entry expires at the original deadline, not TTL after the replace'
@@ -319,11 +245,38 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         when: 'replace with ttl resets the expiry'
         provider.put(k2, '{"@v":1,"x":"a"}', Duration.ofMillis(TTL))
         sleep(HALF)
-        provider.replaceIfVersion(k2, 1, '{"@v":2,"x":"b"}', Duration.ofMillis(TTL))
+        provider.replaceIf(k2, 1, '{"@v":2,"x":"b"}', Duration.ofMillis(TTL))
         and:
         sleep(HALF)
         then: 'the entry is still alive past the original deadline'
         provider.get(k2) == '{"@v":2,"x":"b"}'
+    }
+
+    def 'should let exactly one concurrent replace succeed' () {
+        given:
+        def THREADS = 16
+        def ROUNDS = 10
+        def pool = Executors.newFixedThreadPool(THREADS)
+
+        when:
+        def winsPerRound = (1..ROUNDS).collect { round ->
+            final k = UUID.randomUUID().toString()
+            provider.put(k, '{"@v":0,"x":"v0"}')
+            final barrier = new CyclicBarrier(THREADS)
+            final futures = (0..<THREADS).collect { i ->
+                pool.submit({
+                    barrier.await()
+                    provider.replaceIf(k, 0, '{"@v":1,"x":"w' + i + '"}')
+                } as Callable<Boolean>)
+            }
+            return futures.count { it.get() } as int
+        }
+
+        then: 'exactly one writer wins every round'
+        winsPerRound == [1] * ROUNDS
+
+        cleanup:
+        pool.shutdown()
     }
 
 }

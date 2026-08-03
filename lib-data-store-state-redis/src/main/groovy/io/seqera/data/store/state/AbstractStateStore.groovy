@@ -222,8 +222,8 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
         // the stored form's leading frame against the caller's read basis and swaps in
         // the new (framed) value - no read-back, no payload comparison, no second trip
         final done = ttl != null
-                ? delegate.replaceIfVersion(key0(key), expected, serialize0(next), ttl)
-                : delegate.replaceIfVersion(key0(key), expected, serialize0(next))
+                ? delegate.replaceIf(key0(key), expected, serialize0(next), ttl)
+                : delegate.replaceIf(key0(key), expected, serialize0(next))
         if( done && next instanceof RequestIdAware ) {
             delegate.put(requestId0(((RequestIdAware) next).getRequestId()), key, ttl != null ? ttl : getDuration())
         }

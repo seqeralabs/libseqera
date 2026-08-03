@@ -81,46 +81,13 @@ class RedisStateProvider implements StateProvider<String,String> {
     }
 
     /*
-     * Replace the value at KEYS[1] only if it currently equals ARGV[1] (compare-and-swap).
-     * An empty ARGV[3] preserves the remaining TTL (KEEPTTL), otherwise the TTL is reset
-     * to ARGV[3] milliseconds. A missing key never matches.
-     */
-    static private final String REPLACE_IF = '''
-        if redis.call('GET', KEYS[1]) == ARGV[1] then
-            if ARGV[3] == '' then
-                redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
-            else
-                redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
-            end
-            return 1
-        end
-        return 0
-        '''
-
-    @Override
-    boolean replaceIf(String key, String expected, String value) {
-        return replaceIf0(key, expected, value, '')
-    }
-
-    @Override
-    boolean replaceIf(String key, String expected, String value, Duration ttl) {
-        return replaceIf0(key, expected, value, ttl.toMillis().toString())
-    }
-
-    private boolean replaceIf0(String key, String expected, String value, String ttlMillis) {
-        try( Jedis conn=pool.getResource() ) {
-            return conn.eval(REPLACE_IF, 1, key, expected, value, ttlMillis) == 1L
-        }
-    }
-
-    /*
      * Versioned compare-and-swap: replace the value at KEYS[1] only if the version carried
      * by its leading {"@v":N frame equals ARGV[1]. An unframed value counts as version 0;
      * a missing key never matches. Only the head of the stored value is inspected
      * (GETRANGE), so the cost is independent of the payload size. An empty ARGV[3]
      * preserves the remaining TTL (KEEPTTL), otherwise the TTL is reset to ARGV[3] millis.
      */
-    static private final String REPLACE_IF_VERSION = '''
+    static private final String REPLACE_IF = '''
         local head = redis.call('GETRANGE', KEYS[1], 0, 23)
         if head == '' then return 0 end
         local ver = string.match(head, '^{"@v":(%d+)[,}]') or '0'
@@ -134,18 +101,18 @@ class RedisStateProvider implements StateProvider<String,String> {
         '''
 
     @Override
-    boolean replaceIfVersion(String key, long expected, String value) {
-        return replaceIfVersion0(key, expected, value, '')
+    boolean replaceIf(String key, long expected, String value) {
+        return replaceIf0(key, expected, value, '')
     }
 
     @Override
-    boolean replaceIfVersion(String key, long expected, String value, Duration ttl) {
-        return replaceIfVersion0(key, expected, value, ttl.toMillis().toString())
+    boolean replaceIf(String key, long expected, String value, Duration ttl) {
+        return replaceIf0(key, expected, value, ttl.toMillis().toString())
     }
 
-    private boolean replaceIfVersion0(String key, long expected, String value, String ttlMillis) {
+    private boolean replaceIf0(String key, long expected, String value, String ttlMillis) {
         try( Jedis conn=pool.getResource() ) {
-            return conn.eval(REPLACE_IF_VERSION, 1, key, String.valueOf(expected), value, ttlMillis) == 1L
+            return conn.eval(REPLACE_IF, 1, key, String.valueOf(expected), value, ttlMillis) == 1L
         }
     }
 

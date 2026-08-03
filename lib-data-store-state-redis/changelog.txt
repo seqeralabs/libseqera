@@ -17,8 +17,9 @@
 - Entries written before versioning carry no frame, count as version 0, and are adopted
   transparently by their first successful replace; unconditional put() must be reserved
   for creation since it does not move the version
-- The raw stored-form compare-and-swap moves from the StateStore contract to
-  StateProvider, alongside the new replaceIfVersion primitive
+- The raw stored-form compare-and-swap is removed; StateProvider's replaceIf is
+  re-signed to the versioned form (key, expectedVersion, value) and no byte-level
+  CAS remains anywhere in the API
 
 1.1.0 - 1 Aug 2026
 - Add replaceIf compare-and-swap write to StateStore, StateProvider and AbstractStateStore (#104)
