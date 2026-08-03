@@ -28,6 +28,11 @@
   non-versioned value is always preserved
 - Entries written before versioning carry no frame, count as version 0, and are adopted
   transparently by their first successful replace
+- replaceIf renews the entry time-to-live like every other write path: without an
+  explicit ttl it resets to the store default duration, and the request-id mapping
+  always shares the entry's ttl, so the findByRequestId index can never expire out of
+  step with its entry; no time-to-live-preserving variant exists (and the Redis 6
+  KEEPTTL requirement is gone with it)
 - Non-canonical frame digits carry the same version everywhere: the semantics are
   numeric - leading zeros are insignificant, digits overflowing a long count as
   version 0 - shared via a single parser (VersionParser) by the read path and the

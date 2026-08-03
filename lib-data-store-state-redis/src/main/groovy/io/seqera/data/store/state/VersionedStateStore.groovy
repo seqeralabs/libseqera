@@ -118,8 +118,9 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
 
     /**
      * Replace the value associated with the specified key only if the entry has not been
-     * written since the caller read it (compare-and-swap), preserving the entry's
-     * remaining time-to-live.
+     * written since the caller read it (compare-and-swap), resetting the entry
+     * time-to-live to the store default duration — like every other write path, a
+     * replace renews the entry's lifetime.
      *
      * <p>The write witness is the value's own {@link VersionAware#version()} — the version
      * of the read the value was derived from: the replace lands only when the stored
@@ -140,12 +141,12 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
      *         exist or the entry was written since the version carried by the value
      */
     boolean replaceIf(String key, V value) {
-        return replaceIf0(key, value, null)
+        return replaceIf(key, value, getDuration())
     }
 
     /**
      * Same as {@link #replaceIf(String, VersionAware)}, resetting the entry time-to-live
-     * to the specified duration.
+     * to the specified duration instead of the store default.
      *
      * @param key The key of the entry to be replaced
      * @param value The new value, carrying the version of the read it was derived from
@@ -154,19 +155,13 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
      *         exist or the entry was written since the version carried by the value
      */
     boolean replaceIf(String key, V value, Duration ttl) {
-        return replaceIf0(key, value, ttl)
-    }
-
-    private boolean replaceIf0(String key, V value, Duration ttl) {
         final long expected = value.version()
         // a single atomic server-side call: the provider compares the version carried by
         // the stored form's leading frame against the caller's read basis and swaps in
         // the new (framed) value - no read-back, no payload comparison, no second trip
-        final done = ttl != null
-                ? versions.replaceIf(key0(key), expected, serialize(value), ttl)
-                : versions.replaceIf(key0(key), expected, serialize(value))
+        final done = versions.replaceIf(key0(key), expected, serialize(value), ttl)
         if( done && value instanceof RequestIdAware ) {
-            delegate.put(requestId0(((RequestIdAware) value).getRequestId()), key, ttl != null ? ttl : getDuration())
+            delegate.put(requestId0(((RequestIdAware) value).getRequestId()), key, ttl)
         }
         return done
     }

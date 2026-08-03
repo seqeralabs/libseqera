@@ -133,22 +133,12 @@ class LocalStateProvider implements StateProvider<String,String>, VersionProvide
     }
 
     @Override
-    boolean replaceIf(String key, long expected, String value) {
-        final entry = validEntry(key)
-        if( entry==null || versionOf(entry.value) != expected )
-            return false
-        // preserve the remaining time-to-live of the existing entry
-        final remaining = entry.ttl==null ? null : Duration.between(Instant.now(), entry.ts.plus(entry.ttl))
-        // compare-and-swap on the entry instance itself, so a concurrent write
-        // landing in between makes this replace fail instead of overwriting it
-        return store.replace(key, entry, new Entry<>(value, remaining))
-    }
-
-    @Override
     boolean replaceIf(String key, long expected, String value, Duration ttl) {
         final entry = validEntry(key)
         if( entry==null || versionOf(entry.value) != expected )
             return false
+        // compare-and-swap on the entry instance itself, so a concurrent write
+        // landing in between makes this replace fail instead of overwriting it
         return store.replace(key, entry, new Entry<>(value, ttl))
     }
 

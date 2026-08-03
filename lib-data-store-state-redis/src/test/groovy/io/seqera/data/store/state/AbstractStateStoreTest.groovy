@@ -688,6 +688,31 @@ class AbstractStateStoreTest extends Specification {
         provider.get(store.key0(key)) =~ /^\{"@v":\d+,/
     }
 
+    def 'should reset the ttl on a versioned replace like any other write' () {
+        given:
+        def TTL = 600
+        def HALF = Math.round(TTL * 0.66)
+        def store = new MyCacheStore(provider) {
+            @Override
+            protected Duration getDuration() { return Duration.ofMillis(TTL) }
+        }
+        def recId = UUID.randomUUID().toString()
+        def key = UUID.randomUUID().toString()
+
+        when: 'an entry near its deadline is replaced without an explicit ttl'
+        store.put(key, new MyObject('a', 'b'))
+        sleep(HALF)
+        def current = store.get(key)
+        def done = store.replaceIf(key, new MyState(recId, 'value').withVersion(current.version()))
+        then:
+        done
+
+        and: 'past the original deadline the entry and its request-id mapping are both alive'
+        sleep(HALF)
+        store.get(key) == new MyState(recId, 'value')
+        store.findByRequestId(recId) == new MyState(recId, 'value')
+    }
+
     def 'should adopt a foreign entry whose version overflows a long' () {
         given:
         def store = new MyCacheStore(provider)

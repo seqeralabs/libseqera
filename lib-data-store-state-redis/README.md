@@ -97,7 +97,8 @@ if( !store.replaceIf("task-123", updated) ) {  // lands only if the entry is unc
     // another writer got there first — re-read and retry
 }
 
-// same, but resetting the entry TTL; the two-argument form keeps the remaining one
+// same, but with an explicit TTL; the two-argument form resets it to getDuration(),
+// like every other write
 store.replaceIf("task-123", updated, Duration.ofMinutes(5))
 ```
 

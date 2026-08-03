@@ -31,24 +31,11 @@ interface VersionProvider<K,V> {
     /**
      * Replace the value associated with the specified key only if the version carried by
      * the leading {@code {"@v":N} frame of the stored form equals the expected one
-     * (versioned compare-and-swap). A stored form without the frame counts as version 0;
-     * a missing key never matches. The whole operation is a single atomic server-side
-     * call, and only the head of the stored value is inspected, so the cost is
-     * independent of the payload size.
-     *
-     * <p>The entry retains its remaining time-to-live.
-     *
-     * @param key The key of the entry to be replaced
-     * @param expected The version the stored form is expected to carry
-     * @param value The new value to be stored; must not be {@code null}
-     * @return {@code true} if the value was replaced, {@code false} if the key does not
-     *      exist or the stored version differs from the expected one
-     */
-    boolean replaceIf(K key, long expected, V value)
-
-    /**
-     * Same as {@link #replaceIf(Object, long, Object)}, resetting the entry
-     * time-to-live to the specified duration.
+     * (versioned compare-and-swap), resetting the entry time-to-live to the specified
+     * duration. A stored form without the frame counts as version 0; a missing key never
+     * matches. The whole operation is a single atomic server-side call, and only the
+     * head of the stored value is inspected, so the cost is independent of the payload
+     * size.
      *
      * @param key The key of the entry to be replaced
      * @param expected The version the stored form is expected to carry
