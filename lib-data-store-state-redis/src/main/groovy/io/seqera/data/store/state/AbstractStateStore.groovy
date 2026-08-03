@@ -18,6 +18,7 @@
 package io.seqera.data.store.state
 
 import java.time.Duration
+import java.util.function.UnaryOperator
 
 import groovy.transform.CompileStatic
 import io.seqera.serde.encode.StringEncodingStrategy
@@ -151,8 +152,12 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
     /**
      * {@inheritDoc}
      *
-     * <p>The comparison is performed on the serialized form of the expected value,
-     * so the configured encoding strategy must be deterministic.
+     * <p>The comparison is performed on the serialized form of the expected value, so the
+     * configured encoding strategy must be byte-deterministic: when the same value can
+     * serialize differently across processes (reflection-dependent field order, hash-based
+     * collection ordering) the comparison can refuse indefinitely. Prefer
+     * {@link #update(String, UnaryOperator, int)}, which compares the raw form actually read
+     * and is immune by construction.
      */
     @Override
     boolean replaceIf(String key, V expected, V value) {
@@ -166,8 +171,12 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
     /**
      * {@inheritDoc}
      *
-     * <p>The comparison is performed on the serialized form of the expected value,
-     * so the configured encoding strategy must be deterministic.
+     * <p>The comparison is performed on the serialized form of the expected value, so the
+     * configured encoding strategy must be byte-deterministic: when the same value can
+     * serialize differently across processes (reflection-dependent field order, hash-based
+     * collection ordering) the comparison can refuse indefinitely. Prefer
+     * {@link #update(String, UnaryOperator, int)}, which compares the raw form actually read
+     * and is immune by construction.
      */
     @Override
     boolean replaceIf(String key, V expected, V value, Duration ttl) {
@@ -176,6 +185,49 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
             delegate.put(requestId0(value.getRequestId()), key, ttl)
         }
         return result
+    }
+
+    /**
+     * Atomically update the value associated with the specified key via a compare-and-swap
+     * read-modify-write loop.
+     *
+     * <p>Unlike {@link #replaceIf} — whose expected value is re-serialized for the comparison
+     * and therefore requires a byte-deterministic encoding strategy — the comparison here uses
+     * the exact raw serialized form read from the store. It is correct even when the encoding
+     * of the same value differs between processes (e.g. reflection-dependent field order or
+     * hash-based collection ordering), which makes it the safe choice for multi-replica
+     * deployments. The entry time-to-live is reset on every successful write, matching
+     * {@link #put(String, Object)}.
+     *
+     * @param key The key of the entry to update
+     * @param mutator Maps the current value to the new one; returning {@code null} aborts the
+     *        update, returning the same instance skips the write and reports success
+     * @param attempts Max number of compare-and-swap rounds before giving up; must be positive
+     * @return {@code true} when the update landed (or the mutator was a no-op), {@code false}
+     *         when the key is missing, the mutator aborted, or the attempts were exhausted
+     */
+    boolean update(String key, UnaryOperator<V> mutator, int attempts) {
+        if( attempts <= 0 )
+            throw new IllegalArgumentException("Argument 'attempts' must be positive - offending value: $attempts")
+        final k = key0(key)
+        for( int i=0; i<attempts; i++ ) {
+            final String raw = delegate.get(k)
+            if( raw == null )
+                return false
+            final V current = deserialize(raw)
+            final V next = mutator.apply(current)
+            if( next == null )
+                return false
+            if( next.is(current) )
+                return true
+            if( delegate.replaceIf(k, raw, serialize(next), getDuration()) ) {
+                if( next instanceof RequestIdAware )
+                    delegate.put(requestId0(next.getRequestId()), key, getDuration())
+                return true
+            }
+            // CAS miss: another writer got in between - re-read and re-apply
+        }
+        return false
     }
 
     @Override

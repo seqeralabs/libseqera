@@ -1,5 +1,19 @@
 # lib-data-store-state-redis changelog
 
+1.2.0 - 3 Aug 2026
+- Add update() atomic read-modify-write to AbstractStateStore: applies a mutator to the
+  freshly read value and lands the write via compare-and-swap, re-reading and retrying up
+  to a caller-supplied attempts bound (#107)
+- The CAS comparison uses the exact raw serialized form read from the store, never a
+  re-serialization — correct even when the encoding of the same value differs across
+  processes (reflection-dependent field order, hash-based collection ordering), where
+  replaceIf(expected, value) can refuse indefinitely
+- Mutator contract: null return aborts (false), same-instance return skips the write
+  (true); missing key and exhausted attempts return false; non-positive attempts rejected
+- RequestIdAware values updated through update() refresh their request-id mapping,
+  matching put() and replaceIf()
+- Sharpen replaceIf docs: byte-deterministic encoding required, prefer update()
+
 1.1.0 - 1 Aug 2026
 - Add replaceIf compare-and-swap write to StateStore, StateProvider and AbstractStateStore (#104)
 - Atomic via a Lua script in RedisStateProvider (requires Redis 6.0+ for SET KEEPTTL);
