@@ -28,6 +28,11 @@
   non-versioned value is always preserved
 - Entries written before versioning carry no frame, count as version 0, and are adopted
   transparently by their first successful replace
+- Non-canonical frame digits carry the same version everywhere: the semantics are
+  numeric - leading zeros are insignificant, digits overflowing a long count as
+  version 0 - shared via a single parser (VersionParser) by the read path and the
+  local provider, and mirrored string-wise by the Redis compare-and-swap script, so
+  the version witnessed on read always matches the version the CAS compares
 - The raw stored-form compare-and-swap added in 1.1.0 is removed and 1.1.0 is revoked
   (see below): the provider-level CAS is re-signed to the versioned form (key,
   expectedVersion, value) and moves to the new standalone VersionProvider capability

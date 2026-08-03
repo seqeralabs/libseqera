@@ -23,6 +23,7 @@ import java.util.regex.Pattern
 import com.github.f4b6a3.tsid.TsidCreator
 import groovy.transform.CompileStatic
 import io.seqera.data.store.state.impl.StateProvider
+import io.seqera.data.store.state.impl.VersionParser
 import io.seqera.data.store.state.impl.VersionProvider
 import io.seqera.serde.encode.StringEncodingStrategy
 /**
@@ -91,7 +92,7 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
         final matcher = FRAME_PATTERN.matcher(encoded)
         if( !matcher.find() )
             return super.deserialize(encoded).withVersion(0)
-        final version = parseVersion(matcher.group(1))
+        final version = VersionParser.parseVersion(matcher.group(1))
         if( version == null )
             return super.deserialize(encoded).withVersion(0)
         final payload = matcher.group(2) == ','
@@ -106,15 +107,6 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
      */
     private V stamp(V value) {
         return value.withVersion(TsidCreator.getTsid().toLong())
-    }
-
-    private static Long parseVersion(String digits) {
-        try {
-            return Long.valueOf(digits)
-        }
-        catch( NumberFormatException ignored ) {
-            return null
-        }
     }
 
     private static String frame(String payload, long version) {

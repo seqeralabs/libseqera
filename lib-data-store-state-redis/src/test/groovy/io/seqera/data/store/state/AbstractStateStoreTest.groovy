@@ -688,6 +688,23 @@ class AbstractStateStoreTest extends Specification {
         provider.get(store.key0(key)) =~ /^\{"@v":\d+,/
     }
 
+    def 'should adopt a foreign entry whose version overflows a long' () {
+        given:
+        def store = new MyCacheStore(provider)
+        def key = UUID.randomUUID().toString()
+        and: 'a foreign entry whose head resembles a frame but overflows a long'
+        provider.put(store.key0(key), '{"@v":99999999999999999999,"field1":"a","field2":"b"}', Duration.ofSeconds(10))
+
+        when: 'the version recovered on read acts as the witness'
+        def value = store.get(key)
+        def done = store.replaceIf(key, new MyObject('c', 'd', value.version()))
+        then:
+        done
+        store.get(key) == new MyObject('c', 'd')
+        and: 'the adopted entry is framed'
+        provider.get(store.key0(key)) =~ /^\{"@v":\d+,/
+    }
+
     def 'should reject a provider that does not support versioned writes' () {
         when: 'a versioned store is built on a provider that is not a VersionProvider'
         new MyCacheStore(Stub(StateProvider))

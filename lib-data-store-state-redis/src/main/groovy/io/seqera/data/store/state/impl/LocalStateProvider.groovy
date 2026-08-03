@@ -127,7 +127,9 @@ class LocalStateProvider implements StateProvider<String,String>, VersionProvide
 
     private static long versionOf(String value) {
         final matcher = VERSION_HEAD.matcher(value)
-        return matcher.find() ? matcher.group(1) as long : 0L
+        if( !matcher.find() )
+            return 0L
+        return VersionParser.parseVersion(matcher.group(1)) ?: 0L
     }
 
     @Override
