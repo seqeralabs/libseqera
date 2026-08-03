@@ -18,6 +18,7 @@
 package io.seqera.data.store.state
 
 import java.time.Duration
+import java.util.regex.Pattern
 
 import com.github.f4b6a3.tsid.TsidCreator
 import groovy.transform.CompileStatic
@@ -97,13 +98,33 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
      * the value carries an optimistic-concurrency version (see {@link VersionAware}). The
      * frame is written by the store at a fixed position — never by the encoding strategy —
      * so the versioned compare-and-swap can inspect it server-side without parsing the
-     * payload; decoders ignore it as an unknown property on read.
+     * payload; {@link #deserialize0} strips it symmetrically on read, so the encoding
+     * strategy never sees it in either direction.
      */
     protected String serialize0(V value) {
         final payload = serialize(value)
         return value instanceof VersionAware
                 ? frame(payload, ((VersionAware) value).version())
                 : payload
+    }
+
+    /**
+     * Symmetric inverse of {@link #serialize0}: strip the leading {@code {"@v":N} version
+     * frame from the stored form — the decoder receives exactly the payload the encoding
+     * strategy produced on write — and inject the frame's version into the decoded value
+     * via {@link VersionAware#withVersion}. The frame is the single source of truth for
+     * the version: an unframed entry counts as version {@code 0}, whatever the payload
+     * itself may carry.
+     */
+    protected V deserialize0(String encoded) {
+        final matcher = FRAME_PATTERN.matcher(encoded)
+        if( !matcher.find() )
+            return unstamp(deserialize(encoded), 0)
+        final version = Long.parseLong(matcher.group(1))
+        final payload = matcher.group(2) == ','
+                ? '{' + encoded.substring(matcher.end())
+                : '{}'
+        return unstamp(deserialize(payload), version)
     }
 
     /**
@@ -117,6 +138,14 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
                 : value
     }
 
+    private V unstamp(V value, long version) {
+        return value instanceof VersionAware
+                ? (V) ((VersionAware) value).withVersion(version)
+                : value
+    }
+
+    private static final Pattern FRAME_PATTERN = Pattern.compile(/^\{"@v":(\d+)([,}])/)
+
     private static String frame(String payload, long version) {
         if( !payload || payload.charAt(0) != ('{' as char) )
             throw new IllegalStateException("VersionAware values must serialize to a JSON object - offending payload: ${payload?.take(80)}")
@@ -127,7 +156,7 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
     @Override
     V get(String key) {
         final result = delegate.get(key0(key))
-        return result ? deserialize(result) : null
+        return result ? deserialize0(result) : null
     }
 
     V findByRequestId(String requestId) {
@@ -174,7 +203,7 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
                 counterKey(key,value),
                 counterScript())
         // update the `value` with the result one
-        final updated = deserialize(result.value)
+        final updated = deserialize0(result.value)
         if( result && updated instanceof RequestIdAware ) {
             delegate.put(requestId0(updated.getRequestId()), key, ttl)
         }
@@ -196,10 +225,11 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
      * parsed or shipped for the comparison and the encoding strategy is never re-invoked —
      * no byte-determinism assumption remains anywhere.
      *
-     * <p>The serialized form of a versioned value must be a JSON object — the frame is a
-     * regular JSON property, ignored by decoders on read. An entry written before
-     * versioning existed carries no frame, counts as version {@code 0}, and is adopted by
-     * its first successful replace.
+     * <p>The serialized form of a versioned value must be a JSON object — the frame is
+     * stripped symmetrically on read and the version it carries injected into the decoded
+     * value, so it never reaches the encoding strategy in either direction. An entry
+     * written before versioning existed carries no frame, counts as version {@code 0},
+     * and is adopted by its first successful replace.
      *
      * @param key The key of the entry to be replaced
      * @param value The new value, carrying the version of the read it was derived from;

@@ -450,6 +450,145 @@ class AbstractStateStoreTest extends Specification {
         }
     }
 
+    /**
+     * Encoder whose serialized form does not carry the version at all and whose decoder
+     * rejects any input other than what {@code encode} produced — the strictest possible
+     * consumer: the version must travel in the store's frame only, and the frame must
+     * never leak to the decoder.
+     */
+    static class VersionlessEncoder implements StringEncodingStrategy<MyObject> {
+
+        @Override
+        String encode(MyObject value) {
+            return '{"field1":"' + value.field1 + '","field2":"' + value.field2 + '"}'
+        }
+
+        @Override
+        MyObject decode(String encoded) {
+            if( encoded.contains('"@v"') )
+                throw new IllegalStateException("Version frame leaked to the decoder - offending payload: $encoded")
+            final f1 = (encoded =~ /"field1":"([^"]*)"/)
+            final f2 = (encoded =~ /"field2":"([^"]*)"/)
+            return new MyObject(
+                    f1.find() ? f1.group(1) : null,
+                    f2.find() ? f2.group(1) : null )
+        }
+    }
+
+    static class VersionlessStore extends AbstractStateStore<MyObject> {
+
+        VersionlessStore(StateProvider<String, String> provider) {
+            super(provider, new VersionlessEncoder())
+        }
+
+        @Override
+        protected String getPrefix() {
+            return 'test/v1'
+        }
+
+        @Override
+        protected Duration getDuration() {
+            return Duration.ofSeconds(10)
+        }
+    }
+
+    static class EmptyJsonEncoder implements StringEncodingStrategy<MyObject> {
+
+        @Override
+        String encode(MyObject value) { '{}' }
+
+        @Override
+        MyObject decode(String encoded) {
+            if( encoded != '{}' )
+                throw new IllegalStateException("Expected the exact payload produced by encode - offending payload: $encoded")
+            return new MyObject()
+        }
+    }
+
+    static class EmptyJsonStore extends AbstractStateStore<MyObject> {
+
+        EmptyJsonStore(StateProvider<String, String> provider) {
+            super(provider, new EmptyJsonEncoder())
+        }
+
+        @Override
+        protected String getPrefix() {
+            return 'test/v1'
+        }
+
+        @Override
+        protected Duration getDuration() {
+            return Duration.ofSeconds(10)
+        }
+    }
+
+    def 'should strip the frame on read and recover the version from it' () {
+        given:
+        def store = new VersionlessStore(provider)
+        def key = UUID.randomUUID().toString()
+        store.put(key, new MyObject('a', 'b'))
+
+        expect: 'the stored form is framed'
+        provider.get(store.key0(key)) =~ /^\{"@v":\d+,/
+
+        when: 'reading through the store'
+        def current = store.get(key)
+        then: 'the frame never reaches the decoder and the version is injected from the frame'
+        current == new MyObject('a', 'b')
+        current.version() != 0
+
+        when: 'the recovered version acts as a valid witness'
+        def done = store.replaceIf(key, new MyObject('c', 'd', current.version()))
+        then:
+        done
+        store.get(key) == new MyObject('c', 'd')
+        store.get(key).version() != current.version()
+    }
+
+    def 'should report the frame as the authoritative version on read' () {
+        given:
+        def store = new MyCacheStore(provider)
+        def key = UUID.randomUUID().toString()
+        and: 'an unframed legacy entry whose payload carries a spurious version field'
+        provider.put(store.key0(key), '{"field1":"a","field2":"b","ver":99}', Duration.ofSeconds(10))
+
+        when:
+        def legacy = store.get(key)
+        then: 'the missing frame counts as version zero, whatever the payload says'
+        legacy == new MyObject('a', 'b')
+        legacy.version() == 0
+
+        and: 'zero is the witness that adopts the entry'
+        store.replaceIf(key, new MyObject('c', 'd', legacy.version()))
+    }
+
+    def 'should frame and unframe an empty JSON object payload' () {
+        given:
+        def store = new EmptyJsonStore(provider)
+        def key = UUID.randomUUID().toString()
+
+        when:
+        store.put(key, new MyObject('x', 'y'))
+        then: 'the frame is the whole stored form'
+        provider.get(store.key0(key)) =~ /^\{"@v":\d+\}$/
+        and: 'the decoder gets back the exact empty object it produced'
+        store.get(key) == new MyObject()
+        store.get(key).version() != 0
+    }
+
+    def 'should strip the frame from the value returned by put-if-absent-and-count' () {
+        given:
+        def store = new VersionlessStore(provider)
+        def key = UUID.randomUUID().toString()
+
+        when:
+        def result = store.putIfAbsentAndCount(key, new MyObject('a', 'b'))
+        then:
+        result.succeed
+        result.value == new MyObject('a', 'b')
+        result.value.version() != 0
+    }
+
     def 'should converge the versioned replace even when the encoding is not deterministic' () {
         given:
         def store = new NonDeterministicStore(provider)

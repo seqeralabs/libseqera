@@ -14,8 +14,11 @@
   value on the wire, no re-serialization, cost independent of the value size
   (reflection-dependent property order broke the previous byte-equality compare in
   multi-replica deployments)
-- Versioned values must serialize to a JSON object; decoders ignore the frame as an
-  unknown property, so readers of any code version are unaffected
+- Versioned values must serialize to a JSON object; the frame is transparent to the
+  encoding strategy - stripped symmetrically on read, with its version injected into
+  the decoded value via withVersion - so the frame is the single source of truth for
+  the version, the value type need not serialize its version field, and the decoder
+  always receives exactly the payload the encoder produced
 - Entries written before versioning carry no frame, count as version 0, and are adopted
   transparently by their first successful replace
 - The raw stored-form compare-and-swap is removed; StateProvider's replaceIf is

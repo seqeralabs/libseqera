@@ -28,9 +28,15 @@ package io.seqera.data.store.state
  * witness, including across a remove-and-recreate of the entry. Callers never assign
  * versions themselves: they carry forward the version of the value they read.
  *
- * <p>A value deserialized from an entry written before versioning existed reports
- * version {@code 0} (the field is simply absent from the stored form), so legacy entries
- * are adopted transparently by their first successful conditional write.
+ * <p>The version travels in a frame the store prepends to the stored form — never in the
+ * value's own serialized payload: the store strips the frame on read and injects its
+ * version into the decoded value through {@link #withVersion}, so implementing types do
+ * not need to serialize their version field, and whatever version the payload itself may
+ * carry is ignored.
+ *
+ * <p>A value read from an entry written before versioning existed reports version
+ * {@code 0} (the frame is simply absent from the stored form), so legacy entries are
+ * adopted transparently by their first successful conditional write.
  *
  * @param <T> the self type, so {@link #withVersion} preserves the concrete type
  *

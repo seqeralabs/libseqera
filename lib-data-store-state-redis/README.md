@@ -93,12 +93,15 @@ the read the value derives from. Versions are unique time-sorted identifiers (TS
 stamped by the store on **every** write — `put` included — so any write invalidates
 every outstanding witness; callers never assign versions, they carry forward the one
 they read. The whole compare-and-swap is a single atomic server-side call: the store
-frames every versioned write with a leading `{"@v":N` JSON property, and the swap peeks
+frames every versioned write with a leading `{"@v":N}` JSON property, and the swap peeks
 the stored version from that frame — no payload parsing, no expected value on the wire,
-no re-serialization, cost independent of the value size. Versioned values must serialize
-to a JSON object; decoders ignore the frame as an unknown property. Values stored before
-versioning carry no frame, count as version `0`, and are adopted by their first
-successful replace. Requires Redis 6.0 or later.
+no re-serialization, cost independent of the value size. The frame is transparent to the
+encoding strategy: it is stripped symmetrically on read — the decoder receives exactly
+the payload the encoder produced — and its version is injected into the decoded value
+through `withVersion`, making the frame the single source of truth for the version; the
+value type does not need to serialize its version field. Versioned values must serialize
+to a JSON object. Values stored before versioning carry no frame, count as version `0`,
+and are adopted by their first successful replace. Requires Redis 6.0 or later.
 
 ### Atomic counters
 
