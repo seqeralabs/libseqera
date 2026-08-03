@@ -72,35 +72,6 @@ interface StateStore<K, V> {
     boolean putIfAbsent(K key, V value, Duration ttl)
 
     /**
-     * Replace the value associated with the specified key only if the current value
-     * equals the expected one (compare-and-swap). The comparison is performed on the
-     * stored (serialized) form of the value.
-     *
-     * <p>The entry retains its remaining time-to-live.
-     *
-     * @param key The key of the entry to be replaced
-     * @param expected The value the entry is expected to currently hold; must not be {@code null}
-     * @param value The new value to be stored; must not be {@code null}
-     * @return {@code true} if the value was replaced, {@code false} if the key does not
-     *      exist or the current value differs from the expected one
-     */
-    boolean replaceIf(K key, V expected, V value)
-
-    /**
-     * Replace the value associated with the specified key only if the current value
-     * equals the expected one (compare-and-swap), resetting the entry time-to-live
-     * to the specified duration.
-     *
-     * @param key The key of the entry to be replaced
-     * @param expected The value the entry is expected to currently hold; must not be {@code null}
-     * @param value The new value to be stored; must not be {@code null}
-     * @param ttl The new max time-to-live of the entry once replaced
-     * @return {@code true} if the value was replaced, {@code false} if the key does not
-     *      exist or the current value differs from the expected one
-     */
-    boolean replaceIf(K key, V expected, V value, Duration ttl)
-
-    /**
      * Remove the entry with the specified key from the cache
      *
      * @param key The key of the entry to be removed

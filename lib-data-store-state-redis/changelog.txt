@@ -1,18 +1,20 @@
 # lib-data-store-state-redis changelog
 
 1.2.0 - 3 Aug 2026
-- Add update() atomic read-modify-write to AbstractStateStore: applies a mutator to the
-  freshly read value and lands the write via compare-and-swap, re-reading and retrying up
-  to a caller-supplied attempts bound (#107)
-- The CAS comparison uses the exact raw serialized form read from the store, never a
-  re-serialization — correct even when the encoding of the same value differs across
-  processes (reflection-dependent field order, hash-based collection ordering), where
-  replaceIf(expected, value) can refuse indefinitely
-- Mutator contract: null return aborts (false), same-instance return skips the write
-  (true); missing key and exhausted attempts return false; non-positive attempts rejected
-- RequestIdAware values updated through update() refresh their request-id mapping,
-  matching put() and replaceIf()
-- Sharpen replaceIf docs: byte-deterministic encoding required, prefer update()
+- Add Versioned interface: a value carries its own optimistic-concurrency version,
+  JPA @Version style - version() accessor plus withVersion(long) copy method (#107)
+- Change replaceIf signature to replaceIf(key, value[, ttl]): the write witness is the
+  value's own version - the swap lands only when the stored version still equals it,
+  and the value is persisted with the version incremented
+- Atomicity between the version check and the write compares the stored form exactly as
+  read, never a re-serialization: correct even when the encoding of the same value
+  differs across processes (reflection-dependent property order broke the previous
+  byte-equality compare in multi-replica deployments)
+- Entries written before versioning report version 0 and are adopted transparently by
+  their first successful replace; unconditional put() must be reserved for creation
+  since it does not move the version
+- The raw stored-form compare-and-swap moves from the StateStore contract to
+  StateProvider, as the atomicity primitive backing the versioned replace
 
 1.1.0 - 1 Aug 2026
 - Add replaceIf compare-and-swap write to StateStore, StateProvider and AbstractStateStore (#104)

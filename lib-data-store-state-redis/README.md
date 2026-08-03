@@ -62,38 +62,39 @@ store.clear()
 
 ### Compare-and-swap
 
-`update` performs an atomic read-modify-write: the mutator is applied to the freshly read
-value and the write lands only when no other writer got in between, re-reading and retrying
-up to the given bound. The comparison uses the exact raw serialized form read from the
-store — never a re-serialization — so it stays correct even when the encoding of the same
-value differs between processes (e.g. reflection-dependent field order or hash-based
-collection ordering). The entry TTL is reset on every successful write, matching `put`:
+A value type opts into optimistic concurrency by implementing `Versioned` — it carries
+its own version, JPA `@Version` style. Read the value, transform it (the version rides
+along), and write it back conditionally with `replaceIf`:
 
 ```groovy
-// false when the key is missing, the mutator returns null,
-// or the attempts are exhausted under contention
-store.update("task-123", state -> state.withStatus("done"), 5)
-```
+class MyState implements Versioned<MyState> {
+    // ... domain fields ...
+    long version
 
-The lower-level `replaceIf` writes only when the stored value still equals the expected
-one, and returns `false` when the key is missing or the current value differs:
+    @Override
+    long version() { return version }
 
-```groovy
-def current = store.get("task-123")
-def updated = current.withStatus("done")
-if( !store.replaceIf("task-123", current, updated) ) {
+    @Override
+    MyState withVersion(long v) { new MyState(/* same fields */, v) }
+}
+
+def current = store.get("task-123")            // version() == 5
+def updated = current.withStatus("done")       // transitions preserve the version
+if( !store.replaceIf("task-123", updated) ) {  // lands only if still at 5, stored as 6
     // another writer got there first — re-read and retry
 }
 
 // same, but resetting the entry TTL; the two-argument form keeps the remaining one
-store.replaceIf("task-123", current, updated, Duration.ofMinutes(5))
+store.replaceIf("task-123", updated, Duration.ofMinutes(5))
 ```
 
-**`replaceIf` re-serializes the expected value for the comparison, so it requires a
-byte-deterministic encoding strategy: with a non-deterministic one — e.g. field order
-differing across JVM instances — the comparison can refuse indefinitely. Prefer `update`,
-which is immune by construction.** On Redis the swap is a single Lua script, and requires
-Redis 6.0 or later.
+The version is the write witness: the swap is refused when the entry was written after
+the read the value derives from. Atomicity between the version check and the write is
+guaranteed by comparing the stored form exactly as read — never a re-serialization — so
+the encoding strategy is not required to be byte-deterministic. Values stored before
+versioning report version `0` and are adopted by their first successful replace. Reserve
+unconditional `put` for entry creation: it does not move the version. On Redis the swap
+is a single Lua script, and requires Redis 6.0 or later.
 
 ### Atomic counters
 

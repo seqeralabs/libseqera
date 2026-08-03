@@ -30,6 +30,35 @@ import io.seqera.data.store.state.StateStore
 interface StateProvider<K,V> extends StateStore<K,V> {
 
     /**
+     * Replace the value associated with the specified key only if the current stored
+     * value equals the expected one (compare-and-swap on the stored form). This is the
+     * raw atomicity primitive backing {@code AbstractStateStore#replaceIf}; the expected
+     * value must be the stored form exactly as previously read, never a re-serialization.
+     *
+     * <p>The entry retains its remaining time-to-live.
+     *
+     * @param key The key of the entry to be replaced
+     * @param expected The stored form the entry is expected to currently hold; must not be {@code null}
+     * @param value The new value to be stored; must not be {@code null}
+     * @return {@code true} if the value was replaced, {@code false} if the key does not
+     *      exist or the current value differs from the expected one
+     */
+    boolean replaceIf(K key, V expected, V value)
+
+    /**
+     * Same as {@link #replaceIf(Object, Object, Object)}, resetting the entry
+     * time-to-live to the specified duration.
+     *
+     * @param key The key of the entry to be replaced
+     * @param expected The stored form the entry is expected to currently hold; must not be {@code null}
+     * @param value The new value to be stored; must not be {@code null}
+     * @param ttl The new max time-to-live of the entry once replaced
+     * @return {@code true} if the value was replaced, {@code false} if the key does not
+     *      exist or the current value differs from the expected one
+     */
+    boolean replaceIf(K key, V expected, V value, Duration ttl)
+
+    /**
      * Store a value in the cache only if does not exist. If the operation is successful
      * the counter identified by the key specified is incremented by 1 and the counter (new)
      * value is returned as result the operation.

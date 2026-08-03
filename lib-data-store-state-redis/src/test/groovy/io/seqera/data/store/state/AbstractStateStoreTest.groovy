@@ -41,9 +41,18 @@ class AbstractStateStoreTest extends Specification {
     static public long ttlMillis = 100
 
     @Canonical
-    static class MyObject {
+    static class MyObject implements Versioned<MyObject> {
         String field1
         String field2
+        long ver
+
+        @Override
+        long version() { return ver }
+
+        @Override
+        MyObject withVersion(long version) {
+            return new MyObject(field1, field2, version)
+        }
     }
 
     static class MyState extends MyObject implements RequestIdAware {
@@ -55,6 +64,35 @@ class AbstractStateStoreTest extends Specification {
         @Override
         String getRequestId() {
             return field1
+        }
+
+        @Override
+        MyState withVersion(long version) {
+            final result = new MyState(field1, field2)
+            result.ver = version
+            return result
+        }
+    }
+
+    @Canonical
+    static class PlainObject {
+        String field1
+    }
+
+    static class PlainStore extends AbstractStateStore<PlainObject> {
+
+        PlainStore(StateProvider<String, String> provider) {
+            super(provider, new MoshiEncodeStrategy<PlainObject>() {})
+        }
+
+        @Override
+        protected String getPrefix() {
+            return 'test/v1'
+        }
+
+        @Override
+        protected Duration getDuration() {
+            return Duration.ofSeconds(10)
         }
     }
 
@@ -105,19 +143,46 @@ class AbstractStateStoreTest extends Specification {
         store.get(key) == new MyObject('this','that')
     }
 
-    def 'should replace a value only when the current one matches' () {
+    def 'should replace a versioned value and bump its version' () {
         given:
         def store = new MyCacheStore(provider)
         def key = UUID.randomUUID().toString()
-        store.put(key, new MyObject('a','b'))
+        store.put(key, new MyObject('a', 'b'), Duration.ofSeconds(10))
 
-        expect: 'a mismatching expected value is not replaced'
-        !store.replaceIf(key, new MyObject('x','y'), new MyObject('c','d'))
-        store.get(key) == new MyObject('a','b')
+        when:
+        def current = store.get(key)
+        then:
+        current.version() == 0
 
-        and: 'a matching expected value is replaced'
-        store.replaceIf(key, new MyObject('a','b'), new MyObject('c','d'))
-        store.get(key) == new MyObject('c','d')
+        when: 'replace using the version from the current read'
+        def done = store.replaceIf(key, new MyObject('c', 'd', current.version()))
+        then:
+        done
+        and: 'the stored value carries the bumped version'
+        store.get(key) == new MyObject('c', 'd', 1)
+    }
+
+    def 'should refuse the replace when the caller version is stale' () {
+        given:
+        def store = new MyCacheStore(provider)
+        def key = UUID.randomUUID().toString()
+        store.put(key, new MyObject('a', 'b'), Duration.ofSeconds(10))
+        and: 'a concurrent writer lands a versioned replace first'
+        def current = store.get(key)
+        store.replaceIf(key, new MyObject('x', 'y', current.version()))
+
+        expect: 'a replace based on the pre-interference read is refused'
+        !store.replaceIf(key, new MyObject('c', 'd', current.version()))
+        and: 'the concurrent write is preserved'
+        store.get(key) == new MyObject('x', 'y', 1)
+    }
+
+    def 'should refuse the replace when the key is missing' () {
+        given:
+        def store = new MyCacheStore(provider)
+
+        expect:
+        !store.replaceIf(UUID.randomUUID().toString(), new MyObject('a', 'b'))
     }
 
     def 'should get and put a value' () {
@@ -298,13 +363,13 @@ class AbstractStateStoreTest extends Specification {
 
         @Override
         String encode(MyObject value) {
-            return "${value.field1}|${value.field2}|${nonce.incrementAndGet()}"
+            return "${value.field1}|${value.field2}|${value.version()}|${nonce.incrementAndGet()}"
         }
 
         @Override
         MyObject decode(String encoded) {
             final parts = encoded.tokenize('|')
-            return new MyObject(parts[0], parts[1])
+            return new MyObject(parts[0], parts[1], parts[2] as long)
         }
     }
 
@@ -325,107 +390,65 @@ class AbstractStateStoreTest extends Specification {
         }
     }
 
-    def 'should converge update even when the encoding is not deterministic' () {
+    def 'should converge the versioned replace even when the encoding is not deterministic' () {
         given:
         def store = new NonDeterministicStore(provider)
         def key = UUID.randomUUID().toString()
         store.put(key, new MyObject('a', 'b'))
 
-        expect:
-        store.update(key, { MyObject v -> new MyObject(v.field1, 'updated') }, 5)
-        store.get(key) == new MyObject('a', 'updated')
+        when:
+        def current = store.get(key)
+        def done = store.replaceIf(key, new MyObject(current.field1, 'updated', current.version()))
+        then:
+        done
+        store.get(key) == new MyObject('a', 'updated', 1)
     }
 
-    def 'should return false when updating a missing key' () {
-        given:
-        def store = new MyCacheStore(provider)
-
-        expect:
-        !store.update(UUID.randomUUID().toString(), { MyObject v -> v }, 5)
-    }
-
-    def 'should abort update when the mutator returns null' () {
+    def 'should adopt a legacy entry without version at version zero' () {
         given:
         def store = new MyCacheStore(provider)
         def key = UUID.randomUUID().toString()
-        store.put(key, new MyObject('a', 'b'))
+        and: 'an entry stored before versioning existed'
+        provider.put(store.key0(key), '{"field1":"a","field2":"b"}', Duration.ofSeconds(10))
 
-        expect:
-        !store.update(key, { MyObject v -> null }, 5)
-        store.get(key) == new MyObject('a', 'b')
+        when:
+        def legacy = store.get(key)
+        then:
+        legacy == new MyObject('a', 'b')
+        legacy.version() == 0
+
+        when: 'the first versioned replace adopts the entry'
+        def done = store.replaceIf(key, new MyObject('c', 'd', legacy.version()))
+        then:
+        done
+        store.get(key).version() == 1
     }
 
-    def 'should skip the write when the mutator returns the same instance' () {
+    def 'should reject a value type that does not implement Versioned' () {
         given:
-        def store = new MyCacheStore(provider)
-        def key = UUID.randomUUID().toString()
-        store.put(key, new MyObject('a', 'b'))
+        def store = new PlainStore(provider)
+        store.put('k1', new PlainObject('a'))
 
-        expect:
-        store.update(key, { MyObject v -> v }, 5)
-        store.get(key) == new MyObject('a', 'b')
+        when:
+        store.replaceIf('k1', new PlainObject('b'))
+        then:
+        thrown(IllegalArgumentException)
     }
 
-    def 'should re-read and retry when a concurrent writer gets in between' () {
-        given:
-        def store = new MyCacheStore(provider)
-        def key = UUID.randomUUID().toString()
-        store.put(key, new MyObject('a', '1'))
-        and: 'a mutator that simulates a concurrent write on its first invocation'
-        def first = true
-        def mutator = { MyObject v ->
-            if( first ) {
-                first = false
-                store.put(key, new MyObject('a', '2'))
-            }
-            return new MyObject(v.field1, v.field2 + '-x')
-        }
-
-        expect: 'the update lands on the value written by the concurrent writer'
-        store.update(key, mutator, 5)
-        store.get(key) == new MyObject('a', '2-x')
-    }
-
-    def 'should give up after exhausting the attempts under persistent contention' () {
-        given:
-        def store = new MyCacheStore(provider)
-        def key = UUID.randomUUID().toString()
-        store.put(key, new MyObject('a', '0'))
-        and: 'a mutator that always invalidates its own read'
-        def count = 0
-        def mutator = { MyObject v ->
-            count += 1
-            store.put(key, new MyObject('a', "clobber-$count".toString()))
-            return new MyObject(v.field1, 'mine')
-        }
-
-        expect:
-        !store.update(key, mutator, 3)
-        count == 3
-    }
-
-    def 'should record the request-id mapping when updating to a RequestIdAware value' () {
+    def 'should record the request-id mapping on a versioned replace' () {
         given:
         def store = new MyCacheStore(provider)
         def recId = UUID.randomUUID().toString()
         def key = UUID.randomUUID().toString()
-        store.put(key, new MyObject('a', 'b'))
+        store.put(key, new MyObject('a', 'b'), Duration.ofSeconds(10))
 
         when:
-        def done = store.update(key, { MyObject v -> new MyState(recId, 'value') }, 5)
+        def done = store.replaceIf(key, new MyState(recId, 'value'))
         then:
         done
-        store.findByRequestId(recId) == new MyState(recId, 'value')
-    }
-
-    def 'should reject a non-positive attempts bound' () {
-        given:
-        def store = new MyCacheStore(provider)
-
-        when:
-        store.update('any', { MyObject v -> v }, 0)
-        then:
-        thrown(IllegalArgumentException)
+        and:
+        store.get(key).version() == 1
+        store.findByRequestId(recId) == new MyState(recId, 'value').withVersion(1)
     }
 
 }
