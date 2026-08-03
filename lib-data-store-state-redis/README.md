@@ -119,7 +119,7 @@ to a JSON object, and their leading `@v` property is reserved for the store; a p
 non-versioned value is always preserved, and on a versioned store a head that merely
 resembles a frame but cannot be one (version digits that do not fit a long) never fails
 a read. Values stored before versioning carry no frame, count as version `0`, and are
-adopted by their first successful replace. Requires Redis 6.0 or later.
+adopted by their first successful replace.
 
 ### Atomic counters
 

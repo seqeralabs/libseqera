@@ -40,6 +40,9 @@
   fits the 28-byte head peek - a longer run (impossible for a store-written frame) counts
   as version 0, same as an unframed entry - while reads degrade to version 0 with a
   warning when the digits do not fit a long, never a read failure
+- A null or empty stored value never matches the compare-and-swap and never throws:
+  the Redis script sees both as the empty head of a missing key, and the local
+  provider mirrors the same refusal
 - The raw stored-form compare-and-swap added in 1.1.0 is removed and 1.1.0 is revoked
   (see below): the provider-level CAS is re-signed to the versioned form (key,
   expectedVersion, value) and moves to the new standalone VersionProvider capability
