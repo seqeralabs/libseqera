@@ -91,6 +91,27 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
         return encodingStrategy.encode(value)
     }
 
+    /**
+     * Serialize the value, framing it with a leading {@code {"@v":N} version property when
+     * the value carries an optimistic-concurrency version (see {@link Versioned}). The
+     * frame is written by the store at a fixed position — never by the encoding strategy —
+     * so the versioned compare-and-swap can inspect it server-side without parsing the
+     * payload; decoders ignore it as an unknown property on read.
+     */
+    protected String serialize0(V value) {
+        final payload = serialize(value)
+        return value instanceof Versioned
+                ? frame(payload, ((Versioned) value).version())
+                : payload
+    }
+
+    private static String frame(String payload, long version) {
+        if( !payload || payload.charAt(0) != ('{' as char) )
+            throw new IllegalStateException("Versioned values must serialize to a JSON object - offending payload: ${payload?.take(80)}")
+        final rest = payload.substring(1)
+        return rest == '}' ? '{"@v":' + version + '}' : '{"@v":' + version + ',' + rest
+    }
+
     @Override
     V get(String key) {
         final result = delegate.get(key0(key))
@@ -109,7 +130,7 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
 
     @Override
     void put(String key, V value, Duration ttl) {
-        delegate.put(key0(key), serialize(value), ttl)
+        delegate.put(key0(key), serialize0(value), ttl)
         if( value instanceof RequestIdAware ) {
             delegate.put(requestId0(value.getRequestId()), key, ttl)
         }
@@ -117,7 +138,7 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
 
     @Override
     boolean putIfAbsent(String key, V value, Duration ttl) {
-        final result = delegate.putIfAbsent(key0(key), serialize(value), ttl)
+        final result = delegate.putIfAbsent(key0(key), serialize0(value), ttl)
         if( result && value instanceof RequestIdAware ) {
             delegate.put(requestId0(value.getRequestId()), key, ttl)
         }
@@ -136,7 +157,7 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
     CountResult<V> putIfAbsentAndCount(String key, V value, Duration ttl) {
         final result = delegate.putJsonIfAbsentAndIncreaseCount(
                 key0(key),
-                serialize(value),
+                serialize0(value),
                 ttl,
                 counterKey(key,value),
                 counterScript())
@@ -156,13 +177,16 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
      * <p>The write witness is the value's own {@link Versioned#version()} — the version
      * of the read the value was derived from: the replace lands only when the stored
      * version still equals it, and the value is persisted with the version incremented.
-     * Atomicity between the version check and the write is guaranteed by comparing the
-     * stored form exactly as read — never a re-serialization — so no assumption is made
-     * on the encoding strategy being deterministic.
+     * The whole compare-and-swap is one atomic server-side operation: the stored version
+     * is read from the {@code {"@v":N} frame the store prepends to every versioned write,
+     * so no payload is parsed or shipped for the comparison and the encoding strategy is
+     * never re-invoked — no byte-determinism assumption remains anywhere.
      *
-     * <p>An entry written before versioning existed reports version {@code 0} and is
-     * adopted by its first successful replace. Unconditional {@link #put} writes do not
-     * move the version, so they must be reserved for entry creation.
+     * <p>The serialized form of a versioned value must be a JSON object — the frame is a
+     * regular JSON property, ignored by decoders on read. An entry written before
+     * versioning existed carries no frame, counts as version {@code 0}, and is adopted by
+     * its first successful replace. Unconditional {@link #put} writes do not move the
+     * version, so they must be reserved for entry creation.
      *
      * @param key The key of the entry to be replaced
      * @param value The new value, carrying the version of the read it was derived from;
@@ -192,21 +216,14 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
     private boolean replaceIf0(String key, V value, Duration ttl) {
         if( !(value instanceof Versioned) )
             throw new IllegalArgumentException("Versioned compare-and-swap requires the value type to implement Versioned - offending type: ${value.getClass().getName()}")
-        final k = key0(key)
-        final raw = delegate.get(k)
-        if( raw == null )
-            return false
-        final Versioned current = (Versioned) deserialize(raw)
         final long expected = ((Versioned) value).version()
-        // the caller's read basis is stale: the entry was written since
-        if( current.version() != expected )
-            return false
         final V next = (V) ((Versioned) value).withVersion(expected + 1)
-        // the raw form as read makes the check-and-write atomic: a write landing after
-        // the read above changes the stored bytes and refuses the swap, whatever it wrote
+        // a single atomic server-side call: the provider compares the version carried by
+        // the stored form's leading frame against the caller's read basis and swaps in
+        // the new (framed) value - no read-back, no payload comparison, no second trip
         final done = ttl != null
-                ? delegate.replaceIf(k, raw, serialize(next), ttl)
-                : delegate.replaceIf(k, raw, serialize(next))
+                ? delegate.replaceIfVersion(key0(key), expected, serialize0(next), ttl)
+                : delegate.replaceIfVersion(key0(key), expected, serialize0(next))
         if( done && next instanceof RequestIdAware ) {
             delegate.put(requestId0(((RequestIdAware) next).getRequestId()), key, ttl != null ? ttl : getDuration())
         }

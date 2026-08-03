@@ -149,6 +149,9 @@ class AbstractStateStoreTest extends Specification {
         def key = UUID.randomUUID().toString()
         store.put(key, new MyObject('a', 'b'), Duration.ofSeconds(10))
 
+        expect: 'the stored form is framed with the value own version'
+        provider.get(store.key0(key)).startsWith('{"@v":0,')
+
         when:
         def current = store.get(key)
         then:
@@ -160,6 +163,17 @@ class AbstractStateStoreTest extends Specification {
         done
         and: 'the stored value carries the bumped version'
         store.get(key) == new MyObject('c', 'd', 1)
+        provider.get(store.key0(key)).startsWith('{"@v":1,')
+    }
+
+    def 'should reject a versioned value that does not serialize to a JSON object' () {
+        given:
+        def store = new NotJsonStore(provider)
+
+        when:
+        store.put('k1', new MyObject('a', 'b'))
+        then:
+        thrown(IllegalStateException)
     }
 
     def 'should refuse the replace when the caller version is stale' () {
@@ -353,9 +367,9 @@ class AbstractStateStoreTest extends Specification {
 
     /**
      * Encoder whose output differs on every call — the single-process equivalent of two
-     * replicas whose JVMs serialize the same value with different bytes (field order,
-     * hash-based collection ordering). A store using it can never reproduce the raw form
-     * it previously wrote, so any CAS comparing a re-serialization is bound to fail.
+     * replicas whose JVMs serialize the same value with different bytes (property order,
+     * spacing). A store using it can never reproduce the raw form it previously wrote,
+     * so any CAS comparing a re-serialization is bound to fail.
      */
     static class NonDeterministicEncoder implements StringEncodingStrategy<MyObject> {
 
@@ -363,13 +377,56 @@ class AbstractStateStoreTest extends Specification {
 
         @Override
         String encode(MyObject value) {
-            return "${value.field1}|${value.field2}|${value.version()}|${nonce.incrementAndGet()}"
+            final n = nonce.incrementAndGet()
+            final parts = [
+                    "\"field1\":\"${value.field1}\"".toString(),
+                    "\"field2\":\"${value.field2}\"".toString(),
+                    "\"ver\":${value.version()}".toString() ]
+            Collections.rotate(parts, n % 3)
+            return '{' + parts.join(',' + ' ' * (n % 3)) + '}'
+        }
+
+        @Override
+        MyObject decode(String encoded) {
+            // field-wise extraction: tolerates any property order and unknown fields
+            final f1 = (encoded =~ /"field1":"([^"]*)"/)
+            final f2 = (encoded =~ /"field2":"([^"]*)"/)
+            final ver = (encoded =~ /"ver":(\d+)/)
+            return new MyObject(
+                    f1.find() ? f1.group(1) : null,
+                    f2.find() ? f2.group(1) : null,
+                    ver.find() ? ver.group(1) as long : 0L )
+        }
+    }
+
+    static class NotJsonEncoder implements StringEncodingStrategy<MyObject> {
+
+        @Override
+        String encode(MyObject value) {
+            return "${value.field1}|${value.field2}|${value.version()}"
         }
 
         @Override
         MyObject decode(String encoded) {
             final parts = encoded.tokenize('|')
             return new MyObject(parts[0], parts[1], parts[2] as long)
+        }
+    }
+
+    static class NotJsonStore extends AbstractStateStore<MyObject> {
+
+        NotJsonStore(StateProvider<String, String> provider) {
+            super(provider, new NotJsonEncoder())
+        }
+
+        @Override
+        protected String getPrefix() {
+            return 'test/v1'
+        }
+
+        @Override
+        protected Duration getDuration() {
+            return Duration.ofSeconds(10)
         }
     }
 
@@ -422,6 +479,8 @@ class AbstractStateStoreTest extends Specification {
         then:
         done
         store.get(key).version() == 1
+        and: 'the adopted entry is framed'
+        provider.get(store.key0(key)).startsWith('{"@v":1,')
     }
 
     def 'should reject a value type that does not implement Versioned' () {

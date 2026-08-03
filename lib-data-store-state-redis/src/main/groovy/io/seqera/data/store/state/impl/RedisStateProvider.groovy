@@ -114,6 +114,42 @@ class RedisStateProvider implements StateProvider<String,String> {
     }
 
     /*
+     * Versioned compare-and-swap: replace the value at KEYS[1] only if the version carried
+     * by its leading {"@v":N frame equals ARGV[1]. An unframed value counts as version 0;
+     * a missing key never matches. Only the head of the stored value is inspected
+     * (GETRANGE), so the cost is independent of the payload size. An empty ARGV[3]
+     * preserves the remaining TTL (KEEPTTL), otherwise the TTL is reset to ARGV[3] millis.
+     */
+    static private final String REPLACE_IF_VERSION = '''
+        local head = redis.call('GETRANGE', KEYS[1], 0, 23)
+        if head == '' then return 0 end
+        local ver = string.match(head, '^{"@v":(%d+)[,}]') or '0'
+        if ver ~= ARGV[1] then return 0 end
+        if ARGV[3] == '' then
+            redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
+        else
+            redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+        end
+        return 1
+        '''
+
+    @Override
+    boolean replaceIfVersion(String key, long expected, String value) {
+        return replaceIfVersion0(key, expected, value, '')
+    }
+
+    @Override
+    boolean replaceIfVersion(String key, long expected, String value, Duration ttl) {
+        return replaceIfVersion0(key, expected, value, ttl.toMillis().toString())
+    }
+
+    private boolean replaceIfVersion0(String key, long expected, String value, String ttlMillis) {
+        try( Jedis conn=pool.getResource() ) {
+            return conn.eval(REPLACE_IF_VERSION, 1, key, String.valueOf(expected), value, ttlMillis) == 1L
+        }
+    }
+
+    /*
      * Set a value only the specified key does not exists, if the value can be set
      * the counter identified by the key provided via 'KEYS[2]' is incremented by 1,
      *

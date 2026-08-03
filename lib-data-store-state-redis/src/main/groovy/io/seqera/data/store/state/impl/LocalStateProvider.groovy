@@ -143,6 +143,33 @@ class LocalStateProvider implements StateProvider<String,String> {
         return store.replace(key, entry, new Entry<>(value, ttl))
     }
 
+    private static final java.util.regex.Pattern VERSION_HEAD = ~/^\{"@v":(\d+)[,}]/
+
+    private static long versionOf(String value) {
+        final matcher = VERSION_HEAD.matcher(value)
+        return matcher.find() ? matcher.group(1) as long : 0L
+    }
+
+    @Override
+    boolean replaceIfVersion(String key, long expected, String value) {
+        final entry = validEntry(key)
+        if( entry==null || versionOf(entry.value) != expected )
+            return false
+        // preserve the remaining time-to-live of the existing entry
+        final remaining = entry.ttl==null ? null : Duration.between(Instant.now(), entry.ts.plus(entry.ttl))
+        // compare-and-swap on the entry instance itself, so a concurrent write
+        // landing in between makes this replace fail instead of overwriting it
+        return store.replace(key, entry, new Entry<>(value, remaining))
+    }
+
+    @Override
+    boolean replaceIfVersion(String key, long expected, String value, Duration ttl) {
+        final entry = validEntry(key)
+        if( entry==null || versionOf(entry.value) != expected )
+            return false
+        return store.replace(key, entry, new Entry<>(value, ttl))
+    }
+
     private Entry<String> validEntry(String key) {
         final entry = store.get(key)
         if( entry?.isExpired() ) {

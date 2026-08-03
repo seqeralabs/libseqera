@@ -6,15 +6,19 @@
 - Change replaceIf signature to replaceIf(key, value[, ttl]): the write witness is the
   value's own version - the swap lands only when the stored version still equals it,
   and the value is persisted with the version incremented
-- Atomicity between the version check and the write compares the stored form exactly as
-  read, never a re-serialization: correct even when the encoding of the same value
-  differs across processes (reflection-dependent property order broke the previous
-  byte-equality compare in multi-replica deployments)
-- Entries written before versioning report version 0 and are adopted transparently by
-  their first successful replace; unconditional put() must be reserved for creation
-  since it does not move the version
+- The swap is a single atomic server-side operation (one round-trip): the store frames
+  every versioned write with a leading {"@v":N} JSON property and the provider compares
+  the stored version by peeking that frame (GETRANGE) - no payload parsing, no expected
+  value on the wire, no re-serialization, cost independent of the value size
+  (reflection-dependent property order broke the previous byte-equality compare in
+  multi-replica deployments)
+- Versioned values must serialize to a JSON object; decoders ignore the frame as an
+  unknown property, so readers of any code version are unaffected
+- Entries written before versioning carry no frame, count as version 0, and are adopted
+  transparently by their first successful replace; unconditional put() must be reserved
+  for creation since it does not move the version
 - The raw stored-form compare-and-swap moves from the StateStore contract to
-  StateProvider, as the atomicity primitive backing the versioned replace
+  StateProvider, alongside the new replaceIfVersion primitive
 
 1.1.0 - 1 Aug 2026
 - Add replaceIf compare-and-swap write to StateStore, StateProvider and AbstractStateStore (#104)

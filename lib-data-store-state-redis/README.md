@@ -89,12 +89,14 @@ store.replaceIf("task-123", updated, Duration.ofMinutes(5))
 ```
 
 The version is the write witness: the swap is refused when the entry was written after
-the read the value derives from. Atomicity between the version check and the write is
-guaranteed by comparing the stored form exactly as read — never a re-serialization — so
-the encoding strategy is not required to be byte-deterministic. Values stored before
-versioning report version `0` and are adopted by their first successful replace. Reserve
-unconditional `put` for entry creation: it does not move the version. On Redis the swap
-is a single Lua script, and requires Redis 6.0 or later.
+the read the value derives from. The whole compare-and-swap is a single atomic
+server-side call: the store frames every versioned write with a leading `{"@v":N` JSON
+property, and the swap peeks the stored version from that frame — no payload parsing, no
+expected value on the wire, no re-serialization, cost independent of the value size.
+Versioned values must serialize to a JSON object; decoders ignore the frame as an
+unknown property. Values stored before versioning carry no frame, count as version `0`,
+and are adopted by their first successful replace. Reserve unconditional `put` for entry
+creation: it does not move the version. Requires Redis 6.0 or later.
 
 ### Atomic counters
 

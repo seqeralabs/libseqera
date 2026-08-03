@@ -268,4 +268,62 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         pool.shutdown()
     }
 
+    def 'should replace a value only when the stored version matches' () {
+        given:
+        def k = UUID.randomUUID().toString()
+
+        expect: 'a missing key is not replaced'
+        !provider.replaceIfVersion(k, 0, '{"@v":1,"x":"a"}')
+
+        when:
+        provider.put(k, '{"@v":3,"x":"a"}')
+        then: 'a mismatching version is not replaced'
+        !provider.replaceIfVersion(k, 2, '{"@v":3,"x":"b"}')
+        provider.get(k) == '{"@v":3,"x":"a"}'
+
+        and: 'a matching version is replaced'
+        provider.replaceIfVersion(k, 3, '{"@v":4,"x":"b"}')
+        provider.get(k) == '{"@v":4,"x":"b"}'
+    }
+
+    def 'should treat a value without version frame as version zero' () {
+        given:
+        def k = UUID.randomUUID().toString()
+        provider.put(k, '{"x":"legacy"}')
+
+        expect: 'a non-zero version does not match an unframed value'
+        !provider.replaceIfVersion(k, 7, '{"@v":8,"x":"a"}')
+
+        and: 'version zero adopts it'
+        provider.replaceIfVersion(k, 0, '{"@v":1,"x":"a"}')
+        provider.get(k) == '{"@v":1,"x":"a"}'
+    }
+
+    def 'should preserve or reset the ttl on versioned replace' () {
+        given:
+        def TTL = 600
+        def HALF = Math.round(TTL * 0.66)
+        def k1 = UUID.randomUUID().toString()
+        def k2 = UUID.randomUUID().toString()
+
+        when: 'replace without ttl preserves the remaining expiry'
+        provider.put(k1, '{"@v":1,"x":"a"}', Duration.ofMillis(TTL))
+        sleep(HALF)
+        provider.replaceIfVersion(k1, 1, '{"@v":2,"x":"b"}')
+        then:
+        provider.get(k1) == '{"@v":2,"x":"b"}'
+        and: 'the entry expires at the original deadline, not TTL after the replace'
+        sleep(HALF)
+        provider.get(k1) == null
+
+        when: 'replace with ttl resets the expiry'
+        provider.put(k2, '{"@v":1,"x":"a"}', Duration.ofMillis(TTL))
+        sleep(HALF)
+        provider.replaceIfVersion(k2, 1, '{"@v":2,"x":"b"}', Duration.ofMillis(TTL))
+        and:
+        sleep(HALF)
+        then: 'the entry is still alive past the original deadline'
+        provider.get(k2) == '{"@v":2,"x":"b"}'
+    }
+
 }
