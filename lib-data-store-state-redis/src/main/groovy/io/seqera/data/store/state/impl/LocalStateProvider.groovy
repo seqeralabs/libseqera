@@ -126,15 +126,21 @@ class LocalStateProvider implements StateProvider<String,String>, VersionProvide
 
     private static final Pattern VERSION_HEAD = ~/^\{"@v":(\d+)[,}]/
 
+    private static final Pattern FRAME_LOOKALIKE = ~/^\{"@v":\d/
+
     /*
      * Mirror of the Lua script in RedisStateProvider: only the head of the stored form
      * is inspected, and the captured digits are compared literally against the canonical
      * decimal rendering of the expected version - no parsing; an unframed value counts
-     * as version '0'.
+     * as version '0', while a head that resembles a frame but has no terminator in the
+     * window (impossible for a store-written frame) never matches any witness - null.
      */
     private static String versionOf(String value) {
-        final matcher = VERSION_HEAD.matcher(value.take(28))
-        return matcher.find() ? matcher.group(1) : '0'
+        final head = value.take(28)
+        final matcher = VERSION_HEAD.matcher(head)
+        if( matcher.find() )
+            return matcher.group(1)
+        return FRAME_LOOKALIKE.matcher(head).find() ? null : '0'
     }
 
     @Override

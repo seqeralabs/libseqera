@@ -230,6 +230,7 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         def k1 = UUID.randomUUID().toString()
         def k2 = UUID.randomUUID().toString()
         def k3 = UUID.randomUUID().toString()
+        def k4 = UUID.randomUUID().toString()
 
         when: 'a head with leading-zero version digits'
         provider.put(k1, '{"@v":007,"x":"a"}')
@@ -243,6 +244,12 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         then: 'no witness matches it and nothing is thrown'
         !provider.replaceIf(k2, 0, '{"@v":1,"x":"b"}', Duration.ofSeconds(10))
         provider.get(k2) == '{"@v":99999999999999999999,"x":"a"}'
+
+        when: 'a head whose version digits overrun the inspected head window (22+)'
+        provider.put(k4, '{"@v":9999999999999999999999,"x":"a"}')
+        then: 'no witness matches it - version zero must not adopt it as unframed'
+        !provider.replaceIf(k4, 0, '{"@v":1,"x":"b"}', Duration.ofSeconds(10))
+        provider.get(k4) == '{"@v":9999999999999999999999,"x":"a"}'
 
         when: 'a head carrying the largest version a store can write'
         provider.put(k3, '{"@v":9223372036854775807,"x":"a"}')

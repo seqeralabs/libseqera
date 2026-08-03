@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-data-store-state-redis:1.2.0'
+    implementation 'io.seqera:lib-data-store-state-redis:1.2.1'
 }
 ```
 
@@ -94,7 +94,9 @@ class MyState implements VersionAware<MyState> {
 def current = store.get("task-123")            // version as stored
 def updated = current.withStatus("done")       // transitions preserve the version
 if( !store.replaceIf("task-123", updated) ) {  // lands only if the entry is unchanged
-    // another writer got there first — re-read and retry
+    // refused: the entry was written since the read `updated` derives from — by
+    // another writer, or by a previous write of yours — or the key is gone;
+    // re-read and retry
 }
 
 // same, but with an explicit TTL; the two-argument form resets it to getDuration(),
@@ -106,7 +108,10 @@ The version is the write witness: the swap is refused when the entry was written
 the read the value derives from. Versions are unique time-sorted identifiers (TSID)
 stamped by the store on **every** write — `put` included — so any write invalidates
 every outstanding witness; callers never assign versions, they carry forward the one
-they read. The whole compare-and-swap is a single atomic server-side call: the store
+they read. No write returns the stamped version: a successful `replaceIf` invalidates
+the caller's own witness too — the in-memory value still carries the version of the
+read it derives from — so always re-read before chaining another replace. The whole
+compare-and-swap is a single atomic server-side call: the store
 frames every versioned write with a leading `{"@v":N}` JSON property, and the swap peeks
 the stored version from that frame — no payload parsing, no expected value on the wire,
 no re-serialization, cost independent of the value size. The frame is transparent to the
@@ -118,8 +123,8 @@ to a JSON object, and their leading `@v` property is reserved for the store; a p
 `AbstractStateStore` never frames nor strips, so a genuine `@v` property of a
 non-versioned value is always preserved, and on a versioned store a head that merely
 resembles a frame but cannot be one (version digits that do not fit a long) never fails
-a read. Values stored before versioning carry no frame, count as version `0`, and are
-adopted by their first successful replace.
+a read and never matches a replace. Values stored before versioning carry no frame,
+count as version `0`, and are adopted by their first successful replace.
 
 ### Atomic counters
 

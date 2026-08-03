@@ -35,11 +35,11 @@ interface VersionProvider<K,V> {
      * duration. A stored form without the frame counts as version 0; a missing key never
      * matches. The frame digits are compared literally against the canonical decimal
      * form of the expected version — the only form a store-written frame can carry — so
-     * foreign data whose head merely resembles a frame never matches, as long as its
-     * digit run fits the inspected head window; a longer run — impossible for a
-     * store-written frame — counts as version 0, like an unframed value. The whole
-     * operation is a single atomic server-side call, and only the head of the stored
-     * value is inspected, so the cost is independent of the payload size.
+     * foreign data whose head merely resembles a frame never matches: a digit run whose
+     * terminator falls outside the inspected head window — impossible for a
+     * store-written frame — is refused outright rather than counting as unframed. The
+     * whole operation is a single atomic server-side call, and only the head of the
+     * stored value is inspected, so the cost is independent of the payload size.
      *
      * @param key The key of the entry to be replaced
      * @param expected The version the stored form is expected to carry
