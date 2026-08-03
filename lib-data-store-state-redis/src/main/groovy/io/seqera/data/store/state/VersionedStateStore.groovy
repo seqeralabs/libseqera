@@ -32,7 +32,7 @@ import io.seqera.serde.encode.StringEncodingStrategy
  * ({@link #replaceIf}) to the plain {@link AbstractStateStore} contract.
  *
  * <p>The store stamps a version — a unique time-sorted identifier (TSID) — on every
- * write path and persists it as a leading {@code {"@v":N} JSON property framing the
+ * write path and persists it as a leading {@code {"@v":N}} JSON property framing the
  * serialized payload. The frame is transparent to the encoding strategy: it is stripped
  * symmetrically on read, with its version injected into the decoded value via
  * {@link VersionAware#withVersion}, so the frame is the single source of truth for the
@@ -65,7 +65,7 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
     }
 
     /**
-     * Serialize the value framed with a leading {@code {"@v":N} version property carrying
+     * Serialize the value framed with a leading {@code {"@v":N}} version property carrying
      * a freshly stamped version (a unique time-sorted identifier). Every write path goes
      * through here, so any write invalidates every outstanding compare-and-swap witness.
      * The frame is written by the store at a fixed position — never by the encoding
@@ -79,7 +79,7 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
     }
 
     /**
-     * Symmetric inverse of {@link #serialize}: strip the leading {@code {"@v":N} version
+     * Symmetric inverse of {@link #serialize}: strip the leading {@code {"@v":N}} version
      * frame from the stored form — the decoder receives exactly the payload the encoding
      * strategy produced on write — and inject the frame's version into the decoded value
      * via {@link VersionAware#withVersion}. The frame is the single source of truth for
@@ -97,7 +97,6 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
         }
         final version = parseVersion(matcher.group(1))
         if( version == null ) {
-            log.debug("State entry version frame is not parseable - reading it as unframed at version 0")
             return decode(encoded).withVersion(0)
         }
         String payload
@@ -116,7 +115,7 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
     }
 
     /**
-     * Parse the digits captured from a leading {@code {"@v":N} frame, or {@code null}
+     * Parse the digits captured from a leading {@code {"@v":N}} frame, or {@code null}
      * when they do not fit a signed 64-bit long — no store-written frame can carry
      * them, so the entry counts as unframed.
      */
@@ -157,7 +156,7 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
      * (a unique time-sorted identifier). Every write path stamps — {@link #put} included —
      * so any write invalidates every outstanding witness. The whole compare-and-swap is
      * one atomic server-side operation: the stored version is read from the
-     * {@code {"@v":N} frame the store prepends to every write, so no payload is parsed
+     * {@code {"@v":N}} frame the store prepends to every write, so no payload is parsed
      * or shipped for the comparison and the encoding strategy is never re-invoked —
      * no byte-determinism assumption remains anywhere.
      *

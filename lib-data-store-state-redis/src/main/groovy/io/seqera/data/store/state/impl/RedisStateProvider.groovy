@@ -89,8 +89,10 @@ class RedisStateProvider implements StateProvider<String,String>, VersionProvide
      *
      * The digits are compared literally against the canonical decimal form of the
      * expected version - the only form a store-written frame can carry - so foreign
-     * data whose head merely resembles a frame never matches and is left untouched;
-     * LocalStateProvider mirrors the same comparison.
+     * data whose head merely resembles a frame never matches and is left untouched,
+     * as long as its digit run fits the 28-byte peek; a longer run (impossible for a
+     * store-written frame) leaves no terminator in the head and counts as version 0,
+     * same as an unframed value. LocalStateProvider mirrors the same comparison.
      */
     static private final String REPLACE_IF = '''
         local head = redis.call('GETRANGE', KEYS[1], 0, 27)

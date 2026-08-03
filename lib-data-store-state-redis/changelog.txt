@@ -36,8 +36,10 @@
 - The compare-and-swap matches the frame digits literally against the canonical decimal
   form of the expected version - the only form a store-written frame can carry - in both
   providers, with no version parsing anywhere in the CAS path: foreign data whose head
-  merely resembles a frame never matches and is left untouched, while reads degrade to
-  version 0 with a warning when the digits do not fit a long, never a read failure
+  merely resembles a frame never matches and is left untouched, as long as its digit run
+  fits the 28-byte head peek - a longer run (impossible for a store-written frame) counts
+  as version 0, same as an unframed entry - while reads degrade to version 0 with a
+  warning when the digits do not fit a long, never a read failure
 - The raw stored-form compare-and-swap added in 1.1.0 is removed and 1.1.0 is revoked
   (see below): the provider-level CAS is re-signed to the versioned form (key,
   expectedVersion, value) and moves to the new standalone VersionProvider capability

@@ -21,6 +21,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.regex.Pattern
 
 import groovy.transform.CompileStatic
 import io.micronaut.context.annotation.Requires
@@ -123,7 +124,7 @@ class LocalStateProvider implements StateProvider<String,String>, VersionProvide
         return store.putIfAbsent(key, new Entry<>(value,ttl))?.value
     }
 
-    private static final java.util.regex.Pattern VERSION_HEAD = ~/^\{"@v":(\d+)[,}]/
+    private static final Pattern VERSION_HEAD = ~/^\{"@v":(\d+)[,}]/
 
     /*
      * Mirror of the Lua script in RedisStateProvider: only the head of the stored form
