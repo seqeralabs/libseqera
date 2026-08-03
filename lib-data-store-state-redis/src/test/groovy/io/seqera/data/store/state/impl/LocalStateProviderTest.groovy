@@ -239,6 +239,18 @@ class LocalStateProviderTest extends Specification {
         provider.get(k3) == '{"@v":1,"x":"b"}'
     }
 
+    def 'should never match a null or empty stored value' () {
+        given:
+        def k1 = UUID.randomUUID().toString()
+        def k2 = UUID.randomUUID().toString()
+        provider.put(k1, null)
+        provider.put(k2, '')
+
+        expect: 'no witness matches and nothing is thrown'
+        !provider.replaceIf(k1, 0, '{"@v":1,"x":"a"}', Duration.ofSeconds(10))
+        !provider.replaceIf(k2, 0, '{"@v":1,"x":"a"}', Duration.ofSeconds(10))
+    }
+
     def 'should reset the ttl on versioned replace' () {
         given:
         def TTL = 600

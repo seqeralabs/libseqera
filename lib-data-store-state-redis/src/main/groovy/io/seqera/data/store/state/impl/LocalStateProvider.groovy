@@ -140,7 +140,9 @@ class LocalStateProvider implements StateProvider<String,String>, VersionProvide
     @Override
     boolean replaceIf(String key, long expected, String value, Duration ttl) {
         final entry = validEntry(key)
-        if( entry==null || versionOf(entry.value) != String.valueOf(expected) )
+        // a null or empty stored value never matches, like the empty head of a
+        // missing key in the Lua script this mirrors
+        if( entry==null || !entry.value || versionOf(entry.value) != String.valueOf(expected) )
             return false
         // compare-and-swap on the entry instance itself, so a concurrent write
         // landing in between makes this replace fail instead of overwriting it

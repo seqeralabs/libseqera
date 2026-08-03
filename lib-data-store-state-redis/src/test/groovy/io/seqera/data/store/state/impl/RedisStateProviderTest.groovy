@@ -251,6 +251,16 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         provider.get(k3) == '{"@v":1,"x":"b"}'
     }
 
+    def 'should never match an empty stored value' () {
+        given: 'an empty value - indistinguishable from a missing key by its head'
+        def k = UUID.randomUUID().toString()
+        provider.put(k, '')
+
+        expect:
+        !provider.replaceIf(k, 0, '{"@v":1,"x":"a"}', Duration.ofSeconds(10))
+        provider.get(k) == ''
+    }
+
     def 'should reset the ttl on versioned replace' () {
         given:
         def TTL = 600
