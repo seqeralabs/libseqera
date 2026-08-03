@@ -194,48 +194,87 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         result.count == 3
     }
 
-    def 'should replace a value only when the current one matches' () {
+    def 'should replace a value only when the stored version matches' () {
         given:
         def k = UUID.randomUUID().toString()
 
         expect: 'a missing key is not replaced'
-        !provider.replaceIf(k, 'foo', 'bar')
+        !provider.replaceIf(k, 0, '{"@v":1,"x":"a"}', Duration.ofSeconds(10))
 
         when:
-        provider.put(k, 'foo')
-        then: 'a mismatching expected value is not replaced'
-        !provider.replaceIf(k, 'other', 'bar')
-        provider.get(k) == 'foo'
+        provider.put(k, '{"@v":3,"x":"a"}')
+        then: 'a mismatching version is not replaced'
+        !provider.replaceIf(k, 2, '{"@v":3,"x":"b"}', Duration.ofSeconds(10))
+        provider.get(k) == '{"@v":3,"x":"a"}'
 
-        and: 'a matching expected value is replaced'
-        provider.replaceIf(k, 'foo', 'bar')
-        provider.get(k) == 'bar'
+        and: 'a matching version is replaced'
+        provider.replaceIf(k, 3, '{"@v":4,"x":"b"}', Duration.ofSeconds(10))
+        provider.get(k) == '{"@v":4,"x":"b"}'
     }
 
-    def 'should preserve or reset the ttl on replace' () {
+    def 'should treat a value without version frame as version zero' () {
+        given:
+        def k = UUID.randomUUID().toString()
+        provider.put(k, '{"x":"legacy"}')
+
+        expect: 'a non-zero version does not match an unframed value'
+        !provider.replaceIf(k, 7, '{"@v":8,"x":"a"}', Duration.ofSeconds(10))
+
+        and: 'version zero adopts it'
+        provider.replaceIf(k, 0, '{"@v":1,"x":"a"}', Duration.ofSeconds(10))
+        provider.get(k) == '{"@v":1,"x":"a"}'
+    }
+
+    def 'should never match a non-canonical version head' () {
+        given:
+        def k1 = UUID.randomUUID().toString()
+        def k2 = UUID.randomUUID().toString()
+        def k3 = UUID.randomUUID().toString()
+
+        when: 'a head with leading-zero version digits'
+        provider.put(k1, '{"@v":007,"x":"a"}')
+        then: 'no witness matches it - not even the numeric value of the digits'
+        !provider.replaceIf(k1, 7, '{"@v":8,"x":"b"}', Duration.ofSeconds(10))
+        !provider.replaceIf(k1, 0, '{"@v":8,"x":"b"}', Duration.ofSeconds(10))
+        provider.get(k1) == '{"@v":007,"x":"a"}'
+
+        when: 'a head whose version digits overflow a long'
+        provider.put(k2, '{"@v":99999999999999999999,"x":"a"}')
+        then: 'no witness matches it and nothing is thrown'
+        !provider.replaceIf(k2, 0, '{"@v":1,"x":"b"}', Duration.ofSeconds(10))
+        provider.get(k2) == '{"@v":99999999999999999999,"x":"a"}'
+
+        when: 'a head carrying the largest version a store can write'
+        provider.put(k3, '{"@v":9223372036854775807,"x":"a"}')
+        then: 'it matches exactly'
+        provider.replaceIf(k3, Long.MAX_VALUE, '{"@v":1,"x":"b"}', Duration.ofSeconds(10))
+        provider.get(k3) == '{"@v":1,"x":"b"}'
+    }
+
+    def 'should never match an empty stored value' () {
+        given: 'an empty value - indistinguishable from a missing key by its head'
+        def k = UUID.randomUUID().toString()
+        provider.put(k, '')
+
+        expect:
+        !provider.replaceIf(k, 0, '{"@v":1,"x":"a"}', Duration.ofSeconds(10))
+        provider.get(k) == ''
+    }
+
+    def 'should reset the ttl on versioned replace' () {
         given:
         def TTL = 600
         def HALF = Math.round(TTL * 0.66)
-        def k1 = UUID.randomUUID().toString()
-        def k2 = UUID.randomUUID().toString()
+        def k = UUID.randomUUID().toString()
 
-        when: 'replace without ttl preserves the remaining expiry'
-        provider.put(k1, 'foo', Duration.ofMillis(TTL))
+        when: 'an entry near its deadline is replaced'
+        provider.put(k, '{"@v":1,"x":"a"}', Duration.ofMillis(TTL))
         sleep(HALF)
-        provider.replaceIf(k1, 'foo', 'bar')
-        then:
-        provider.get(k1) == 'bar'
-        and: 'the entry expires at the original deadline, not TTL after the replace'
+        provider.replaceIf(k, 1, '{"@v":2,"x":"b"}', Duration.ofMillis(TTL))
+        and:
         sleep(HALF)
-        provider.get(k1) == null
-
-        when: 'replace with ttl resets the expiry'
-        provider.put(k2, 'foo', Duration.ofMillis(TTL))
-        sleep(HALF)
-        provider.replaceIf(k2, 'foo', 'bar', Duration.ofMillis(TTL))
-        sleep(HALF)
-        then: 'the entry is alive beyond the original expiry'
-        provider.get(k2) == 'bar'
+        then: 'the entry is still alive past the original deadline'
+        provider.get(k) == '{"@v":2,"x":"b"}'
     }
 
     def 'should let exactly one concurrent replace succeed' () {
@@ -247,15 +286,12 @@ class RedisStateProviderTest extends Specification implements RedisTestContainer
         when:
         def winsPerRound = (1..ROUNDS).collect { round ->
             final k = UUID.randomUUID().toString()
-            provider.put(k, 'v0')
+            provider.put(k, '{"@v":0,"x":"v0"}')
             final barrier = new CyclicBarrier(THREADS)
             final futures = (0..<THREADS).collect { i ->
                 pool.submit({
                     barrier.await()
-                    // note: the replacement value must differ from the expected one,
-                    // otherwise the winner leaves the value unchanged and a second
-                    // writer's compare-and-swap legitimately matches again
-                    provider.replaceIf(k, 'v0', "w$i".toString())
+                    provider.replaceIf(k, 0, '{"@v":1,"x":"w' + i + '"}', Duration.ofSeconds(10))
                 } as Callable<Boolean>)
             }
             return futures.count { it.get() } as int

@@ -24,7 +24,7 @@ import io.seqera.serde.encode.StringEncodingStrategy
 import io.seqera.data.store.state.impl.StateProvider
 /**
  * Implements a generic store for ephemeral state data
- * 
+ *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @CompileStatic
@@ -146,36 +146,6 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
             delegate.put(requestId0(updated.getRequestId()), key, ttl)
         }
         return new CountResult<V>( result.succeed, updated, result.count)
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * <p>The comparison is performed on the serialized form of the expected value,
-     * so the configured encoding strategy must be deterministic.
-     */
-    @Override
-    boolean replaceIf(String key, V expected, V value) {
-        final result = delegate.replaceIf(key0(key), serialize(expected), serialize(value))
-        if( result && value instanceof RequestIdAware ) {
-            delegate.put(requestId0(value.getRequestId()), key, getDuration())
-        }
-        return result
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * <p>The comparison is performed on the serialized form of the expected value,
-     * so the configured encoding strategy must be deterministic.
-     */
-    @Override
-    boolean replaceIf(String key, V expected, V value, Duration ttl) {
-        final result = delegate.replaceIf(key0(key), serialize(expected), serialize(value), ttl)
-        if( result && value instanceof RequestIdAware ) {
-            delegate.put(requestId0(value.getRequestId()), key, ttl)
-        }
-        return result
     }
 
     @Override

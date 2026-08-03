@@ -21,6 +21,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.regex.Pattern
 
 import groovy.transform.CompileStatic
 import io.micronaut.context.annotation.Requires
@@ -39,7 +40,7 @@ import org.luaj.vm2.lib.jse.JsePlatform
 @Requires(missingProperty = 'redis.uri')
 @Singleton
 @CompileStatic
-class LocalStateProvider implements StateProvider<String,String> {
+class LocalStateProvider implements StateProvider<String,String>, VersionProvider<String,String> {
 
     private static class Entry<V> {
         final V value
@@ -123,23 +124,28 @@ class LocalStateProvider implements StateProvider<String,String> {
         return store.putIfAbsent(key, new Entry<>(value,ttl))?.value
     }
 
-    @Override
-    boolean replaceIf(String key, String expected, String value) {
-        final entry = validEntry(key)
-        if( entry==null || entry.value != expected )
-            return false
-        // preserve the remaining time-to-live of the existing entry
-        final remaining = entry.ttl==null ? null : Duration.between(Instant.now(), entry.ts.plus(entry.ttl))
-        // compare-and-swap on the entry instance itself, so a concurrent write
-        // landing in between makes this replace fail instead of overwriting it
-        return store.replace(key, entry, new Entry<>(value, remaining))
+    private static final Pattern VERSION_HEAD = ~/^\{"@v":(\d+)[,}]/
+
+    /*
+     * Mirror of the Lua script in RedisStateProvider: only the head of the stored form
+     * is inspected, and the captured digits are compared literally against the canonical
+     * decimal rendering of the expected version - no parsing; an unframed value counts
+     * as version '0'.
+     */
+    private static String versionOf(String value) {
+        final matcher = VERSION_HEAD.matcher(value.take(28))
+        return matcher.find() ? matcher.group(1) : '0'
     }
 
     @Override
-    boolean replaceIf(String key, String expected, String value, Duration ttl) {
+    boolean replaceIf(String key, long expected, String value, Duration ttl) {
         final entry = validEntry(key)
-        if( entry==null || entry.value != expected )
+        // a null or empty stored value never matches, like the empty head of a
+        // missing key in the Lua script this mirrors
+        if( entry==null || !entry.value || versionOf(entry.value) != String.valueOf(expected) )
             return false
+        // compare-and-swap on the entry instance itself, so a concurrent write
+        // landing in between makes this replace fail instead of overwriting it
         return store.replace(key, entry, new Entry<>(value, ttl))
     }
 

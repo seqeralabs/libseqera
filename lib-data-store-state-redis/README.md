@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-data-store-state-redis:1.1.0'
+    implementation 'io.seqera:lib-data-store-state-redis:1.2.0'
 }
 ```
 
@@ -62,23 +62,64 @@ store.clear()
 
 ### Compare-and-swap
 
-`replaceIf` writes only when the stored value still equals the one previously read, so a
-read-modify-write can detect a concurrent writer instead of silently overwriting it. It
-returns `false` when the key is missing or the current value differs:
+A store opts into optimistic concurrency by extending `VersionedStateStore` instead of
+`AbstractStateStore`; its value type must implement `VersionAware` — it carries its own
+version. Read the value, transform it (the version rides along), and write it back
+conditionally with `replaceIf`:
 
 ```groovy
-def current = store.get("task-123")
-def updated = current.withStatus("done")
-if( !store.replaceIf("task-123", current, updated) ) {
+@Singleton
+@CompileStatic
+class MyStateStore extends VersionedStateStore<MyState> {
+
+    // the provider must also implement VersionProvider - both implementations do
+    MyStateStore(StateProvider<String,String> provider) {
+        super(provider, new MoshiEncodeStrategy<MyState>() {})
+    }
+
+    // getPrefix / getDuration as above
+}
+
+class MyState implements VersionAware<MyState> {
+    // ... domain fields ...
+    long version
+
+    @Override
+    long version() { return version }
+
+    @Override
+    MyState withVersion(long v) { new MyState(/* same fields */, v) }
+}
+
+def current = store.get("task-123")            // version as stored
+def updated = current.withStatus("done")       // transitions preserve the version
+if( !store.replaceIf("task-123", updated) ) {  // lands only if the entry is unchanged
     // another writer got there first — re-read and retry
 }
 
-// same, but resetting the entry TTL; the two-argument form keeps the remaining one
-store.replaceIf("task-123", current, updated, Duration.ofMinutes(5))
+// same, but with an explicit TTL; the two-argument form resets it to getDuration(),
+// like every other write
+store.replaceIf("task-123", updated, Duration.ofMinutes(5))
 ```
 
-The comparison is made on the serialized form, so the encoding strategy must be
-deterministic. On Redis this is a single Lua script, and requires Redis 6.0 or later.
+The version is the write witness: the swap is refused when the entry was written after
+the read the value derives from. Versions are unique time-sorted identifiers (TSID)
+stamped by the store on **every** write — `put` included — so any write invalidates
+every outstanding witness; callers never assign versions, they carry forward the one
+they read. The whole compare-and-swap is a single atomic server-side call: the store
+frames every versioned write with a leading `{"@v":N}` JSON property, and the swap peeks
+the stored version from that frame — no payload parsing, no expected value on the wire,
+no re-serialization, cost independent of the value size. The frame is transparent to the
+encoding strategy: it is stripped symmetrically on read — the decoder receives exactly
+the payload the encoder produced — and its version is injected into the decoded value
+through `withVersion`, making the frame the single source of truth for the version; the
+value type does not need to serialize its version field. Versioned values must serialize
+to a JSON object, and their leading `@v` property is reserved for the store; a plain
+`AbstractStateStore` never frames nor strips, so a genuine `@v` property of a
+non-versioned value is always preserved, and on a versioned store a head that merely
+resembles a frame but cannot be one (version digits that do not fit a long) never fails
+a read. Values stored before versioning carry no frame, count as version `0`, and are
+adopted by their first successful replace.
 
 ### Atomic counters
 

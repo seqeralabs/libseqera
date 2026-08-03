@@ -37,7 +37,7 @@ import redis.clients.jedis.params.SetParams
 @Requires(bean = RedisActivator)
 @Singleton
 @CompileStatic
-class RedisStateProvider implements StateProvider<String,String> {
+class RedisStateProvider implements StateProvider<String,String>, VersionProvider<String,String> {
 
     @Inject
     private JedisPool pool
@@ -81,35 +81,32 @@ class RedisStateProvider implements StateProvider<String,String> {
     }
 
     /*
-     * Replace the value at KEYS[1] only if it currently equals ARGV[1] (compare-and-swap).
-     * An empty ARGV[3] preserves the remaining TTL (KEEPTTL), otherwise the TTL is reset
-     * to ARGV[3] milliseconds. A missing key never matches.
+     * Versioned compare-and-swap: replace the value at KEYS[1] only if the version carried
+     * by its leading {"@v":N frame equals ARGV[1], resetting the TTL to ARGV[3] millis.
+     * An unframed value counts as version 0; a missing key never matches. Only the head
+     * of the stored value is inspected (GETRANGE), so the cost is independent of the
+     * payload size.
+     *
+     * The digits are compared literally against the canonical decimal form of the
+     * expected version - the only form a store-written frame can carry - so foreign
+     * data whose head merely resembles a frame never matches and is left untouched,
+     * as long as its digit run fits the 28-byte peek; a longer run (impossible for a
+     * store-written frame) leaves no terminator in the head and counts as version 0,
+     * same as an unframed value. LocalStateProvider mirrors the same comparison.
      */
     static private final String REPLACE_IF = '''
-        if redis.call('GET', KEYS[1]) == ARGV[1] then
-            if ARGV[3] == '' then
-                redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
-            else
-                redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
-            end
-            return 1
-        end
-        return 0
+        local head = redis.call('GETRANGE', KEYS[1], 0, 27)
+        if head == '' then return 0 end
+        local ver = string.match(head, '^{"@v":(%d+)[,}]') or '0'
+        if ver ~= ARGV[1] then return 0 end
+        redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+        return 1
         '''
 
     @Override
-    boolean replaceIf(String key, String expected, String value) {
-        return replaceIf0(key, expected, value, '')
-    }
-
-    @Override
-    boolean replaceIf(String key, String expected, String value, Duration ttl) {
-        return replaceIf0(key, expected, value, ttl.toMillis().toString())
-    }
-
-    private boolean replaceIf0(String key, String expected, String value, String ttlMillis) {
+    boolean replaceIf(String key, long expected, String value, Duration ttl) {
         try( Jedis conn=pool.getResource() ) {
-            return conn.eval(REPLACE_IF, 1, key, expected, value, ttlMillis) == 1L
+            return conn.eval(REPLACE_IF, 1, key, String.valueOf(expected), value, ttl.toMillis().toString()) == 1L
         }
     }
 
