@@ -23,6 +23,7 @@ import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 
 import groovy.transform.Canonical
+import groovy.transform.EqualsAndHashCode
 import io.micronaut.test.extensions.spock.annotation.MicronautTest
 import io.seqera.serde.encode.StringEncodingStrategy
 import io.seqera.serde.moshi.MoshiEncodeStrategy
@@ -41,7 +42,8 @@ class AbstractStateStoreTest extends Specification {
     static public long ttlMillis = 100
 
     @Canonical
-    static class MyObject implements Versioned<MyObject> {
+    @EqualsAndHashCode(excludes = 'ver')
+    static class MyObject implements VersionAware<MyObject> {
         String field1
         String field2
         long ver
@@ -143,27 +145,28 @@ class AbstractStateStoreTest extends Specification {
         store.get(key) == new MyObject('this','that')
     }
 
-    def 'should replace a versioned value and bump its version' () {
+    def 'should replace a versioned value and stamp a new version' () {
         given:
         def store = new MyCacheStore(provider)
         def key = UUID.randomUUID().toString()
         store.put(key, new MyObject('a', 'b'), Duration.ofSeconds(10))
 
-        expect: 'the stored form is framed with the value own version'
-        provider.get(store.key0(key)).startsWith('{"@v":0,')
+        expect: 'the stored form is framed with a version stamped at creation'
+        provider.get(store.key0(key)) =~ /^\{"@v":\d+,/
 
         when:
         def current = store.get(key)
         then:
-        current.version() == 0
+        current.version() != 0
 
         when: 'replace using the version from the current read'
         def done = store.replaceIf(key, new MyObject('c', 'd', current.version()))
         then:
         done
-        and: 'the stored value carries the bumped version'
-        store.get(key) == new MyObject('c', 'd', 1)
-        provider.get(store.key0(key)).startsWith('{"@v":1,')
+        and: 'the stored value carries a freshly stamped version'
+        store.get(key) == new MyObject('c', 'd')
+        store.get(key).version() != current.version()
+        store.get(key).version() != 0
     }
 
     def 'should reject a versioned value that does not serialize to a JSON object' () {
@@ -478,12 +481,12 @@ class AbstractStateStoreTest extends Specification {
         def done = store.replaceIf(key, new MyObject('c', 'd', legacy.version()))
         then:
         done
-        store.get(key).version() == 1
+        store.get(key).version() != 0
         and: 'the adopted entry is framed'
-        provider.get(store.key0(key)).startsWith('{"@v":1,')
+        provider.get(store.key0(key)) =~ /^\{"@v":\d+,/
     }
 
-    def 'should reject a value type that does not implement Versioned' () {
+    def 'should reject a value type that does not implement VersionAware' () {
         given:
         def store = new PlainStore(provider)
         store.put('k1', new PlainObject('a'))
@@ -502,12 +505,13 @@ class AbstractStateStoreTest extends Specification {
         store.put(key, new MyObject('a', 'b'), Duration.ofSeconds(10))
 
         when:
-        def done = store.replaceIf(key, new MyState(recId, 'value'))
+        def current = store.get(key)
+        def done = store.replaceIf(key, new MyState(recId, 'value').withVersion(current.version()))
         then:
         done
         and:
-        store.get(key).version() == 1
-        store.findByRequestId(recId) == new MyState(recId, 'value').withVersion(1)
+        store.get(key).version() != current.version()
+        store.findByRequestId(recId) == new MyState(recId, 'value')
     }
 
 }

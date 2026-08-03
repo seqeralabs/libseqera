@@ -19,6 +19,7 @@ package io.seqera.data.store.state
 
 import java.time.Duration
 
+import com.github.f4b6a3.tsid.TsidCreator
 import groovy.transform.CompileStatic
 import io.seqera.serde.encode.StringEncodingStrategy
 import io.seqera.data.store.state.impl.StateProvider
@@ -93,21 +94,32 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
 
     /**
      * Serialize the value, framing it with a leading {@code {"@v":N} version property when
-     * the value carries an optimistic-concurrency version (see {@link Versioned}). The
+     * the value carries an optimistic-concurrency version (see {@link VersionAware}). The
      * frame is written by the store at a fixed position — never by the encoding strategy —
      * so the versioned compare-and-swap can inspect it server-side without parsing the
      * payload; decoders ignore it as an unknown property on read.
      */
     protected String serialize0(V value) {
         final payload = serialize(value)
-        return value instanceof Versioned
-                ? frame(payload, ((Versioned) value).version())
+        return value instanceof VersionAware
+                ? frame(payload, ((VersionAware) value).version())
                 : payload
+    }
+
+    /**
+     * Stamp a version-aware value with a freshly generated version — a unique time-sorted
+     * identifier (TSID). Applied on every write path, so any write invalidates every
+     * outstanding compare-and-swap witness; a non version-aware value passes through.
+     */
+    private V stamp(V value) {
+        return value instanceof VersionAware
+                ? (V) ((VersionAware) value).withVersion(TsidCreator.getTsid().toLong())
+                : value
     }
 
     private static String frame(String payload, long version) {
         if( !payload || payload.charAt(0) != ('{' as char) )
-            throw new IllegalStateException("Versioned values must serialize to a JSON object - offending payload: ${payload?.take(80)}")
+            throw new IllegalStateException("VersionAware values must serialize to a JSON object - offending payload: ${payload?.take(80)}")
         final rest = payload.substring(1)
         return rest == '}' ? '{"@v":' + version + '}' : '{"@v":' + version + ',' + rest
     }
@@ -130,7 +142,7 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
 
     @Override
     void put(String key, V value, Duration ttl) {
-        delegate.put(key0(key), serialize0(value), ttl)
+        delegate.put(key0(key), serialize0(stamp(value)), ttl)
         if( value instanceof RequestIdAware ) {
             delegate.put(requestId0(value.getRequestId()), key, ttl)
         }
@@ -138,7 +150,7 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
 
     @Override
     boolean putIfAbsent(String key, V value, Duration ttl) {
-        final result = delegate.putIfAbsent(key0(key), serialize0(value), ttl)
+        final result = delegate.putIfAbsent(key0(key), serialize0(stamp(value)), ttl)
         if( result && value instanceof RequestIdAware ) {
             delegate.put(requestId0(value.getRequestId()), key, ttl)
         }
@@ -157,7 +169,7 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
     CountResult<V> putIfAbsentAndCount(String key, V value, Duration ttl) {
         final result = delegate.putJsonIfAbsentAndIncreaseCount(
                 key0(key),
-                serialize0(value),
+                serialize0(stamp(value)),
                 ttl,
                 counterKey(key,value),
                 counterScript())
@@ -174,23 +186,24 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
      * written since the caller read it (compare-and-swap), preserving the entry's
      * remaining time-to-live.
      *
-     * <p>The write witness is the value's own {@link Versioned#version()} — the version
+     * <p>The write witness is the value's own {@link VersionAware#version()} — the version
      * of the read the value was derived from: the replace lands only when the stored
-     * version still equals it, and the value is persisted with the version incremented.
-     * The whole compare-and-swap is one atomic server-side operation: the stored version
-     * is read from the {@code {"@v":N} frame the store prepends to every versioned write,
-     * so no payload is parsed or shipped for the comparison and the encoding strategy is
-     * never re-invoked — no byte-determinism assumption remains anywhere.
+     * version still equals it, and the value is persisted with a freshly stamped version
+     * (a unique time-sorted identifier). Every write path stamps — {@link #put} included —
+     * so any write invalidates every outstanding witness. The whole compare-and-swap is
+     * one atomic server-side operation: the stored version is read from the
+     * {@code {"@v":N} frame the store prepends to every versioned write, so no payload is
+     * parsed or shipped for the comparison and the encoding strategy is never re-invoked —
+     * no byte-determinism assumption remains anywhere.
      *
      * <p>The serialized form of a versioned value must be a JSON object — the frame is a
      * regular JSON property, ignored by decoders on read. An entry written before
      * versioning existed carries no frame, counts as version {@code 0}, and is adopted by
-     * its first successful replace. Unconditional {@link #put} writes do not move the
-     * version, so they must be reserved for entry creation.
+     * its first successful replace.
      *
      * @param key The key of the entry to be replaced
      * @param value The new value, carrying the version of the read it was derived from;
-     *        its type must implement {@link Versioned}
+     *        its type must implement {@link VersionAware}
      * @return {@code true} if the value was replaced, {@code false} if the key does not
      *         exist or the entry was written since the version carried by the value
      */
@@ -204,7 +217,7 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
      *
      * @param key The key of the entry to be replaced
      * @param value The new value, carrying the version of the read it was derived from;
-     *        its type must implement {@link Versioned}
+     *        its type must implement {@link VersionAware}
      * @param ttl The new max time-to-live of the entry once replaced
      * @return {@code true} if the value was replaced, {@code false} if the key does not
      *         exist or the entry was written since the version carried by the value
@@ -214,10 +227,10 @@ abstract class AbstractStateStore<V> implements StateStore<String,V> {
     }
 
     private boolean replaceIf0(String key, V value, Duration ttl) {
-        if( !(value instanceof Versioned) )
-            throw new IllegalArgumentException("Versioned compare-and-swap requires the value type to implement Versioned - offending type: ${value.getClass().getName()}")
-        final long expected = ((Versioned) value).version()
-        final V next = (V) ((Versioned) value).withVersion(expected + 1)
+        if( !(value instanceof VersionAware) )
+            throw new IllegalArgumentException("Versioned compare-and-swap requires the value type to implement VersionAware - offending type: ${value.getClass().getName()}")
+        final long expected = ((VersionAware) value).version()
+        final V next = stamp(value)
         // a single atomic server-side call: the provider compares the version carried by
         // the stored form's leading frame against the caller's read basis and swaps in
         // the new (framed) value - no read-back, no payload comparison, no second trip

@@ -18,29 +18,29 @@
 package io.seqera.data.store.state
 
 /**
- * Contract for values that carry their own optimistic-concurrency version, in the style
- * of a JPA {@code @Version} field: the version is read together with the value, travels
- * through the caller's domain transitions, and acts as the write witness for
- * {@link StateStore#replaceIf} — a conditional write lands only when the stored version
- * still equals the one the caller read, and is persisted with the version incremented.
+ * Contract for values that carry their own optimistic-concurrency version: the version
+ * is read together with the value, travels through the caller's domain transitions, and
+ * acts as the write witness for {@code AbstractStateStore#replaceIf} — a conditional
+ * write lands only when the stored version still equals the one the caller read.
+ *
+ * <p>The version is a unique time-sorted identifier (TSID) stamped by the store on
+ * <em>every</em> write — conditional or not — so any write invalidates every outstanding
+ * witness, including across a remove-and-recreate of the entry. Callers never assign
+ * versions themselves: they carry forward the version of the value they read.
  *
  * <p>A value deserialized from an entry written before versioning existed reports
  * version {@code 0} (the field is simply absent from the stored form), so legacy entries
  * are adopted transparently by their first successful conditional write.
  *
- * <p>The version is expected to change on <em>every</em> write: unconditional
- * {@code put} writes should be reserved for entry creation, otherwise a concurrent
- * conditional write cannot detect them reliably.
- *
  * @param <T> the self type, so {@link #withVersion} preserves the concrete type
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-interface Versioned<T> {
+interface VersionAware<T> {
 
     /**
      * @return The optimistic-concurrency version of this value; {@code 0} for a value
-     *         that was never written through a versioned conditional write
+     *         that was never written through a version-aware store
      */
     long version()
 

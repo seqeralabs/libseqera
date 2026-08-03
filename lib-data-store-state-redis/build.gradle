@@ -32,6 +32,7 @@ dependencies {
     implementation project(':lib-activator')
     implementation 'redis.clients:jedis:5.1.4'
     implementation 'org.luaj:luaj-jse:3.0.1'
+    implementation 'com.github.f4b6a3:tsid-creator:5.2.6'
 
     // Micronaut dependencies
     compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"

@@ -1,11 +1,13 @@
 # lib-data-store-state-redis changelog
 
 1.2.0 - 3 Aug 2026
-- Add Versioned interface: a value carries its own optimistic-concurrency version,
-  JPA @Version style - version() accessor plus withVersion(long) copy method (#107)
+- Add VersionAware interface: a value carries its own optimistic-concurrency version -
+  version() accessor plus withVersion(long) copy method (#107)
 - Change replaceIf signature to replaceIf(key, value[, ttl]): the write witness is the
-  value's own version - the swap lands only when the stored version still equals it,
-  and the value is persisted with the version incremented
+  value's own version - the swap lands only when the stored version still equals it
+- Versions are unique time-sorted identifiers (TSID) stamped by the store on every
+  write path, put() included, so any write invalidates every outstanding witness -
+  no put-is-creation-only invariant and no ABA across a remove-and-recreate
 - The swap is a single atomic server-side operation (one round-trip): the store frames
   every versioned write with a leading {"@v":N} JSON property and the provider compares
   the stored version by peeking that frame (GETRANGE) - no payload parsing, no expected
@@ -15,8 +17,7 @@
 - Versioned values must serialize to a JSON object; decoders ignore the frame as an
   unknown property, so readers of any code version are unaffected
 - Entries written before versioning carry no frame, count as version 0, and are adopted
-  transparently by their first successful replace; unconditional put() must be reserved
-  for creation since it does not move the version
+  transparently by their first successful replace
 - The raw stored-form compare-and-swap is removed; StateProvider's replaceIf is
   re-signed to the versioned form (key, expectedVersion, value) and no byte-level
   CAS remains anywhere in the API

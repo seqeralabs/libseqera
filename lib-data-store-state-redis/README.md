@@ -62,12 +62,12 @@ store.clear()
 
 ### Compare-and-swap
 
-A value type opts into optimistic concurrency by implementing `Versioned` — it carries
-its own version, JPA `@Version` style. Read the value, transform it (the version rides
-along), and write it back conditionally with `replaceIf`:
+A value type opts into optimistic concurrency by implementing `VersionAware` — it
+carries its own version. Read the value, transform it (the version rides along), and
+write it back conditionally with `replaceIf`:
 
 ```groovy
-class MyState implements Versioned<MyState> {
+class MyState implements VersionAware<MyState> {
     // ... domain fields ...
     long version
 
@@ -78,9 +78,9 @@ class MyState implements Versioned<MyState> {
     MyState withVersion(long v) { new MyState(/* same fields */, v) }
 }
 
-def current = store.get("task-123")            // version() == 5
+def current = store.get("task-123")            // version as stored
 def updated = current.withStatus("done")       // transitions preserve the version
-if( !store.replaceIf("task-123", updated) ) {  // lands only if still at 5, stored as 6
+if( !store.replaceIf("task-123", updated) ) {  // lands only if the entry is unchanged
     // another writer got there first — re-read and retry
 }
 
@@ -89,14 +89,16 @@ store.replaceIf("task-123", updated, Duration.ofMinutes(5))
 ```
 
 The version is the write witness: the swap is refused when the entry was written after
-the read the value derives from. The whole compare-and-swap is a single atomic
-server-side call: the store frames every versioned write with a leading `{"@v":N` JSON
-property, and the swap peeks the stored version from that frame — no payload parsing, no
-expected value on the wire, no re-serialization, cost independent of the value size.
-Versioned values must serialize to a JSON object; decoders ignore the frame as an
-unknown property. Values stored before versioning carry no frame, count as version `0`,
-and are adopted by their first successful replace. Reserve unconditional `put` for entry
-creation: it does not move the version. Requires Redis 6.0 or later.
+the read the value derives from. Versions are unique time-sorted identifiers (TSID)
+stamped by the store on **every** write — `put` included — so any write invalidates
+every outstanding witness; callers never assign versions, they carry forward the one
+they read. The whole compare-and-swap is a single atomic server-side call: the store
+frames every versioned write with a leading `{"@v":N` JSON property, and the swap peeks
+the stored version from that frame — no payload parsing, no expected value on the wire,
+no re-serialization, cost independent of the value size. Versioned values must serialize
+to a JSON object; decoders ignore the frame as an unknown property. Values stored before
+versioning carry no frame, count as version `0`, and are adopted by their first
+successful replace. Requires Redis 6.0 or later.
 
 ### Atomic counters
 

@@ -88,7 +88,7 @@ class RedisStateProvider implements StateProvider<String,String> {
      * preserves the remaining TTL (KEEPTTL), otherwise the TTL is reset to ARGV[3] millis.
      */
     static private final String REPLACE_IF = '''
-        local head = redis.call('GETRANGE', KEYS[1], 0, 23)
+        local head = redis.call('GETRANGE', KEYS[1], 0, 27)
         if head == '' then return 0 end
         local ver = string.match(head, '^{"@v":(%d+)[,}]') or '0'
         if ver ~= ARGV[1] then return 0 end
