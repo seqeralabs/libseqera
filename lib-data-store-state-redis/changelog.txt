@@ -28,13 +28,18 @@
   non-versioned value is always preserved
 - Entries written before versioning carry no frame, count as version 0, and are adopted
   transparently by their first successful replace
-- The raw stored-form compare-and-swap added in 1.1.0 is removed - a breaking change:
-  the provider-level CAS is re-signed to the versioned form (key, expectedVersion,
-  value) and moves to the new standalone VersionProvider capability interface,
-  implemented by both providers alongside StateProvider, which keeps its pre-existing
-  contract; no byte-level CAS remains anywhere in the API
+- The raw stored-form compare-and-swap added in 1.1.0 is removed and 1.1.0 is revoked
+  (see below): the provider-level CAS is re-signed to the versioned form (key,
+  expectedVersion, value) and moves to the new standalone VersionProvider capability
+  interface, implemented by both providers alongside StateProvider, which keeps its
+  pre-existing contract; no byte-level CAS remains anywhere in the API
 
-1.1.0 - 1 Aug 2026
+1.1.0 - 1 Aug 2026 [REVOKED]
+- REVOKED: the replaceIf added by this release compares a re-serialization of the
+  expected value byte-wise, which silently requires the encoding strategy to be
+  deterministic across JVMs - reflection-dependent property order breaks it in
+  multi-replica deployments, making the CAS refuse persistently. The API was
+  withdrawn in 1.2.0 before any consumer shipped on it; do not use this version
 - Add replaceIf compare-and-swap write to StateStore, StateProvider and AbstractStateStore (#104)
 - Atomic via a Lua script in RedisStateProvider (requires Redis 6.0+ for SET KEEPTTL);
   via ConcurrentHashMap.replace in LocalStateProvider
