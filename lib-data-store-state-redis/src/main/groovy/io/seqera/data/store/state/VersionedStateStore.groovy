@@ -71,9 +71,13 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
      * The frame is written by the store at a fixed position — never by the encoding
      * strategy — so the versioned compare-and-swap can inspect it server-side without
      * parsing the payload; {@link #deserialize} strips it symmetrically on read.
+     *
+     * <p>Final because an override dropping the frame would silently turn every
+     * compare-and-swap into a blind version-0 write — customize the payload through
+     * the encoding strategy instead.
      */
     @Override
-    protected String serialize(V value) {
+    protected final String serialize(V value) {
         final stamped = stamp(value)
         return frame(super.serialize(stamped), stamped.version())
     }
@@ -86,10 +90,10 @@ abstract class VersionedStateStore<V extends VersionAware<V>> extends AbstractSt
      * the version: an unframed entry counts as version {@code 0}, whatever the payload
      * itself may carry, and so does a head that merely resembles a frame but carries
      * version digits no store-written frame can (they do not fit a long) — reads never
-     * throw on foreign data.
+     * throw on foreign data. Final for the same reason as {@link #serialize}.
      */
     @Override
-    protected V deserialize(String encoded) {
+    protected final V deserialize(String encoded) {
         final matcher = FRAME_PATTERN.matcher(encoded)
         if( !matcher.find() ) {
             log.debug("State entry carries no version frame - reading it as version 0")
