@@ -194,6 +194,22 @@ public class HxConfig implements Retryable.Config {
     }
 
     /**
+     * Creates a new builder pre-populated with all the settings of the given configuration.
+     *
+     * <p>Every setting is copied, so a configuration can be round-tripped through a builder
+     * without loss. Subsequent builder calls override the copied values, and later changes to
+     * the supplied instance are not observed.
+     *
+     * @param config the configuration to copy the settings from
+     * @return a new Builder holding a copy of the given configuration settings
+     * @throws NullPointerException if config is null
+     */
+    public static Builder newBuilder(HxConfig config) {
+        java.util.Objects.requireNonNull(config, "config cannot be null");
+        return new Builder().copyFrom(config);
+    }
+
+    /**
      * Builder class for constructing HttpConfig instances with a fluent API.
      * 
      * <p>All builder methods return the builder instance to enable method chaining.
@@ -697,8 +713,40 @@ public class HxConfig implements Retryable.Config {
         }
 
         /**
+         * Copies all the settings of the given configuration into this builder.
+         *
+         * <p>Deliberately placed next to {@link #build()}: the two field lists mirror each other,
+         * so keeping them adjacent makes a field missing from either one visible in review.
+         * Fields are assigned directly rather than through the fluent setters because a few
+         * builder field names differ from their {@link HxConfig} counterparts.
+         *
+         * @param config the configuration to copy the settings from
+         * @return this builder instance for method chaining
+         */
+        private Builder copyFrom(HxConfig config) {
+            this.delay = config.delay;
+            this.maxDelay = config.maxDelay;
+            this.maxAttempts = config.maxAttempts;
+            this.jitter = config.jitter;
+            this.multiplier = config.multiplier;
+            this.retryCondition = config.retryCondition;
+            this.retryStatusCodes = config.retryStatusCodes;
+            this.bearerToken = config.jwtToken;
+            this.refreshToken = config.refreshToken;
+            this.refreshTokenUrl = config.refreshTokenUrl;
+            this.tokenRefreshTimeout = config.tokenRefreshTimeout;
+            this.basicAuthToken = config.basicAuthToken;
+            this.wwwAuthenticationEnabled = config.wwwAuthenticateEnabled;
+            this.wwwAuthenticationCallback = config.authenticationCallback;
+            this.refreshCookiePolicy = config.refreshCookiePolicy;
+            this.proxySelector = config.proxySelector;
+            this.proxyAuthenticator = config.proxyAuthenticator;
+            return this;
+        }
+
+        /**
          * Builds and returns a new HxConfig instance with the configured values.
-         * 
+         *
          * @return a new HxConfig with all builder settings applied
          */
         public HxConfig build() {

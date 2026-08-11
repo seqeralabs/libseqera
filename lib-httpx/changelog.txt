@@ -1,5 +1,11 @@
 # lib-httpx changelog
 
+2.5.0 - 11 Aug 2026
+- Fix HxClient.Builder.config(HxConfig) silently dropping retryCondition, tokenRefreshTimeout and refreshCookiePolicy (#113)
+- Add HxConfig.newBuilder(HxConfig) creating a builder pre-populated with all the settings of an existing config
+- Wire HxClient.shouldRetryOnException(Throwable) into the retry policy, so overriding it now takes effect; it delegates to HxConfig.retryCondition, unchanged for a default config
+- A configuration passed to HxClient.Builder.config(HxConfig) now propagates its proxy settings to the internal token refresh clients also when an explicit HttpClient is supplied
+
 2.4.0 - 7 Jul 2026
 - Add authenticated forward-proxy support to HxClient
 - Add proxy(ProxySelector) and authenticator(Authenticator) passthroughs to HxClient.Builder, mirroring java.net.http.HttpClient.Builder

@@ -19,10 +19,12 @@ package io.seqera.http
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*
 
+import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.concurrent.ExecutionException
+import java.util.function.Predicate
 
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock
@@ -557,5 +559,78 @@ class HxClientRetryIntegrationTest extends Specification {
 
         and: 'wait was bounded by maxDelay (300ms ± 25% jitter), never the 10s hint'
         elapsed < 2000
+    }
+
+    def 'should not retry when the config retry condition rejects the failure'() {
+        given: 'a config that never retries on exception - issue #113'
+        def config = HxConfig.newBuilder()
+                .maxAttempts(3)
+                .delay(Duration.ofMillis(50))
+                .retryCondition({ Throwable t -> false } as Predicate)
+                .build()
+        def client = HxClient.newBuilder().config(config).build()
+
+        and: 'server always returns connection reset error'
+        wireMockServer.stubFor(get(urlEqualTo('/api/no-retry-condition'))
+                .willReturn(aResponse()
+                        .withFault(Fault.CONNECTION_RESET_BY_PEER)))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/no-retry-condition"))
+                .GET()
+                .build()
+
+        when:
+        client.send(request, HttpResponse.BodyHandlers.ofString())
+
+        then:
+        thrown(IOException)
+
+        and: 'the upstream was contacted once - the condition reached the retry policy'
+        wireMockServer.verify(1, getRequestedFor(urlEqualTo('/api/no-retry-condition')))
+    }
+
+    def 'should honour a shouldRetryOnException override from a subclass'() {
+        given:
+        def config = HxConfig.newBuilder()
+                .maxAttempts(3)
+                .delay(Duration.ofMillis(50))
+                .build()
+        def client = new NeverRetryClient(HttpClient.newBuilder().build(), config)
+
+        and: 'server always returns connection reset error'
+        wireMockServer.stubFor(get(urlEqualTo('/api/subclass-no-retry'))
+                .willReturn(aResponse()
+                        .withFault(Fault.CONNECTION_RESET_BY_PEER)))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/subclass-no-retry"))
+                .GET()
+                .build()
+
+        when:
+        client.send(request, HttpResponse.BodyHandlers.ofString())
+
+        then:
+        thrown(IOException)
+
+        and: 'the upstream was contacted once - the hook is wired to the retry policy'
+        wireMockServer.verify(1, getRequestedFor(urlEqualTo('/api/subclass-no-retry')))
+    }
+
+    /**
+     * Subclass overriding the documented retry-on-exception extension point
+     */
+    static class NeverRetryClient extends HxClient {
+        NeverRetryClient(HttpClient httpClient, HxConfig config) {
+            super(httpClient, config)
+        }
+
+        @Override
+        protected boolean shouldRetryOnException(Throwable throwable) {
+            return false
+        }
     }
 }

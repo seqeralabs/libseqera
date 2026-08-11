@@ -31,6 +31,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.Predicate;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -476,7 +477,7 @@ public class HxClient {
         final boolean[] tokenRefreshed = {false};
 
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
-                .retryCondition(config.getRetryCondition())
+                .retryCondition(this::shouldRetryOnException)
                 .retryIf(this::shouldRetryOnResponse)
                 .retryDelayHint(HxClient::parseRetryAfter)
                 .onRetry(event -> {
@@ -549,7 +550,7 @@ public class HxClient {
         final boolean[] tokenRefreshed = {false};
 
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
-                .retryCondition(config.getRetryCondition())
+                .retryCondition(this::shouldRetryOnException)
                 .retryIf(this::shouldRetryOnResponse)
                 .retryDelayHint(HxClient::parseRetryAfter)
                 .onRetry(event -> {
@@ -610,19 +611,20 @@ public class HxClient {
 
     /**
      * Determines whether to retry a request based on the exception that occurred.
-     * 
-     * <p>By default, retries on IOException which typically indicates network-level issues
-     * such as connection timeouts, connection refused, etc.
-     * 
+     *
+     * <p>Delegates to the configured {@link HxConfig#getRetryCondition()}, which by default
+     * retries on IOException - typically network-level issues such as connection timeouts,
+     * connection refused, etc. Override to decide independently of the configuration.
+     *
      * @param throwable the exception that occurred during the request
      * @return true if the request should be retried, false otherwise
      */
+    @SuppressWarnings({"rawtypes", "unchecked"})
     protected boolean shouldRetryOnException(Throwable throwable) {
-        if (throwable instanceof IOException) {
-            log.debug("Retrying on IOException: {}", throwable.getMessage());
-            return true;
-        }
-        return false;
+        final Predicate condition = config.getRetryCondition();
+        return condition != null
+                ? condition.test(throwable)
+                : throwable instanceof IOException;
     }
 
     /**
@@ -1058,25 +1060,22 @@ public class HxClient {
         }
         
         /**
-         * Sets the HxConfig to use directly.
-         * 
-         * <p>If this method is called, HxConfig-specific builder methods
-         * will be ignored as the provided configuration will be used directly.
-         * 
-         * @param config the HxConfig to use
+         * Copies all the settings of the given HxConfig into this builder.
+         *
+         * <p>Every setting is copied, so nothing carried by the given configuration is lost.
+         * HxConfig-specific builder methods called <em>after</em> this one override the copied
+         * values; those called before it are discarded. Later changes to the supplied instance
+         * are not observed.
+         *
+         * @param config the HxConfig to copy the settings from
          * @return this Builder instance
          * @throws NullPointerException if config is null
          */
         public Builder config(HxConfig config) {
-            this.configBuilder = HxConfig.newBuilder()
-                    .retryConfig(config)
-                    .bearerToken(config.getJwtToken())
-                    .refreshToken(config.getRefreshToken())
-                    .refreshTokenUrl(config.getRefreshTokenUrl())
-                    .basicAuth(config.getBasicAuthToken())
-                    .retryStatusCodes(config.getRetryStatusCodes())
-                    .wwwAuthentication(config.isWwwAuthenticateEnabled())
-                    .wwwAuthenticationCallback(config.getAuthenticationCallback());
+            java.util.Objects.requireNonNull(config, "config cannot be null");
+            this.configBuilder = HxConfig.newBuilder(config);
+            // mirrored onto the builder fields as well, because build() writes them back
+            // onto the config builder when no explicit HttpClient is supplied
             this.proxySelector = config.getProxySelector();
             this.proxyAuthenticator = config.getProxyAuthenticator();
             return this;
@@ -1418,10 +1417,12 @@ public class HxClient {
          * HttpClient or building one from the configured HttpClient.Builder settings.
          *
          * <p>Proxy settings are applied only when supplied explicitly via
-         * {@link #proxy(ProxySelector)} / {@link #authenticator(Authenticator)}; they are never
-         * resolved from the environment automatically. An explicitly supplied HttpClient is always
-         * used verbatim: proxy settings are neither applied to it nor propagated to the internal
-         * token refresh clients.
+         * {@link #proxy(ProxySelector)} / {@link #authenticator(Authenticator)} / {@link
+         * #config(HxConfig)}; they are never resolved from the environment automatically. An
+         * explicitly supplied HttpClient is always used verbatim - proxy settings are never
+         * applied to it. They are still propagated to the internal token refresh clients when
+         * carried by a configuration passed to {@link #config(HxConfig)}, but not when supplied
+         * through {@link #proxy(ProxySelector)} / {@link #authenticator(Authenticator)}.
          *
          * @return a new HxClient instance
          */

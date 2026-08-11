@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-httpx:2.4.0'
+    implementation 'io.seqera:lib-httpx:2.5.0'
 }
 ```
 
@@ -259,10 +259,26 @@ HxConfig config = HxConfig.newBuilder()
     .jitter(0.5)
     .multiplier(2.0)
     .retryStatusCodes(Set.of(429, 500, 502, 503, 504))
+    // which failures are retried - defaults to any IOException, which includes
+    // HttpTimeoutException; narrow it to bound a call by its timeout
+    .retryCondition(t -> t instanceof IOException && !(t instanceof HttpTimeoutException))
     .build();
 
 HxClient client = HxClient.newBuilder().config(config).build();
 ```
+
+`config(...)` copies every setting of the given configuration, so nothing it carries is lost. Builder
+methods called after it override the copied values; those called before it are discarded. To derive a
+variant of an existing configuration, start from `HxConfig.newBuilder(existing)`:
+
+```java
+HxConfig relaxed = HxConfig.newBuilder(config)
+    .maxAttempts(2)
+    .build();
+```
+
+Alternatively, subclass `HxClient` and override `shouldRetryOnException(Throwable)` to decide
+independently of the configuration.
 
 ### Integration with Existing Retry Configuration
 
