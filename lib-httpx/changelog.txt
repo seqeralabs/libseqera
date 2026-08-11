@@ -1,6 +1,10 @@
 # lib-httpx changelog
 
 2.5.0 - 11 Aug 2026
+- BEHAVIOUR CHANGE: the default retry condition no longer retries an HttpTimeoutException raised after the request was sent, so a call is bounded by its timeout instead of maxAttempts x timeout (#113)
+- HttpConnectTimeoutException, raised before the request is sent, remains retryable
+- Callers that want the previous behaviour can opt back in with retryCondition(t -> t instanceof IOException)
+- Add public HxConfig.defaultRetryCondition(Throwable) so callers can compose with the default rule; it is also the fallback when retryCondition is set to null
 - Fix HxClient.Builder.config(HxConfig) silently dropping retryCondition, tokenRefreshTimeout and refreshCookiePolicy (#113)
 - Add HxConfig.newBuilder(HxConfig) creating a builder pre-populated with all the settings of an existing config
 - Wire HxClient.shouldRetryOnException(Throwable) into the retry policy, so overriding it now takes effect; it delegates to HxConfig.retryCondition, unchanged for a default config

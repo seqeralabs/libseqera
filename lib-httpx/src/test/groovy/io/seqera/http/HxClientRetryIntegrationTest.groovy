@@ -22,6 +22,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.net.http.HttpTimeoutException
 import java.time.Duration
 import java.util.concurrent.ExecutionException
 import java.util.function.Predicate
@@ -618,6 +619,65 @@ class HxClientRetryIntegrationTest extends Specification {
 
         and: 'the upstream was contacted once - the hook is wired to the retry policy'
         wireMockServer.verify(1, getRequestedFor(urlEqualTo('/api/subclass-no-retry')))
+    }
+
+    def 'should not retry a request timeout by default'() {
+        given: 'default retry condition, 3 attempts'
+        def config = HxConfig.newBuilder()
+                .maxAttempts(3)
+                .delay(Duration.ofMillis(50))
+                .build()
+        def client = HxClient.newBuilder().config(config).build()
+
+        and: 'server always responds slower than the request timeout'
+        wireMockServer.stubFor(get(urlEqualTo('/api/slow-default'))
+                .willReturn(aResponse().withStatus(200).withFixedDelay(1000)))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/slow-default"))
+                .timeout(Duration.ofMillis(150))
+                .GET()
+                .build()
+
+        when:
+        client.send(request, HttpResponse.BodyHandlers.ofString())
+
+        then:
+        thrown(HttpTimeoutException)
+
+        and: 'the call is bounded by its timeout, not by maxAttempts x timeout'
+        wireMockServer.verify(1, getRequestedFor(urlEqualTo('/api/slow-default')))
+    }
+
+    def 'should retry a request timeout when the caller opts back in'() {
+        given: 'the pre-2.5.0 rule supplied explicitly'
+        def config = HxConfig.newBuilder()
+                .maxAttempts(3)
+                .delay(Duration.ofMillis(50))
+                .retryCondition({ Throwable t -> t instanceof IOException } as Predicate)
+                .build()
+        def client = HxClient.newBuilder().config(config).build()
+
+        and: 'server always responds slower than the request timeout'
+        wireMockServer.stubFor(get(urlEqualTo('/api/slow-optin'))
+                .willReturn(aResponse().withStatus(200).withFixedDelay(1000)))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/slow-optin"))
+                .timeout(Duration.ofMillis(150))
+                .GET()
+                .build()
+
+        when:
+        client.send(request, HttpResponse.BodyHandlers.ofString())
+
+        then:
+        thrown(HttpTimeoutException)
+
+        and: 'all 3 attempts are made'
+        wireMockServer.verify(3, getRequestedFor(urlEqualTo('/api/slow-optin')))
     }
 
     /**
