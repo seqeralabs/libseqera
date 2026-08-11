@@ -613,8 +613,10 @@ public class HxClient {
      * Determines whether to retry a request based on the exception that occurred.
      *
      * <p>Delegates to the configured {@link HxConfig#getRetryCondition()}, which by default
-     * retries on IOException - typically network-level issues such as connection timeouts,
-     * connection refused, etc. Override to decide independently of the configuration.
+     * retries network-level IOExceptions such as connection resets and connect timeouts, but
+     * not a request timeout that elapsed after the request was sent - see
+     * {@link HxConfig#defaultRetryCondition(Throwable)}. Override to decide independently of
+     * the configuration.
      *
      * @param throwable the exception that occurred during the request
      * @return true if the request should be retried, false otherwise
@@ -624,7 +626,7 @@ public class HxClient {
         final Predicate condition = config.getRetryCondition();
         return condition != null
                 ? condition.test(throwable)
-                : throwable instanceof IOException;
+                : HxConfig.defaultRetryCondition(throwable);
     }
 
     /**

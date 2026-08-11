@@ -17,8 +17,13 @@
 
 package io.seqera.http
 
+import java.net.ConnectException
 import java.net.CookiePolicy
+import java.net.SocketTimeoutException
+import java.net.http.HttpConnectTimeoutException
+import java.net.http.HttpTimeoutException
 import java.time.Duration
+import java.util.function.Predicate
 
 import io.seqera.util.retry.Retryable
 import spock.lang.Specification
@@ -96,6 +101,43 @@ class HxConfigTest extends Specification {
         config.retryCondition.test(new IllegalArgumentException('invalid arg')) == false
         config.retryCondition.test(new NullPointerException('null pointer')) == false
         config.retryCondition.test(new Exception('generic exception')) == false
+    }
+
+    def 'should apply the default retry condition - #exception.class.simpleName is retried: #expected'() {
+        expect:
+        HxConfig.defaultRetryCondition(exception) == expected
+
+        and: 'the condition wired into a default config agrees with the static rule'
+        HxConfig.newBuilder().build().retryCondition.test(exception) == expected
+
+        where:
+        exception                                          || expected
+        // I/O failures are retried
+        new IOException('io error')                        || true
+        new ConnectException('connection refused')         || true
+        new SocketTimeoutException('socket timeout')       || true
+        new FileNotFoundException('not found')             || true
+        // HttpConnectTimeoutException extends HttpTimeoutException: raised before the
+        // request was sent, so re-sending is safe
+        new HttpConnectTimeoutException('connect timeout') || true
+        // HttpTimeoutException extends IOException, which is why a plain
+        // 'instanceof IOException' rule retried it - the server may have processed the request
+        new HttpTimeoutException('request timeout')        || false
+        // non-I/O failures are never retried
+        new RuntimeException('runtime error')              || false
+        new IllegalArgumentException('invalid arg')        || false
+        new NullPointerException('null pointer')           || false
+        new Exception('generic exception')                 || false
+    }
+
+    def 'should allow opting back in to retrying request timeouts'() {
+        when: 'the pre-2.6.0 rule is supplied explicitly'
+        def config = HxConfig.newBuilder()
+                .retryCondition({ Throwable t -> t instanceof IOException } as Predicate)
+                .build()
+
+        then:
+        config.retryCondition.test(new HttpTimeoutException('request timed out')) == true
     }
 
     def 'should create config with custom retry condition'() {

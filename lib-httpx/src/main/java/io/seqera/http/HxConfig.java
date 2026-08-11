@@ -17,10 +17,13 @@
 
 package io.seqera.http;
 
+import java.io.IOException;
 import java.net.Authenticator;
 import java.net.CookiePolicy;
 import java.net.ProxySelector;
 import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -42,6 +45,8 @@ import io.seqera.util.retry.Retryable;
  *   <li>Jitter: 0.25 (25% random variation)</li>
  *   <li>Backoff multiplier: 2.0 (exponential)</li>
  *   <li>Retry status codes: 429, 500, 502, 503, 504</li>
+ *   <li>Retry condition: any {@link IOException} except a request timeout raised after the
+ *       request was sent - see {@link #defaultRetryCondition(Throwable)}</li>
  *   <li>Token refresh timeout: 30 seconds</li>
  * </ul>
  * 
@@ -69,7 +74,43 @@ import io.seqera.util.retry.Retryable;
  */
 public class HxConfig implements Retryable.Config {
 
-    private static final Predicate<? extends Throwable> DEFAULT_RETRY_COND = throwable -> throwable instanceof java.io.IOException;
+    private static final Predicate<? extends Throwable> DEFAULT_RETRY_COND = HxConfig::defaultRetryCondition;
+
+    /**
+     * The default retry-on-exception rule: retry I/O failures, but not a request timeout that
+     * elapsed after the request was sent.
+     *
+     * <p>{@link HttpTimeoutException} extends {@link IOException}, so a plain "retry any
+     * IOException" rule retries request timeouts and the real bound on a call becomes
+     * {@code maxAttempts × timeout} instead of {@code timeout}. Such a timeout is also
+     * ambiguous - the server may have received the request and be processing it - so re-sending
+     * risks duplicating a non-idempotent operation. {@link HttpConnectTimeoutException} is a
+     * subclass raised before the request is sent and stays retryable.
+     *
+     * <p>This mirrors the defaults of other clients: OkHttp recovers from a socket timeout only
+     * when the request has not been sent, and Apache HttpClient 5 treats the whole
+     * {@code InterruptedIOException} family as non-retriable.
+     *
+     * <p>Callers that want timeouts retried can opt back in with
+     * {@code retryCondition(t -> t instanceof IOException)}.
+     *
+     * @param throwable the exception raised while sending the request
+     * @return true if the request should be retried, false otherwise
+     */
+    static boolean defaultRetryCondition(Throwable throwable) {
+        if (!(throwable instanceof IOException))
+            return false;
+        if (throwable instanceof HttpTimeoutException)
+            // Retry only a connect timeout. It is raised while establishing the connection, so the
+            // request never reached the server: nothing ran, re-sending cannot duplicate anything,
+            // and the next attempt may pick a healthy endpoint. A bare HttpTimeoutException instead
+            // means the request timeout elapsed after the request was sent - the server may well
+            // have received it and still be working on it, so re-sending risks running a
+            // non-idempotent operation twice, and only pushes the worst case out to
+            // maxAttempts x timeout without making an answer more likely.
+            return throwable instanceof HttpConnectTimeoutException;
+        return true;
+    }
 
     private Duration delay = Duration.ofMillis(500);
     private Duration maxDelay = Duration.ofSeconds(30);

@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-httpx:2.5.0'
+    implementation 'io.seqera:lib-httpx:2.6.0'
 }
 ```
 
@@ -259,9 +259,8 @@ HxConfig config = HxConfig.newBuilder()
     .jitter(0.5)
     .multiplier(2.0)
     .retryStatusCodes(Set.of(429, 500, 502, 503, 504))
-    // which failures are retried - defaults to any IOException, which includes
-    // HttpTimeoutException; narrow it to bound a call by its timeout
-    .retryCondition(t -> t instanceof IOException && !(t instanceof HttpTimeoutException))
+    // which failures are retried - see "Which failures are retried" below
+    .retryCondition(t -> t instanceof IOException)
     .build();
 
 HxClient client = HxClient.newBuilder().config(config).build();
@@ -279,6 +278,35 @@ HxConfig relaxed = HxConfig.newBuilder(config)
 
 Alternatively, subclass `HxClient` and override `shouldRetryOnException(Throwable)` to decide
 independently of the configuration.
+
+### Which failures are retried
+
+By default a request is retried when it fails with an `IOException` — connection reset, connection
+refused, `HttpConnectTimeoutException` — **except** an `HttpTimeoutException` raised after the request
+was sent, which is not retried.
+
+That exception to the rule matters because `HttpTimeoutException extends IOException`: a plain
+"retry any `IOException`" rule retries request timeouts, which makes the real bound on a call
+`maxAttempts × timeout` instead of `timeout` — with the default of 5 attempts, a 2 minute timeout is a
+10 minute worst case. A timeout that elapses after the request was sent is also ambiguous: the server
+may have received the request and be processing it, so re-sending can duplicate a non-idempotent
+operation. `HttpConnectTimeoutException` is a subclass raised *before* the request is sent, so it stays
+retryable.
+
+This matches the defaults of comparable clients — OkHttp recovers from a socket timeout only while the
+request has not been sent, and Apache HttpClient 5 treats the whole `InterruptedIOException` family as
+non-retriable.
+
+To retry request timeouts anyway, say so explicitly:
+
+```java
+HxConfig config = HxConfig.newBuilder()
+    .retryCondition(t -> t instanceof IOException)   // includes HttpTimeoutException
+    .build();
+```
+
+Note that retries are **not** gated on the request method: a `POST` is retried like a `GET`. Until that
+changes, prefer idempotent endpoints, or narrow `retryCondition` for calls with side effects.
 
 ### Integration with Existing Retry Configuration
 
