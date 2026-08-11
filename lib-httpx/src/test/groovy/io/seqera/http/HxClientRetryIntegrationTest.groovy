@@ -651,7 +651,7 @@ class HxClientRetryIntegrationTest extends Specification {
     }
 
     def 'should retry a request timeout when the caller opts back in'() {
-        given: 'the pre-2.6.0 rule supplied explicitly'
+        given: 'the pre-2.5.0 rule supplied explicitly'
         def config = HxConfig.newBuilder()
                 .maxAttempts(3)
                 .delay(Duration.ofMillis(50))

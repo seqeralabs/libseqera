@@ -131,7 +131,7 @@ class HxConfigTest extends Specification {
     }
 
     def 'should allow opting back in to retrying request timeouts'() {
-        when: 'the pre-2.6.0 rule is supplied explicitly'
+        when: 'the pre-2.5.0 rule is supplied explicitly'
         def config = HxConfig.newBuilder()
                 .retryCondition({ Throwable t -> t instanceof IOException } as Predicate)
                 .build()
