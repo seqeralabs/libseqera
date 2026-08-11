@@ -650,6 +650,38 @@ class HxClientRetryIntegrationTest extends Specification {
         wireMockServer.verify(1, getRequestedFor(urlEqualTo('/api/slow-default')))
     }
 
+    def 'should not retry a request timeout by default with sendAsync'() {
+        given: 'default retry condition, 3 attempts'
+        def config = HxConfig.newBuilder()
+                .maxAttempts(3)
+                .delay(Duration.ofMillis(50))
+                .build()
+        def client = HxClient.newBuilder().config(config).build()
+
+        and: 'server always responds slower than the request timeout'
+        wireMockServer.stubFor(get(urlEqualTo('/api/slow-default-async'))
+                .willReturn(aResponse().withStatus(200).withFixedDelay(1000)))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/slow-default-async"))
+                .timeout(Duration.ofMillis(150))
+                .GET()
+                .build()
+
+        when:
+        client
+                .sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .get()
+
+        then: 'the ExecutionException unwrapping surfaces the real timeout to the retry condition'
+        def e = thrown(ExecutionException)
+        e.cause instanceof HttpTimeoutException
+
+        and: 'the async path is bounded by the timeout too'
+        wireMockServer.verify(1, getRequestedFor(urlEqualTo('/api/slow-default-async')))
+    }
+
     def 'should retry a request timeout when the caller opts back in'() {
         given: 'the pre-2.5.0 rule supplied explicitly'
         def config = HxConfig.newBuilder()

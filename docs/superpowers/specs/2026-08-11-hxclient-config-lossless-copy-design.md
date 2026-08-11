@@ -232,20 +232,33 @@ proving §3.3 wired the hook rather than merely relocating the default.
 `./gradlew :lib-httpx:test` — the six existing `config()`-using suites are the regression net for
 the copy change, and `HxClientTest` for the retry-path change.
 
-## 5. Out of scope
+## 5. Scope: what shipped alongside, and what did not
 
-**Changing the default `retryCondition` to stop retrying `HttpTimeoutException`.** This is the
-second half of the issue's Impact section: `HttpTimeoutException extends IOException`, so the
-default condition retries timeouts and the real bound on a call is `maxAttempts × timeout` — with
-`maxAttempts = 5`, a 2-minute timeout is a 10-minute worst case. After this change a caller can opt
-out, which is what unblocks `ffq-java-sdk`; changing the *default* alters retry behaviour for every
-consumer and deserves its own issue. It also needs more nuance than "don't retry timeouts":
-`HttpConnectTimeoutException extends HttpTimeoutException`, and a connect timeout is usually worth
-retrying while a request timeout usually is not.
+**Changing the default `retryCondition` was written up here as out of scope, then shipped in the
+same release.** It was implemented on this branch via the stacked PR
+[#116](https://github.com/seqeralabs/libseqera/pull/116) (`460af80`) and released together in
+2.5.0, so this section records it rather than deferring it.
 
-**A `retryCondition` / `tokenRefreshTimeout` delegate on `HxClient.Builder`** (the issue's option
-B). Once `config()` is lossless both fields are reachable via `HxConfig.newBuilder()`, so the
-delegates are convenience only, and each is another line that can drift. Add on demand.
+The rule lives in `HxConfig.defaultRetryCondition(Throwable)`: retry any `IOException`, except an
+`HttpTimeoutException` that is not an `HttpConnectTimeoutException`. A connect timeout is raised
+before the request is sent, so nothing ran and re-sending is safe; a post-send timeout is ambiguous
+— the server may have received the request and still be working on it — so re-sending risks running
+a non-idempotent operation twice and only pushes the worst case out to `maxAttempts × timeout`.
+`HxClient.shouldRetryOnException` uses the same method as its `null`-condition fallback, so the
+documented default and the fallback cannot drift. The method is public, so callers can compose with
+it. This matches OkHttp (a socket timeout is recoverable only before the request is sent) and Apache
+HttpClient 5 (the `InterruptedIOException` family is non-retriable), though scoped more narrowly than
+Apache's — see the README section "Which failures are retried".
+
+**Still out of scope:**
+
+- **A `retryCondition` / `tokenRefreshTimeout` delegate on `HxClient.Builder`** (the issue's option
+  B). Once `config()` is lossless both fields are reachable via `HxConfig.newBuilder()`, so the
+  delegates are convenience only, and each is another line that can drift. Add on demand.
+- **Gating retries on idempotency, and an overall retry budget** — tracked in
+  [#115](https://github.com/seqeralabs/libseqera/issues/115). Retries are decided purely on
+  exception type and response status, so a `POST` is retried like a `GET`, and no call has a
+  wall-clock ceiling.
 
 ## 6. Release
 

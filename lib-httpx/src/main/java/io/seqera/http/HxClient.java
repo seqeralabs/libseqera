@@ -1438,8 +1438,10 @@ public class HxClient {
          */
         public HxClient build() {
             if (httpClient != null) {
-                // an explicitly supplied client is used verbatim - proxy settings are neither
-                // applied to it nor propagated to the internal token refresh clients
+                // an explicitly supplied client is used verbatim - proxy settings are never applied
+                // to it, and the proxy()/authenticator() builder settings are dropped. A proxy
+                // carried by a config passed to config(...) is retained by the config copy, so the
+                // internal token refresh clients still inherit it - see HxTokenManager
                 return new HxClient(httpClient, configBuilder.build(), tokenStore);
             }
             // propagate the proxy settings to the config so that the internal
