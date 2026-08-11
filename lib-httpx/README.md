@@ -293,7 +293,18 @@ retryable.
 
 This matches the defaults of comparable clients — OkHttp recovers from a socket timeout only while the
 request has not been sent, and Apache HttpClient 5 treats the whole `InterruptedIOException` family as
-non-retriable.
+non-retriable. The exclusion here is narrower than Apache's: it is scoped to the `HttpTimeoutException`
+that `java.net.http` raises for a request timeout, so a `SocketTimeoutException` — an
+`InterruptedIOException` the JDK client does not normally surface — stays retryable.
+
+The rule is available as `HxConfig.defaultRetryCondition(Throwable)`, so a caller can extend it instead
+of restating it:
+
+```java
+HxConfig config = HxConfig.newBuilder()
+    .retryCondition(t -> HxConfig.defaultRetryCondition(t) || t instanceof MyTransientException)
+    .build();
+```
 
 To retry request timeouts anyway, say so explicitly:
 

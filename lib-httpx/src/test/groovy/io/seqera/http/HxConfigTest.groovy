@@ -130,6 +130,24 @@ class HxConfigTest extends Specification {
         new Exception('generic exception')                 || false
     }
 
+    def 'should allow composing with the default retry condition'() {
+        when: 'the documented composition pattern - the default plus one extra failure'
+        def config = HxConfig.newBuilder()
+                .retryCondition({ Throwable t ->
+                    HxConfig.defaultRetryCondition(t) || t instanceof IllegalStateException
+                } as Predicate)
+                .build()
+
+        then: 'the extra failure is retried'
+        config.retryCondition.test(new IllegalStateException('transient')) == true
+
+        and: 'the default rule still applies to everything else'
+        config.retryCondition.test(new IOException('io error')) == true
+        config.retryCondition.test(new HttpConnectTimeoutException('connect timeout')) == true
+        config.retryCondition.test(new HttpTimeoutException('request timeout')) == false
+        config.retryCondition.test(new RuntimeException('runtime error')) == false
+    }
+
     def 'should allow opting back in to retrying request timeouts'() {
         when: 'the pre-2.5.0 rule is supplied explicitly'
         def config = HxConfig.newBuilder()
