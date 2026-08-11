@@ -60,7 +60,9 @@ import org.slf4j.LoggerFactory;
  * By default, requests are retried on:
  * <ul>
  *   <li>HTTP status codes: 429 (Too Many Requests), 500, 502, 503, 504</li>
- *   <li>Network errors (IOException)</li>
+ *   <li>Network errors (IOException), except a request timeout raised after the request was
+ *       sent - such a timeout is not retried because the server may already be processing the
+ *       request; a connect timeout ({@code HttpConnectTimeoutException}) is still retried</li>
  * </ul>
  * 
  * Retry behavior uses exponential backoff with configurable jitter to prevent thundering herd problems.
@@ -256,7 +258,8 @@ public class HxClient {
      * <ul>
      *   <li>Add JWT authentication header if configured</li>
      *   <li>Retry on configured HTTP status codes (default: 429, 500, 502, 503, 504)</li>
-     *   <li>Retry on IOException (network errors)</li>
+     *   <li>Retry on IOException (network errors), except a request timeout raised after the
+     *       request was sent - a connect timeout is still retried</li>
      *   <li>Attempt token refresh on 401 Unauthorized responses</li>
      * </ul>
      * 
@@ -378,7 +381,8 @@ public class HxClient {
      * <ul>
      *   <li>Add JWT authentication header if configured</li>
      *   <li>Retry on configured HTTP status codes (default: 429, 500, 502, 503, 504)</li>
-     *   <li>Retry on IOException (network errors)</li>
+     *   <li>Retry on IOException (network errors), except a request timeout raised after the
+     *       request was sent - a connect timeout is still retried</li>
      *   <li>Attempt token refresh on 401 Unauthorized responses</li>
      * </ul>
      * 
@@ -401,7 +405,8 @@ public class HxClient {
      * <ul>
      *   <li>Add JWT authentication header if configured</li>
      *   <li>Retry on configured HTTP status codes (default: 429, 500, 502, 503, 504)</li>
-     *   <li>Retry on IOException (network errors)</li>
+     *   <li>Retry on IOException (network errors), except a request timeout raised after the
+     *       request was sent - a connect timeout is still retried</li>
      *   <li>Attempt token refresh on 401 Unauthorized responses</li>
      * </ul>
      * 

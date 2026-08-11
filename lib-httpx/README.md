@@ -259,8 +259,6 @@ HxConfig config = HxConfig.newBuilder()
     .jitter(0.5)
     .multiplier(2.0)
     .retryStatusCodes(Set.of(429, 500, 502, 503, 504))
-    // which failures are retried - see "Which failures are retried" below
-    .retryCondition(t -> t instanceof IOException)
     .build();
 
 HxClient client = HxClient.newBuilder().config(config).build();
