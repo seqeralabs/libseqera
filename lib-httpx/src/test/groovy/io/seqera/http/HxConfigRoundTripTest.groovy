@@ -182,6 +182,31 @@ class HxConfigRoundTripTest extends Specification {
         actual.refreshCookiePolicy == CookiePolicy.ACCEPT_ALL
     }
 
+    def 'should discard a proxy set before config() when the config carries none'() {
+        given: 'a config with no proxy settings'
+        def config = HxConfig.newBuilder().build()
+
+        when: 'the proxy is set before the config is supplied'
+        def before = HxClient.newBuilder()
+                .proxy(PROXY_SELECTOR)
+                .config(config)
+                .build()
+                .config
+
+        then: 'config() replaced it - proxy(...) is not exempt from being discarded'
+        before.proxySelector == null
+
+        when: 'the proxy is set after the config is supplied'
+        def after = HxClient.newBuilder()
+                .config(config)
+                .proxy(PROXY_SELECTOR)
+                .build()
+                .config
+
+        then:
+        after.proxySelector.is(PROXY_SELECTOR)
+    }
+
     def 'should discard builder settings applied before config()'() {
         when: 'maxAttempts is set before the config is supplied'
         def actual = HxClient.newBuilder()
