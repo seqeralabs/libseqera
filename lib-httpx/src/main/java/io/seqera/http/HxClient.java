@@ -1065,9 +1065,12 @@ public class HxClient {
          * Copies all the settings of the given HxConfig into this builder.
          *
          * <p>Every setting is copied, so nothing carried by the given configuration is lost.
-         * HxConfig-specific builder methods called <em>after</em> this one override the copied
-         * values; those called before it are discarded. Later changes to the supplied instance
-         * are not observed.
+         * Builder methods called <em>after</em> this one override the copied values; those called
+         * before it are discarded. This includes {@link #proxy(ProxySelector)} and
+         * {@link #authenticator(Authenticator)}: they read as {@link HttpClient.Builder}
+         * passthroughs, but a configuration carries proxy settings of its own and replaces them,
+         * so call them after {@code config(...)} to keep them. Later changes to the supplied
+         * instance are not observed.
          *
          * @param config the HxConfig to copy the settings from
          * @return this Builder instance
