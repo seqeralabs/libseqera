@@ -17,10 +17,13 @@
 
 package io.seqera.http;
 
+import java.io.IOException;
 import java.net.Authenticator;
 import java.net.CookiePolicy;
 import java.net.ProxySelector;
 import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -42,6 +45,8 @@ import io.seqera.util.retry.Retryable;
  *   <li>Jitter: 0.25 (25% random variation)</li>
  *   <li>Backoff multiplier: 2.0 (exponential)</li>
  *   <li>Retry status codes: 429, 500, 502, 503, 504</li>
+ *   <li>Retry condition: any {@link IOException} except a request timeout raised after the
+ *       request was sent - see {@link #defaultRetryCondition(Throwable)}</li>
  *   <li>Token refresh timeout: 30 seconds</li>
  * </ul>
  * 
@@ -69,7 +74,46 @@ import io.seqera.util.retry.Retryable;
  */
 public class HxConfig implements Retryable.Config {
 
-    private static final Predicate<? extends Throwable> DEFAULT_RETRY_COND = throwable -> throwable instanceof java.io.IOException;
+    private static final Predicate<? extends Throwable> DEFAULT_RETRY_COND = HxConfig::defaultRetryCondition;
+
+    /**
+     * The default retry-on-exception rule: retry I/O failures, but not a request timeout that
+     * elapsed after the request was sent.
+     *
+     * <p>{@link HttpTimeoutException} extends {@link IOException}, so a plain "retry any
+     * IOException" rule retries request timeouts and the real bound on a call becomes
+     * {@code maxAttempts × timeout} instead of {@code timeout}. Such a timeout is also
+     * ambiguous - the server may have received the request and be processing it - so re-sending
+     * risks duplicating a non-idempotent operation. {@link HttpConnectTimeoutException} is a
+     * subclass raised before the request is sent and stays retryable.
+     *
+     * <p>This mirrors the defaults of other clients: OkHttp recovers from a socket timeout only
+     * when the request has not been sent, and Apache HttpClient 5 treats the whole
+     * {@code InterruptedIOException} family as non-retriable. The exclusion here is narrower
+     * than Apache's - it is scoped to the {@link HttpTimeoutException} that {@code java.net.http}
+     * raises for a request timeout, so a {@code SocketTimeoutException} stays retryable.
+     *
+     * <p>Callers that want timeouts retried can opt back in with
+     * {@code retryCondition(t -> t instanceof IOException)}, or compose with this rule, for
+     * example {@code retryCondition(t -> HxConfig.defaultRetryCondition(t) || t instanceof MyEx)}.
+     *
+     * @param throwable the exception raised while sending the request
+     * @return true if the request should be retried, false otherwise
+     */
+    public static boolean defaultRetryCondition(Throwable throwable) {
+        if (!(throwable instanceof IOException))
+            return false;
+        if (throwable instanceof HttpTimeoutException)
+            // Retry only a connect timeout. It is raised while establishing the connection, so the
+            // request never reached the server: nothing ran, re-sending cannot duplicate anything,
+            // and the next attempt may pick a healthy endpoint. A bare HttpTimeoutException instead
+            // means the request timeout elapsed after the request was sent - the server may well
+            // have received it and still be working on it, so re-sending risks running a
+            // non-idempotent operation twice, and only pushes the worst case out to
+            // maxAttempts x timeout without making an answer more likely.
+            return throwable instanceof HttpConnectTimeoutException;
+        return true;
+    }
 
     private Duration delay = Duration.ofMillis(500);
     private Duration maxDelay = Duration.ofSeconds(30);
@@ -191,6 +235,22 @@ public class HxConfig implements Retryable.Config {
      */
     public static Builder newBuilder() {
         return new Builder();
+    }
+
+    /**
+     * Creates a new builder pre-populated with all the settings of the given configuration.
+     *
+     * <p>Every setting is copied, so a configuration can be round-tripped through a builder
+     * without loss. Subsequent builder calls override the copied values, and later changes to
+     * the supplied instance are not observed.
+     *
+     * @param config the configuration to copy the settings from
+     * @return a new Builder holding a copy of the given configuration settings
+     * @throws NullPointerException if config is null
+     */
+    public static Builder newBuilder(HxConfig config) {
+        java.util.Objects.requireNonNull(config, "config cannot be null");
+        return new Builder().copyFrom(config);
     }
 
     /**
@@ -697,8 +757,40 @@ public class HxConfig implements Retryable.Config {
         }
 
         /**
+         * Copies all the settings of the given configuration into this builder.
+         *
+         * <p>Deliberately placed next to {@link #build()}: the two field lists mirror each other,
+         * so keeping them adjacent makes a field missing from either one visible in review.
+         * Fields are assigned directly rather than through the fluent setters because a few
+         * builder field names differ from their {@link HxConfig} counterparts.
+         *
+         * @param config the configuration to copy the settings from
+         * @return this builder instance for method chaining
+         */
+        private Builder copyFrom(HxConfig config) {
+            this.delay = config.delay;
+            this.maxDelay = config.maxDelay;
+            this.maxAttempts = config.maxAttempts;
+            this.jitter = config.jitter;
+            this.multiplier = config.multiplier;
+            this.retryCondition = config.retryCondition;
+            this.retryStatusCodes = config.retryStatusCodes;
+            this.bearerToken = config.jwtToken;
+            this.refreshToken = config.refreshToken;
+            this.refreshTokenUrl = config.refreshTokenUrl;
+            this.tokenRefreshTimeout = config.tokenRefreshTimeout;
+            this.basicAuthToken = config.basicAuthToken;
+            this.wwwAuthenticationEnabled = config.wwwAuthenticateEnabled;
+            this.wwwAuthenticationCallback = config.authenticationCallback;
+            this.refreshCookiePolicy = config.refreshCookiePolicy;
+            this.proxySelector = config.proxySelector;
+            this.proxyAuthenticator = config.proxyAuthenticator;
+            return this;
+        }
+
+        /**
          * Builds and returns a new HxConfig instance with the configured values.
-         * 
+         *
          * @return a new HxConfig with all builder settings applied
          */
         public HxConfig build() {
