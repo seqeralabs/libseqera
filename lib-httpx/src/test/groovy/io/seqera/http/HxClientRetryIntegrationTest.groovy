@@ -712,6 +712,87 @@ class HxClientRetryIntegrationTest extends Specification {
         wireMockServer.verify(3, getRequestedFor(urlEqualTo('/api/slow-optin')))
     }
 
+    def 'should let a subclass re-send a timed-out GET the default would give up on'() {
+        given:
+        def client = new MethodAwareClient(HttpClient.newHttpClient(), perRequestConfig())
+
+        and: 'an endpoint slower than the per-request timeout, so every attempt times out'
+        wireMockServer.stubFor(get(urlEqualTo('/api/per-request-get'))
+                .willReturn(aResponse().withStatus(200).withFixedDelay(1000)))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/per-request-get"))
+                .timeout(Duration.ofMillis(150))
+                .GET()
+                .build()
+
+        when:
+        client.send(request, HttpResponse.BodyHandlers.ofString())
+
+        then:
+        thrown(HttpTimeoutException)
+
+        and: 'all 3 attempts made — the default condition alone would have stopped at 1'
+        wireMockServer.verify(3, getRequestedFor(urlEqualTo('/api/per-request-get')))
+    }
+
+    def 'should let a subclass refuse to re-send a reset POST the default would retry'() {
+        given:
+        def client = new MethodAwareClient(HttpClient.newHttpClient(), perRequestConfig())
+
+        and: 'a connection reset — an IOException the default condition does retry'
+        wireMockServer.stubFor(post(urlEqualTo('/api/per-request-post'))
+                .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/per-request-post"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build()
+
+        when:
+        client.send(request, HttpResponse.BodyHandlers.ofString())
+
+        then:
+        thrown(IOException)
+
+        and: 'delivered once — the default condition alone would have made 3 attempts'
+        wireMockServer.verify(1, postRequestedFor(urlEqualTo('/api/per-request-post')))
+    }
+
+    def 'should reach the per-request hook on the async path too'() {
+        given: 'a subclass wrapping a builder-built client, as the README recommends'
+        def base = HxClient.newBuilder().config(perRequestConfig()).build()
+        def client = new MethodAwareClient(base.getHttpClient(), base.getConfig())
+
+        and:
+        wireMockServer.stubFor(post(urlEqualTo('/api/per-request-async'))
+                .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)))
+
+        and:
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/per-request-async"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build()
+
+        when:
+        client.sendAsync(request, HttpResponse.BodyHandlers.ofString()).get()
+
+        then:
+        thrown(ExecutionException)
+
+        and: 'delivered once, so the async policy consulted the request-aware hook too'
+        wireMockServer.verify(1, postRequestedFor(urlEqualTo('/api/per-request-async')))
+    }
+
+    private static HxConfig perRequestConfig() {
+        return HxConfig.newBuilder()
+                .maxAttempts(3)
+                .delay(Duration.ofMillis(50))
+                .build()
+    }
+
     /**
      * Subclass overriding the documented retry-on-exception extension point
      */
@@ -723,6 +804,23 @@ class HxClientRetryIntegrationTest extends Specification {
         @Override
         protected boolean shouldRetryOnException(Throwable throwable) {
             return false
+        }
+    }
+
+    /**
+     * Subclass deciding on the request, the way a caller with non-idempotent POSTs would:
+     * a GET can always be re-sent, a POST only when it provably never arrived.
+     */
+    static class MethodAwareClient extends HxClient {
+        MethodAwareClient(HttpClient httpClient, HxConfig config) {
+            super(httpClient, config)
+        }
+
+        @Override
+        protected boolean shouldRetryOnException(HttpRequest request, Throwable throwable) {
+            return 'POST' == request.method()
+                    ? throwable instanceof java.net.ConnectException
+                    : throwable instanceof IOException
         }
     }
 }
