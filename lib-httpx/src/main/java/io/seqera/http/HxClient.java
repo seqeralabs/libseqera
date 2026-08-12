@@ -644,7 +644,10 @@ public class HxClient {
      * {@link #shouldRetryOnException(Throwable)}, so an existing override of that method keeps
      * taking effect unchanged.
      *
-     * @param request   the request that failed, never null
+     * @param request   the request that failed, never null. This is the request as passed by the
+     *                  caller, before any {@code Authorization} header added by the token or
+     *                  WWW-Authenticate handling, so decide on its method and URI rather than on
+     *                  headers that may still be missing.
      * @param throwable the exception that occurred while sending it
      * @return true if the request should be retried, false otherwise
      */

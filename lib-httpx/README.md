@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-httpx:2.5.0'
+    implementation 'io.seqera:lib-httpx:2.6.0'
 }
 ```
 
@@ -358,6 +358,11 @@ To reuse the full builder wiring — transport, token refresh, proxy — build a
 HxClient base = HxClient.newBuilder().bearerToken(token).maxAttempts(5).build();
 HxClient client = new MyClient(base.getHttpClient(), base.getConfig());
 ```
+
+Note that this recipe does not carry over a custom `tokenStore`: the two-argument constructor builds a
+fresh default token manager, so a wrapper around a base client configured with `.tokenStore(...)` gets
+private in-memory token state instead of the shared one. Pass the store to the three-argument
+`HxClient(HttpClient, HxConfig, HxTokenStore)` constructor when the subclass needs it.
 
 ### Integration with Existing Retry Configuration
 
