@@ -786,6 +786,48 @@ class HxClientRetryIntegrationTest extends Specification {
         wireMockServer.verify(1, postRequestedFor(urlEqualTo('/api/per-request-async')))
     }
 
+    def 'should let a subclass compose a per-request veto with a configured retryCondition'() {
+        given: 'a retryCondition that retries a request timeout, which the default does not'
+        def config = HxConfig.newBuilder()
+                .maxAttempts(3)
+                .delay(Duration.ofMillis(50))
+                .retryCondition({ Throwable t -> t instanceof HttpTimeoutException } as Predicate)
+                .build()
+        def client = new ComposingClient(HttpClient.newHttpClient(), config)
+
+        and: 'endpoints slower than the per-request timeout, so every attempt times out'
+        wireMockServer.stubFor(get(urlEqualTo('/api/compose-get'))
+                .willReturn(aResponse().withStatus(200).withFixedDelay(1000)))
+        wireMockServer.stubFor(post(urlEqualTo('/api/compose-post'))
+                .willReturn(aResponse().withStatus(200).withFixedDelay(1000)))
+
+        when: 'a GET, which the subclass defers to super on'
+        client.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/compose-get"))
+                .timeout(Duration.ofMillis(150))
+                .GET()
+                .build(), HttpResponse.BodyHandlers.ofString())
+
+        then:
+        thrown(HttpTimeoutException)
+
+        and: 'all 3 attempts — so super reached the configured condition, not the default one'
+        wireMockServer.verify(3, getRequestedFor(urlEqualTo('/api/compose-get')))
+
+        when: 'a POST, which the subclass vetoes before super is consulted'
+        client.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:${wireMockServer.port()}/api/compose-post"))
+                .timeout(Duration.ofMillis(150))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build(), HttpResponse.BodyHandlers.ofString())
+
+        then:
+        thrown(HttpTimeoutException)
+
+        and: 'delivered once — the per-request veto wins over the configured condition'
+        wireMockServer.verify(1, postRequestedFor(urlEqualTo('/api/compose-post')))
+    }
+
     private static HxConfig perRequestConfig() {
         return HxConfig.newBuilder()
                 .maxAttempts(3)
@@ -821,6 +863,24 @@ class HxClientRetryIntegrationTest extends Specification {
             return 'POST' == request.method()
                     ? throwable instanceof java.net.ConnectException
                     : throwable instanceof IOException
+        }
+    }
+
+    /**
+     * Subclass that vetoes POSTs per request but otherwise defers to {@code super}, so the
+     * configured {@link HxConfig#getRetryCondition()} still decides — the composition the
+     * javadoc on the 2-arg hook promises.
+     */
+    static class ComposingClient extends HxClient {
+        ComposingClient(HttpClient httpClient, HxConfig config) {
+            super(httpClient, config)
+        }
+
+        @Override
+        protected boolean shouldRetryOnException(HttpRequest request, Throwable throwable) {
+            return 'POST' == request.method()
+                    ? false
+                    : super.shouldRetryOnException(request, throwable)
         }
     }
 }

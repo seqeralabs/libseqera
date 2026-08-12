@@ -352,6 +352,11 @@ request through `HttpResponse.request()`, so a subclass can vary the retryable s
 in the same way. That matters for a status like `502`, which a load balancer returns *after* forwarding
 the request, versus `503`, which it returns when it had no target to forward to.
 
+The two are not quite mirror images, though: `shouldRetryOnException` receives the request as the caller
+built it, before any `Authorization` header is applied, whereas `HttpResponse.request()` is the request
+as actually sent — post-auth and post-redirect. Decide on the method and URI, which are the same in
+both, rather than on headers that are only present on one side.
+
 To reuse the full builder wiring — transport, token refresh, proxy — build a client and wrap it:
 
 ```java

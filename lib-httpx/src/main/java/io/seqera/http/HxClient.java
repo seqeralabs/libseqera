@@ -666,6 +666,11 @@ public class HxClient {
      * the configuration; override {@link #shouldRetryOnException(HttpRequest, Throwable)}
      * instead when the decision depends on the request.
      *
+     * <p>An override of this method must not delegate to
+     * {@link #shouldRetryOnException(HttpRequest, Throwable)}: that method's default
+     * implementation calls this one, so delegating in that direction recurses without end.
+     * Delegation runs one way only, from the request-aware hook to this one.
+     *
      * @param throwable the exception that occurred during the request
      * @return true if the request should be retried, false otherwise
      */
