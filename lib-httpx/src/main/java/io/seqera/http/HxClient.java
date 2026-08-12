@@ -482,7 +482,7 @@ public class HxClient {
         final boolean[] tokenRefreshed = {false};
 
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
-                .retryCondition(this::shouldRetryOnException)
+                .retryCondition(t -> shouldRetryOnException(request, t))
                 .retryIf(this::shouldRetryOnResponse)
                 .retryDelayHint(HxClient::parseRetryAfter)
                 .onRetry(event -> {
@@ -555,7 +555,7 @@ public class HxClient {
         final boolean[] tokenRefreshed = {false};
 
         final Retryable<HttpResponse<T>> retry = Retryable.<HttpResponse<T>>of(config)
-                .retryCondition(this::shouldRetryOnException)
+                .retryCondition(t -> shouldRetryOnException(request, t))
                 .retryIf(this::shouldRetryOnResponse)
                 .retryDelayHint(HxClient::parseRetryAfter)
                 .onRetry(event -> {
@@ -615,13 +615,61 @@ public class HxClient {
     }
 
     /**
-     * Determines whether to retry a request based on the exception that occurred.
+     * Determines whether to retry the given request after the given exception, and is the hook
+     * the retry policy actually consults.
+     *
+     * <p>Override this rather than {@link #shouldRetryOnException(Throwable)} when the answer
+     * depends on the request. It usually does, because a retry is safe when the request is
+     * idempotent <em>or</em> when it provably never reached the server, and only the first of
+     * those is visible in the request:
+     *
+     * <pre>{@code
+     * @Override
+     * protected boolean shouldRetryOnException(HttpRequest request, Throwable throwable) {
+     *     return "POST".equals(request.method())
+     *             // a POST may already have been committed, so re-send only what never arrived
+     *             ? throwable instanceof ConnectException
+     *                     || throwable instanceof HttpConnectTimeoutException
+     *             // a GET can always be re-sent, request timeouts included
+     *             : throwable instanceof IOException;
+     * }
+     * }</pre>
+     *
+     * <p>A bare {@code HttpTimeoutException} is the case that forces the distinction: it means
+     * the response never arrived, not that the request never did, so the same exception warrants
+     * opposite answers for a GET and a POST. {@link HxConfig#getRetryCondition()} is a
+     * {@code Predicate<Throwable>} and so cannot express that on its own.
+     *
+     * <p>The default implementation ignores the request and delegates to
+     * {@link #shouldRetryOnException(Throwable)}, so an existing override of that method keeps
+     * taking effect unchanged.
+     *
+     * @param request   the request that failed, never null. This is the request as passed by the
+     *                  caller, before any {@code Authorization} header added by the token or
+     *                  WWW-Authenticate handling, so decide on its method and URI rather than on
+     *                  headers that may still be missing.
+     * @param throwable the exception that occurred while sending it
+     * @return true if the request should be retried, false otherwise
+     */
+    protected boolean shouldRetryOnException(HttpRequest request, Throwable throwable) {
+        return shouldRetryOnException(throwable);
+    }
+
+    /**
+     * Determines whether to retry a request based on the exception that occurred, without regard
+     * to which request it was.
      *
      * <p>Delegates to the configured {@link HxConfig#getRetryCondition()}, which by default
      * retries network-level IOExceptions such as connection resets and connect timeouts, but
      * not a request timeout that elapsed after the request was sent - see
      * {@link HxConfig#defaultRetryCondition(Throwable)}. Override to decide independently of
-     * the configuration.
+     * the configuration; override {@link #shouldRetryOnException(HttpRequest, Throwable)}
+     * instead when the decision depends on the request.
+     *
+     * <p>An override of this method must not delegate to
+     * {@link #shouldRetryOnException(HttpRequest, Throwable)}: that method's default
+     * implementation calls this one, so delegating in that direction recurses without end.
+     * Delegation runs one way only, from the request-aware hook to this one.
      *
      * @param throwable the exception that occurred during the request
      * @return true if the request should be retried, false otherwise

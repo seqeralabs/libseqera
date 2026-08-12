@@ -1,5 +1,14 @@
 # lib-httpx changelog
 
+2.6.0 - 12 Aug 2026
+- Add HxClient.shouldRetryOnException(HttpRequest, Throwable) - the hook the retry policy now
+  consults - so a subclass can decide on the exception per request
+- The existing shouldRetryOnException(Throwable) is its default implementation, so current
+  overrides and HxConfig.retryCondition keep working unchanged
+- Needed because a retry is safe when the request is idempotent OR when it provably never
+  reached the server: a bare HttpTimeoutException warrants opposite answers for a GET and a
+  POST, which a Predicate<Throwable> cannot express on its own
+
 2.5.0 - 11 Aug 2026
 - BEHAVIOUR CHANGE: the default retry condition no longer retries an HttpTimeoutException raised after the request was sent, so a call is bounded by its timeout instead of maxAttempts x timeout (#113)
 - HttpConnectTimeoutException, raised before the request is sent, remains retryable

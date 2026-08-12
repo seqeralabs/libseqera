@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-httpx:2.5.0'
+    implementation 'io.seqera:lib-httpx:2.6.0'
 }
 ```
 
@@ -275,7 +275,8 @@ HxConfig relaxed = HxConfig.newBuilder(config)
 ```
 
 Alternatively, subclass `HxClient` and override `shouldRetryOnException(Throwable)` to decide
-independently of the configuration.
+independently of the configuration, or `shouldRetryOnException(HttpRequest, Throwable)` to decide
+per request — see [Deciding per request](#deciding-per-request).
 
 ### Which failures are retried
 
@@ -314,8 +315,59 @@ HxConfig config = HxConfig.newBuilder()
     .build();
 ```
 
-Note that retries are **not** gated on the request method: a `POST` is retried like a `GET`. Until that
-changes, prefer idempotent endpoints, or narrow `retryCondition` for calls with side effects.
+### Deciding per request
+
+`retryCondition` is a `Predicate<Throwable>`, so it answers the same way for every request. That is
+not enough when the caller has non-idempotent endpoints, because a retry is safe when the request is
+**idempotent** *or* when it **provably never reached the server** — and only the first of those is
+visible in the request. A bare `HttpTimeoutException` is the case that forces the distinction: it says
+the response never arrived, not that the request never did, so the same exception warrants opposite
+answers for a `GET` and a `POST`.
+
+Override `shouldRetryOnException(HttpRequest, Throwable)` — the hook the retry policy consults — to
+answer per request:
+
+```java
+class MyClient extends HxClient {
+    MyClient(HttpClient httpClient, HxConfig config) { super(httpClient, config); }
+
+    @Override
+    protected boolean shouldRetryOnException(HttpRequest request, Throwable throwable) {
+        return "POST".equals(request.method())
+                // a POST may already have been committed: re-send only what never arrived
+                ? throwable instanceof ConnectException
+                        || throwable instanceof HttpConnectTimeoutException
+                        || throwable instanceof UnknownHostException
+                // a GET can always be re-sent, request timeouts included
+                : throwable instanceof IOException;
+    }
+}
+```
+
+Its default implementation ignores the request and delegates to `shouldRetryOnException(Throwable)`,
+so an existing override of that method — or a configured `retryCondition` — keeps working unchanged.
+
+The response side needs no new hook: `shouldRetryOnResponse(HttpResponse)` can already reach the
+request through `HttpResponse.request()`, so a subclass can vary the retryable status codes by method
+in the same way. That matters for a status like `502`, which a load balancer returns *after* forwarding
+the request, versus `503`, which it returns when it had no target to forward to.
+
+The two are not quite mirror images, though: `shouldRetryOnException` receives the request as the caller
+built it, before any `Authorization` header is applied, whereas `HttpResponse.request()` is the request
+as actually sent — post-auth and post-redirect. Decide on the method and URI, which are the same in
+both, rather than on headers that are only present on one side.
+
+To reuse the full builder wiring — transport, token refresh, proxy — build a client and wrap it:
+
+```java
+HxClient base = HxClient.newBuilder().bearerToken(token).maxAttempts(5).build();
+HxClient client = new MyClient(base.getHttpClient(), base.getConfig());
+```
+
+Note that this recipe does not carry over a custom `tokenStore`: the two-argument constructor builds a
+fresh default token manager, so a wrapper around a base client configured with `.tokenStore(...)` gets
+private in-memory token state instead of the shared one. Pass the store to the three-argument
+`HxClient(HttpClient, HxConfig, HxTokenStore)` constructor when the subclass needs it.
 
 ### Integration with Existing Retry Configuration
 
