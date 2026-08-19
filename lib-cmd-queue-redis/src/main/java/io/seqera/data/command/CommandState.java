@@ -18,8 +18,10 @@ package io.seqera.data.command;
 
 import java.time.Instant;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import io.micronaut.core.annotation.Nullable;
+import io.seqera.data.store.state.VersionAware;
 
 /**
  * Persistent state of a command, stored as JSON in the database.
@@ -34,6 +36,13 @@ import io.micronaut.core.annotation.Nullable;
  * {@code error != null}. {@code modifiedAt} is refreshed on every state write, giving a
  * last-touched timestamp.
  *
+ * <p>{@code version} is the optimistic-concurrency write witness (see {@link VersionAware}):
+ * stamped by the state store on every write, injected on read, and carried unchanged through
+ * every transition so a compare-and-swap lands only when the entry was not written since the
+ * read the transition derives from. It is {@code @JsonIgnore}d — the store persists it in a
+ * frame outside the payload, which is the single source of truth — and never assigned by
+ * callers.
+ *
  * @param id command id
  * @param type command type discriminator
  * @param status current lifecycle status
@@ -44,9 +53,11 @@ import io.micronaut.core.annotation.Nullable;
  * @param errorsCount number of consecutive processing errors since the last successful
  *        processing; reset to 0 on any successful transition or recovery
  * @param createdAt when the command was first submitted
- * @param startedAt when the command first transitioned to RUNNING (nullable)
+ * @param startedAt when the command first transitioned to PROCESSING (nullable)
  * @param modifiedAt when the command state was last written (nullable for pre-existing records)
  * @param completedAt when the command reached a terminal state (nullable)
+ * @param version optimistic-concurrency version of the read this state derives from; 0 for a
+ *        state never written through the store
  */
 public record CommandState(
         String id,
@@ -61,29 +72,30 @@ public record CommandState(
         Instant createdAt,
         @Nullable Instant startedAt,
         @Nullable Instant modifiedAt,
-        @Nullable Instant completedAt
-) {
+        @Nullable Instant completedAt,
+        @JsonIgnore long version
+) implements VersionAware<CommandState> {
 
     /**
-     * Create a new submitted command state.
+     * Create a new command state, pending its first processing.
      */
-    public static CommandState submitted(String id, String type, Object params) {
+    public static CommandState create(String id, String type, Object params) {
         final Instant now = Instant.now();
         return new CommandState(
-                id, type, CommandStatus.SUBMITTED, params,
-                null, null, 0, now, null, now, null
+                id, type, CommandStatus.PENDING, params,
+                null, null, 0, now, null, now, null, 0
         );
     }
 
     /**
-     * Transition to RUNNING status. A successful (non-throwing) transition, so the
+     * Transition to PROCESSING status. A successful (non-throwing) transition, so the
      * consecutive-error streak is reset.
      */
-    public CommandState started() {
+    public CommandState toProcessing() {
         final Instant now = Instant.now();
         return new CommandState(
-                id, type, CommandStatus.RUNNING, params,
-                result, error, 0, createdAt, now, now, completedAt
+                id, type, CommandStatus.PROCESSING, params,
+                result, error, 0, createdAt, now, now, completedAt, version
         );
     }
 
@@ -94,7 +106,7 @@ public record CommandState(
         final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.SUCCEEDED, params,
-                result, null, 0, createdAt, startedAt, now, now
+                result, null, 0, createdAt, startedAt, now, now, version
         );
     }
 
@@ -105,7 +117,7 @@ public record CommandState(
         final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.FAILED, params,
-                null, error, errorsCount, createdAt, startedAt, now, now
+                null, error, errorsCount, createdAt, startedAt, now, now, version
         );
     }
 
@@ -116,7 +128,7 @@ public record CommandState(
         final Instant now = Instant.now();
         return new CommandState(
                 id, type, CommandStatus.CANCELLED, params,
-                null, null, 0, createdAt, startedAt, now, now
+                null, null, 0, createdAt, startedAt, now, now, version
         );
     }
 
@@ -128,7 +140,7 @@ public record CommandState(
     public CommandState withError(String message) {
         return new CommandState(
                 id, type, status, params,
-                result, message, errorsCount + 1, createdAt, startedAt, Instant.now(), completedAt
+                result, message, errorsCount + 1, createdAt, startedAt, Instant.now(), completedAt, version
         );
     }
 
@@ -139,7 +151,20 @@ public record CommandState(
     public CommandState clearErrors() {
         return new CommandState(
                 id, type, status, params,
-                result, error, 0, createdAt, startedAt, Instant.now(), completedAt
+                result, error, 0, createdAt, startedAt, Instant.now(), completedAt, version
+        );
+    }
+
+    /**
+     * Create a copy of this state carrying the specified optimistic-concurrency version.
+     * Called by the state store, which injects on read the version of the stored entry —
+     * never by application code.
+     */
+    @Override
+    public CommandState withVersion(long version) {
+        return new CommandState(
+                id, type, status, params,
+                result, error, errorsCount, createdAt, startedAt, modifiedAt, completedAt, version
         );
     }
 

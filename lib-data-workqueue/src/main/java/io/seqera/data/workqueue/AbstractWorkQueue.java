@@ -20,15 +20,7 @@ package io.seqera.data.workqueue;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.micronaut.core.annotation.Nullable;
@@ -45,7 +37,7 @@ import static io.seqera.data.workqueue.SleepHelper.sleep;
  * Abstract base implementation of a work queue that provides asynchronous message consumption.
  *
  * <p>This class implements the core functionality for a work queue that continuously consumes
- * messages from an underlying queue and delivers them to registered consumers. It provides:</p>
+ * messages from underlying queues and delivers them to registered consumers. It provides:</p>
  *
  * <ul>
  *   <li><strong>Asynchronous Processing:</strong> Uses a background thread to continuously poll for messages</li>
@@ -78,13 +70,10 @@ import static io.seqera.data.workqueue.SleepHelper.sleep;
  * // Usage
  * MyWorkQueue queue = new MyWorkQueue(underlyingQueue);
  *
- * // Supply the handler executor (mandatory, no default) before adding consumers
- * queue.withHandlerExecutor(executorService);
- *
  * // Add consumer for a specific queue
- * queue.addConsumer("user-events", event -> {
+ * queue.addConsumer("user-events", (event, lease) -> {
  *     processUserEvent(event);
- *     return true; // Acknowledge successful processing
+ *     return MessageConsumer.Decision.ACK; // Acknowledge successful processing
  * });
  *
  * // Send messages (will be processed asynchronously by registered consumers)
@@ -112,6 +101,12 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
 
     private static final AtomicInteger count = new AtomicInteger();
 
+    /**
+     * Granularity at which an in-loop pause re-checks {@link #closing}, so a cooperative
+     * shutdown is not held up for a whole poll interval or backoff delay.
+     */
+    private static final long PAUSE_SLICE_MILLIS = 50;
+
     private final Map<String, MessageConsumer<M>> listeners = new ConcurrentHashMap<>();
 
     private final ExponentialAttempt attempt = new ExponentialAttempt();
@@ -124,61 +119,22 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
 
     private volatile Thread thread;
 
+    /**
+     * Set by {@link #awaitQuiescent(Duration)} to stop the dispatcher from claiming further
+     * messages. The dispatcher observes it at the head of its loop and at every pause slice,
+     * so it exits at a safe point rather than being interrupted mid-call.
+     */
+    private volatile boolean closing;
+
+    /**
+     * Set once {@link #close(Duration)} has run its cooperative wait. A second close — the
+     * {@code @PreDestroy} backstop after an explicit drain, for instance — must not wait again:
+     * the first call either saw the dispatcher stop or already decided to give up, and repeating
+     * the wait during bean destruction spends a shutdown budget that was spent once already.
+     */
+    private volatile boolean closeAttempted;
+
     private final String name0;
-
-    /**
-     * A message picked up from a queue and held while it is processed. The
-     * {@code queueId} + {@code leaseId} pair identifies the delivered entry; the
-     * {@code message} is kept so a not-yet-terminal command can be re-invoked in-process
-     * (Model B) without re-reading it from the queue.
-     */
-    private record InFlight(String queueId, String leaseId, String message) {
-        String key() {
-            return queueId + '|' + leaseId;
-        }
-    }
-
-    /**
-     * Leases held from pickup to terminal/crash; every entry is heartbeated by the
-     * daemon so an alive consumer is never reclaimed. Keyed by {@code queueId|leaseId}.
-     */
-    private final Map<String, InFlight> inFlight = new ConcurrentHashMap<>();
-
-    /**
-     * Subset of {@link #inFlight} whose {@code accept()} invocation is running right now,
-     * mapped to the wall-clock millis at which that invocation started. Used by the
-     * heartbeat daemon to enforce {@code max-processing-time} on a single invocation.
-     */
-    private final Map<String, Long> active = new ConcurrentHashMap<>();
-
-    /**
-     * Executor that runs the message handlers. Supplied by the consumer via
-     * {@link #withHandlerExecutor} before the first {@link #addConsumer} — there is no default,
-     * so {@link #startProcessing()} fails fast if it was never set. Micronaut consumers pass the
-     * injected {@code BLOCKING} executor. Handler concurrency is bounded by {@link #slots}, not by
-     * this executor, so it is never sized or shut down here.
-     */
-    private volatile ExecutorService pool;
-
-    /**
-     * Gates new intake: a permit is acquired when a lease is picked up and held for the
-     * whole lease lifetime (across re-polls), released on terminal ack / eviction /
-     * release. This bounds concurrent handlers to {@link #concurrency()} and reserves
-     * capacity so in-flight commands' re-polls are never starved by new intake.
-     */
-    private volatile Semaphore slots;
-
-    /**
-     * Schedules delayed re-poll re-submissions for not-yet-terminal commands (Model B).
-     */
-    private volatile ScheduledExecutorService scheduler;
-
-    /**
-     * Renews every in-flight lease on a fixed cadence so an alive consumer keeps ownership.
-     */
-    private volatile ScheduledExecutorService heartbeat;
-
-    private volatile boolean closed;
 
     /**
      * Constructs a new queue without metrics instrumentation. Behavior is identical
@@ -218,50 +174,16 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
     }
 
     /**
-     * @return The name of the work queue implementation
+     * @return The name of the message queue implementation
      */
     protected abstract String name();
 
     /**
      * @return
      *      The time interval to await before trying to read again the queue
-     *      when no more entries are available. Also the cadence at which a
-     *      not-yet-terminal command is re-invoked in-process (Model B).
+     *      when no more entries are available.
      */
     protected abstract Duration pollInterval();
-
-    /**
-     * @return
-     *      The maximum number of message handlers that may run concurrently on this
-     *      instance (the worker pool size). Defaults to {@code 1}; subclasses may
-     *      override to enable parallel processing.
-     */
-    protected int concurrency() {
-        return 1;
-    }
-
-    /**
-     * @return
-     *      How often in-flight leases are renewed so an alive consumer keeps ownership
-     *      of its message regardless of how long its handler runs. Must be shorter than
-     *      the underlying queue's visibility timeout; subclasses backed by a configuration
-     *      should wire this to {@code visibility-timeout / 3}.
-     */
-    protected Duration heartbeatInterval() {
-        final Duration d = queue.heartbeatInterval();
-        return d != null ? d : Duration.ofSeconds(20);
-    }
-
-    /**
-     * @return
-     *      The upper bound on a single {@code accept()} invocation before its lease is
-     *      released (safety valve); it does not interrupt the handler thread. Defaults
-     *      to {@code 15m}.
-     */
-    protected Duration maxProcessingTime() {
-        final Duration d = queue.maxProcessingTime();
-        return d != null ? d : Duration.ofMinutes(15);
-    }
 
     /**
      * Adds a message to the specified queue for asynchronous processing.
@@ -293,14 +215,17 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
      * <p>Consumer requirements:</p>
      * <ul>
      *   <li>Must be thread-safe as it may be called from a background thread</li>
-     *   <li>Should return {@code true} to acknowledge successful message processing</li>
-     *   <li>Should return {@code false} if message processing fails or should be retried</li>
-     *   <li>Should handle exceptions gracefully to avoid disrupting queue processing</li>
+     *   <li>Should return {@link MessageConsumer.Decision#ACK} to acknowledge successful processing</li>
+     *   <li>Should return {@link MessageConsumer.Decision#RETRY} if processing should be retried</li>
+     *   <li>Should return {@link MessageConsumer.Decision#DEFERRED} when a task takes the
+     *       message lease and settles it later via {@link MessageLease}</li>
+     *   <li>May override {@link MessageConsumer#ready()} to gate admission — the dispatcher
+     *       skips the queue while the consumer reports not ready</li>
      * </ul>
      *
      * @param queueId the unique identifier of the queue to consume from; must not be null or empty
      * @param consumer the message consumer that will process messages; must not be null
-     * @see MessageConsumer#accept(Object)
+     * @see MessageConsumer#accept(Object, MessageLease)
      */
     public void addConsumer(String queueId, MessageConsumer<M> consumer) {
         // the use of synchronized block is meant to prevent a race condition while
@@ -317,51 +242,11 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
             listeners.put(queueId, consumer);
             // bind the backlog gauge for this queue id (no-op when metrics disabled)
             metrics.bindBacklog(queueId, () -> queue.length(queueId));
-            // finally start the dispatcher thread and its supporting executors
+            // finally start the listener thread
             if (thread == null) {
-                startProcessing();
+                thread = createListenerThread();
             }
         }
-    }
-
-    /**
-     * Lazily create the worker pool, the re-poll scheduler, the heartbeat daemon and the
-     * capacity gate, then start the dispatcher thread. Invoked once, when the first
-     * consumer is registered.
-     */
-    private void startProcessing() {
-        // a handler executor must be supplied via withHandlerExecutor() before processing starts
-        Objects.requireNonNull(pool, "Handler executor not set - call withHandlerExecutor() before addConsumer()");
-        // 'slots' — not the executor — bounds how many commands may be in flight at once;
-        // the cap is a memory/heartbeat ceiling, independent of the executor's threading model.
-        this.slots = new Semaphore(Math.max(1, concurrency()));
-        this.scheduler = new ScheduledThreadPoolExecutor(1, daemonFactory(name() + "-repoll-" + count.get()));
-        this.heartbeat = new ScheduledThreadPoolExecutor(1, daemonFactory(name() + "-heartbeat-" + count.get()));
-        final long hb = heartbeatInterval().toMillis();
-        this.heartbeat.scheduleAtFixedRate(this::heartbeatTick, hb, hb, TimeUnit.MILLISECONDS);
-        this.thread = createListenerThread();
-    }
-
-    /**
-     * Supply the executor used to run message handlers. Consumers must call this
-     * <strong>before</strong> the first {@link #addConsumer} — there is no default executor.
-     * Micronaut-managed consumers pass the injected {@code @Named(TaskExecutors.BLOCKING)}
-     * {@link ExecutorService}. The executor is never shut down by {@link #close()}
-     * (it is shared / container-managed).
-     *
-     * @param executor the shared handler executor; must not be {@code null}
-     */
-    public void withHandlerExecutor(ExecutorService executor) {
-        this.pool = Objects.requireNonNull(executor, "Handler executor cannot be null");
-    }
-
-    private static ThreadFactory daemonFactory(String prefix) {
-        final AtomicInteger seq = new AtomicInteger();
-        return runnable -> {
-            final Thread t = new Thread(runnable, prefix + "-" + seq.getAndIncrement());
-            t.setDaemon(true);
-            return t;
-        };
     }
 
     /**
@@ -370,269 +255,215 @@ public abstract class AbstractWorkQueue<M> implements Closeable {
      *
      * @param msg
      *      The message serialised as a string value
+     * @param lease
+     *      The {@link MessageLease} settlement handle for this delivery
      * @param consumer
      *      The consumer {@link MessageConsumer} that will handle the message as a object
+     * @param count
+     *      An {@link AtomicInteger} counter incremented by one when this method is invoked,
+     *      irrespective if the consumer is successful or not.
      * @return
-     *      The result of the consumer {@link MessageConsumer} operation.
+     *      The {@link MessageConsumer.Decision} of the consumer operation.
      */
-    protected boolean processMessage(String msg, MessageConsumer<M> consumer) {
+    protected MessageConsumer.Decision processMessage(String msg, MessageLease lease, MessageConsumer<M> consumer, AtomicInteger count) {
+        count.incrementAndGet();
         final M decoded = encoder.decode(msg);
         log.trace("Work queue - receiving message={}; decoded={}", msg, decoded);
-        return consumer.accept(decoded);
+        return consumer.accept(decoded, lease);
     }
 
     /**
-     * The dispatcher loop (runs on the listener thread). It never runs a handler itself:
-     * for every queue that has free pool capacity it polls one message (without acking)
-     * and submits its processing to the worker pool, then sleeps for {@link #pollInterval()}
-     * when nothing was polled this cycle.
+     * Run one consume cycle for the given queue and record the outcome on the
+     * {@link QueueMetrics} handle. The outcome is derived from the {@code count}
+     * delta (was the consumer lambda invoked?) and the {@link MessageConsumer.Decision}
+     * returned by {@link WorkQueue#consume}: {@code ACK} records processed,
+     * {@code RETRY} records active, and {@code DEFERRED} records active plus a
+     * distinct deferred counter (the task-settled outcome is not timed here).
      */
-    protected void processMessages() {
-        log.trace("Work queue - starting dispatcher thread");
-        while (!Thread.currentThread().isInterrupted()) {
-            try {
-                boolean polled = false;
-                for (Map.Entry<String, MessageConsumer<M>> entry : listeners.entrySet()) {
-                    // poll a queue only when a worker slot is free (backpressure); the
-                    // permit is held for the whole lease lifetime so re-polls of in-flight
-                    // commands are never starved by new intake
-                    if (!slots.tryAcquire()) {
-                        break;
-                    }
-                    // dispatchOne releases the permit itself when nothing is polled
-                    polled = dispatchOne(entry.getKey()) || polled;
-                }
-                // reset the attempt count because no error has been thrown
-                attempt.reset();
-                // if nothing was polled this cycle, sleep for a while before retrying
-                if (!polled) {
-                    log.trace("Work queue - await before checking for new messages");
-                    Thread.sleep(pollInterval().toMillis());
-                }
-            }
-            catch (InterruptedException e) {
-                log.debug("Work queue interrupt exception - cause: {}", e.getMessage());
-                Thread.currentThread().interrupt();
-                break;
-            }
-            catch (Throwable e) {
-                final var d0 = attempt.delay();
-                log.error("Unexpected error on work queue {} (await: {}) - cause: {}", name0, d0, e.getMessage(), e);
-                sleep(d0.toMillis());
-            }
-        }
-        log.trace("Work queue - exiting dispatcher thread");
-    }
-
-    /**
-     * Poll a single queue (a worker permit has already been acquired by the caller) and,
-     * if a message is available, register it as in-flight and submit it to the pool.
-     * If nothing is available the permit is released and {@code false} is returned.
-     *
-     * @return {@code true} if a message was polled and submitted, {@code false} otherwise
-     */
-    private boolean dispatchOne(String queueId) {
-        boolean submitted = false;
-        try {
-            final WorkQueue.Lease<String> lease = queue.receive(queueId);
-            if (lease == null) {
-                metrics.recordOutcome(metrics.startSample(), queueId, Outcome.EMPTY);
-                return false;
-            }
-            final var e = new InFlight(queueId, lease.id(), lease.message());
-            // Guard against self-reclaim: if the heartbeat falls behind by more than the
-            // visibility timeout, this instance's own receive() (XAUTOCLAIM) can re-deliver an
-            // entry it is already processing. The reclaim only refreshed the lease idle time, so
-            // keep the live in-flight entry and drop the duplicate — otherwise a second handler
-            // runs concurrently and its permit leaks (the original remove() returns null).
-            if (inFlight.putIfAbsent(e.key(), e) != null) {
-                return false;   // 'submitted' stays false → finally releases this permit
-            }
-            submitRun(e);
-            submitted = true;
-            return true;
-        }
-        finally {
-            // the permit is held only once the lease is in flight; release it on an empty
-            // poll or an exception so the single acquire in the dispatcher stays balanced
-            if (!submitted) {
-                slots.release();
-            }
-        }
-    }
-
-    /**
-     * Submit the processing of an in-flight lease to the worker pool. Swallows the
-     * rejection that occurs when the pool is being shut down.
-     */
-    private void submitRun(InFlight e) {
-        try {
-            pool.execute(() -> run(e));
-        }
-        catch (RejectedExecutionException ex) {
-            log.debug("Work queue - worker pool rejected task for entry={} (shutting down)", e.key());
-        }
-    }
-
-    /**
-     * Runs a single {@code accept()} invocation on a worker thread. On {@code true}
-     * (terminal) it acks the message and drops the lease; on {@code false} (Model B,
-     * not-yet-terminal) it keeps the lease in-flight and schedules the next invocation
-     * after {@link #pollInterval()} — strictly serial per command, since the next
-     * invocation is scheduled only after this one returned.
-     */
-    private void run(InFlight e) {
-        final boolean accepted = invokeHandler(e);
-        if (accepted) {
-            acknowledge(e);
-        }
-        else if (shouldRepoll(e)) {
-            scheduleRepoll(e);
-        }
-    }
-
-    /**
-     * Run one {@code accept()} invocation on the worker thread, recording the metrics
-     * outcome. Returns {@code true} for a terminal result, {@code false} for
-     * not-yet-terminal or an error (both keep the lease for a later re-poll).
-     */
-    private boolean invokeHandler(InFlight e) {
-        final MessageConsumer<M> consumer = listeners.get(e.queueId());
+    private MessageConsumer.Decision consumeOne(String queueId, MessageConsumer<M> consumer, AtomicInteger count) {
         final long sample = metrics.startSample();
-        boolean accepted = false;
-        Outcome outcome = Outcome.ACTIVE;
-        active.put(e.key(), System.currentTimeMillis());
+        final int countBefore = count.get();
+        Outcome outcome = Outcome.EMPTY;
         try {
-            accepted = processMessage(e.message(), consumer);
-            outcome = accepted ? Outcome.PROCESSED : Outcome.ACTIVE;
+            final MessageConsumer.Decision decision = queue.consume(queueId,
+                    (String msg, MessageLease lease) -> processMessage(msg, lease, consumer, count));
+            if (count.get() != countBefore) {
+                outcome = decision == MessageConsumer.Decision.ACK ? Outcome.PROCESSED : Outcome.ACTIVE;
+                if (decision == MessageConsumer.Decision.DEFERRED) {
+                    metrics.deferred(queueId);
+                }
+            }
+            return decision;
         }
         catch (Throwable t) {
             outcome = Outcome.ERRORED;
-            log.error("Work queue - error processing entry={} - cause: {}", e.key(), t.getMessage(), t);
+            throw t;
         }
         finally {
-            active.remove(e.key());
-            metrics.recordOutcome(sample, e.queueId(), outcome);
-        }
-        return accepted;
-    }
-
-    /** Terminal result: acknowledge the message and release its lease. */
-    private void acknowledge(InFlight e) {
-        try {
-            queue.ack(e.queueId(), e.leaseId());
-        }
-        catch (Throwable t) {
-            log.error("Work queue - error acking entry={} - cause: {}", e.key(), t.getMessage(), t);
-        }
-        finally {
-            releaseLease(e.key());
-        }
-    }
-
-    /** Whether a not-yet-terminal command should be re-polled: still owned and not shutting down. */
-    private boolean shouldRepoll(InFlight e) {
-        return !closed && inFlight.containsKey(e.key());
-    }
-
-    /**
-     * Keep the lease (the heartbeat keeps renewing it, so no reclaim/migration) and schedule
-     * the next in-process invocation after {@link #pollInterval()} — strictly serial, since
-     * it is scheduled only after the previous invocation returned.
-     */
-    private void scheduleRepoll(InFlight e) {
-        try {
-            scheduler.schedule(() -> submitRun(e), pollInterval().toMillis(), TimeUnit.MILLISECONDS);
-        }
-        catch (RejectedExecutionException ex) {
-            log.debug("Work queue - re-poll scheduler rejected entry={} (shutting down)", e.key());
+            metrics.recordOutcome(sample, queueId, outcome);
         }
     }
 
     /**
-     * Drop a lease from the in-flight set and free its capacity permit. This pair is the
-     * single invariant "a permit is held iff its key is in-flight"; returns {@code true} if
-     * this call performed the removal (so callers can log only a real eviction).
+     * Process the messages as they are available from the underlying queue
      */
-    private boolean releaseLease(String key) {
-        if (inFlight.remove(key) != null) {
-            slots.release();
+    protected void processMessages() {
+        log.trace("Work queue - starting listener thread");
+        // `closing` is checked first so a cooperative shutdown claims no further message; the
+        // cycle already in progress below always runs to completion, which is what lets a
+        // consumer finish its work (and its database writes) before the context tears down.
+        while (!closing && !Thread.currentThread().isInterrupted()) {
+            try {
+                final var count = new AtomicInteger();
+                boolean progressed = false;
+                for (Map.Entry<String, MessageConsumer<M>> entry : listeners.entrySet()) {
+                    final var queueId = entry.getKey();
+                    final var consumer = entry.getValue();
+                    // admission gate: do not claim from a queue whose consumer is not
+                    // ready — counts as no-message, so an idle loop still pauses below
+                    if (!consumer.ready()) {
+                        metrics.saturated(queueId);
+                        continue;
+                    }
+                    final MessageConsumer.Decision decision = consumeOne(queueId, consumer, count);
+                    // only ACK and DEFERRED are progress: a RETRY must NOT keep the loop
+                    // hot — a consumer retrying fast (e.g. against the local queue, which
+                    // has no claim clock) would otherwise redeliver at loop speed
+                    progressed |= decision == MessageConsumer.Decision.ACK
+                            || decision == MessageConsumer.Decision.DEFERRED;
+                }
+                // reset the attempt count because no error has been thrown
+                attempt.reset();
+                // pause unless a cycle made real progress, so idle AND retry-only cycles
+                // are both paced by the poll interval
+                if (!progressed) {
+                    log.trace("Work queue - await before checking for new messages");
+                    pause(pollInterval().toMillis());
+                }
+            }
+            catch (Throwable e) {
+                // A forced stop (close() fallback) surfaces as an interrupt, possibly wrapped by
+                // the underlying client. Treat it as "exit now", not as a queue error to retry:
+                // logging it at ERROR with a backoff would turn every hard shutdown into noise.
+                if (e instanceof InterruptedException || Thread.currentThread().isInterrupted()) {
+                    log.debug("Work queue {} interrupted - exiting listener thread", name0);
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+                final var d0 = attempt.delay();
+                log.error("Unexpected error on work queue {} (await: {}) - cause: {}", name0, d0, e.getMessage(), e);
+                pause(d0.toMillis());
+            }
+        }
+        log.trace("Work queue - exiting listener thread");
+    }
+
+    /**
+     * Sleep up to {@code millis}, returning early once {@link #closing} is set or the thread is
+     * interrupted. Used instead of a single long sleep so neither the poll interval nor an
+     * exponential backoff delay can hold up a cooperative shutdown.
+     */
+    private void pause(long millis) {
+        final long deadline = System.currentTimeMillis() + millis;
+        long remaining;
+        while (!closing
+                && !Thread.currentThread().isInterrupted()
+                && (remaining = deadline - System.currentTimeMillis()) > 0) {
+            sleep(Math.min(PAUSE_SLICE_MILLIS, remaining));
+        }
+    }
+
+    /**
+     * Stop claiming new messages and wait for the dispatcher to finish the cycle it is running.
+     *
+     * <p>This is the cooperative half of {@link #close()}, exposed separately so a caller can
+     * drain the queue while its collaborators — a database connection pool, for instance — are
+     * still usable, and only then release resources.
+     *
+     * <p>Safe to call more than once, and safe to call before any consumer was registered.
+     *
+     * @param timeout
+     *      how long to wait for the dispatcher to exit
+     * @return
+     *      {@code true} if the dispatcher stopped within the timeout, {@code false} if it is
+     *      still running, in which case the caller decides whether to force a stop
+     */
+    public boolean awaitQuiescent(Duration timeout) {
+        closing = true;
+        final Thread t = thread;
+        if (t == null) {
             return true;
         }
-        return false;
-    }
-
-    /**
-     * Heartbeat tick: renew every in-flight lease so an alive consumer keeps ownership,
-     * and release the lease of any single invocation that has exceeded
-     * {@link #maxProcessingTime()} (safety valve; does not interrupt the handler thread).
-     */
-    private void heartbeatTick() {
-        final long now = System.currentTimeMillis();
-        final long maxMillis = maxProcessingTime().toMillis();
-        for (InFlight e : inFlight.values()) {
-            final String key = e.key();
-            final long start = active.getOrDefault(key, now);
-            if (now - start > maxMillis) {
-                // a single invocation is stalled beyond the bound: stop renewing so the
-                // lease becomes reclaimable, and free its capacity permit
-                if (releaseLease(key)) {
-                    log.warn("Work queue - releasing lease of stalled entry={} after {} - reclaimable after visibility timeout",
-                            key, Duration.ofMillis(now - start));
-                }
-            }
-            else {
-                try {
-                    queue.renewLease(e.queueId(), e.leaseId());
-                }
-                catch (Throwable t) {
-                    // swallow transient errors; the next tick retries
-                    log.warn("Work queue - error renewing lease for entry={} - cause: {}", key, t.getMessage());
-                }
-            }
+        try {
+            t.join(Math.max(1, timeout.toMillis()));
         }
+        catch (InterruptedException e) {
+            log.info("Work queue {} interrupted while awaiting quiescence", name0, e);
+            Thread.currentThread().interrupt();
+        }
+        return !t.isAlive();
     }
 
     /**
-     * Shutdown orderly the queue: stop the dispatcher, cancel pending re-polls, drain
-     * the worker pool so active handlers finish and ack, release any remaining leases so
-     * they are redelivered, and finally stop the heartbeat daemon.
+     * Shutdown orderly the queue.
+     *
+     * <p>Cooperative first: {@link #awaitQuiescent(Duration)} lets the dispatcher finish the
+     * message it is holding and leave the loop at a safe point. Interrupting a thread parked in a
+     * Redis read can hand a RESP-desynced connection back to the pool (libseqera#92), so the
+     * dispatcher is never interrupted: the flag alone guarantees it exits, and it is a daemon.
+     *
+     * <p>Uses {@link #closeTimeout()} as the budget. Callers that have already spent part of an
+     * overall shutdown budget should call {@link #close(Duration)} with what remains; callers that
+     * need the drain to complete while other beans are still alive should call
+     * {@link #awaitQuiescent(Duration)} themselves, ahead of either.
      */
     @Override
     public void close() {
+        close(closeTimeout());
+    }
+
+    /**
+     * Shutdown orderly the queue within an explicit budget.
+     *
+     * <p>Exists so a caller that has already spent part of an overall shutdown budget can pass what
+     * remains, instead of this method starting a second, independent timer. A caller that drains
+     * first and then closes with {@link #closeTimeout()} can otherwise overrun its own deadline —
+     * and if that deadline came from a container's graceful-shutdown grace period, overrunning it
+     * means being hard-stopped mid-drain, which is the opposite of what draining is for.
+     *
+     * <p>Only the first close waits. Repeated calls — an explicit drain followed by the
+     * {@code @PreDestroy} backstop — return immediately, for the same budget reason.
+     *
+     * @param timeout how long to wait for a cooperative stop before interrupting the dispatcher
+     */
+    public void close(Duration timeout) {
         if (thread == null) {
             return;
         }
-        closed = true;
-        // 1. stop the dispatcher
-        thread.interrupt();
-        try {
-            thread.join(1_000);
+        if (closeAttempted) {
+            return;
         }
-        catch (Exception e) {
-            log.debug("Unexpected error while terminating {} - cause: {}", name0, e.getMessage());
+        closeAttempted = true;
+        if (awaitQuiescent(timeout)) {
+            return;
         }
-        // 2. cancel pending scheduled re-polls
-        if (scheduler != null) {
-            scheduler.shutdownNow();
-        }
-        // 3. the handler executor is shared / container-managed — not shut down here;
-        //    any active handler finishes on its own (short-lived) and acks
-        // 4. release any lease still held so it is redelivered without waiting for lapse
-        for (InFlight e : inFlight.values()) {
-            if (inFlight.remove(e.key()) != null) {
-                try {
-                    queue.release(e.queueId(), e.leaseId());
-                }
-                catch (Throwable t) {
-                    log.debug("Work queue - error releasing entry={} on shutdown - cause: {}", e.key(), t.getMessage());
-                }
-            }
-        }
-        // 5. stop the heartbeat daemon last (any remaining leases lapse -> peers reclaim)
-        if (heartbeat != null) {
-            heartbeat.shutdownNow();
-        }
+        // Stop waiting, but do not interrupt. The `closing` flag already guarantees the dispatcher
+        // exits at its next loop-head check, and the thread is a daemon so it can never hold up JVM
+        // exit — so an interrupt only shortens a wait we have already decided not to keep making.
+        // Against that it is actively harmful: it can hand a RESP-desynced connection back to the
+        // pool (libseqera#92), and it was observed to propagate into a handler still running on the
+        // executor, cutting short the very work a drain exists to protect.
+        log.warn("Work queue {} still running after {} - leaving it to exit on its own", name0, timeout);
+    }
+
+    /**
+     * How long {@link #close()} waits for a cooperative stop before interrupting the dispatcher.
+     * Subclasses may override to align with an application-level shutdown budget.
+     *
+     * @return the cooperative close timeout, {@code 10s} by default
+     */
+    protected Duration closeTimeout() {
+        return Duration.ofSeconds(10);
     }
 
     public int length(String queueId) {

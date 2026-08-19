@@ -33,7 +33,6 @@ public class TestPlainQueue extends AbstractWorkQueue<String> {
 
     public TestPlainQueue(WorkQueue<String> target) {
         super(target);
-        withHandlerExecutor(TestWorkerPool.INSTANCE);
     }
 
     @Override

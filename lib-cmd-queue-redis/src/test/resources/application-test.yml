@@ -7,13 +7,17 @@ micronaut:
 # Command queue configuration
 command:
   poll-interval: 100ms
-  execute-timeout: 1s
+  max-concurrency: 25
   state:
     ttl: 1h
 
 command-queue:
   poll-interval: 100ms
-  stream-name: "command-queue-test/v1"
   checker:
     enabled: true
     interval: 500ms
+
+# Local queue retry pacing: keep redelivery cycles fast in tests (prod default is 1s)
+workqueue:
+  local:
+    retry-delay: 100ms

@@ -18,11 +18,12 @@
 package io.seqera.data.workqueue.metrics;
 
 import java.util.function.IntSupplier;
+import java.util.function.LongSupplier;
 
 /**
  * Metrics handle consumed by {@code AbstractWorkQueue}. Deliberately neutral with
  * respect to Micrometer types so consumers without {@code micrometer-core} on the
- * classpath can still load and instantiate work-queue subclasses.
+ * classpath can still load and instantiate queue subclasses.
  *
  * <p>Two implementations are provided:
  * <ul>
@@ -62,7 +63,41 @@ public interface QueueMetrics {
      * {@link #recordOutcome(long, String, Outcome)} (nanoseconds, or 0 for no-op). */
     long startSample();
 
-    /** Record the outcome of one processing cycle. {@link Outcome#EMPTY} receives
+    /** Record the outcome of one processing cycle. {@link Outcome#EMPTY} polls
      *  must not count toward the messages counter or contribute to the timer. */
     void recordOutcome(long startNanos, String queueId, Outcome outcome);
+
+    /** Record one lease-renewal tick: its duration, the number of entries currently
+     *  leased and the age of the oldest lease (leased count and max age are published
+     *  as gauges by instrumented implementations). */
+    default void renewTick(long durationNanos, int leasedCount, long maxLeaseAgeNanos) { }
+
+    /** Record a failed lease-renewal round-trip (retried on the next tick). */
+    default void renewError() { }
+
+    /**
+     * Bind a liveness probe for the lease-renewal scheduler: the age (nanos) of the
+     * last COMPLETED renewal tick. A stuck tick — e.g. a renewal thread blocked on an
+     * exhausted connection pool — shows as unbounded growth here while every other
+     * renewal signal stays silent (a blocked borrow never throws, so renewError never
+     * fires and the tick-overrun warn never runs). Alert on age above a few renewal
+     * periods.
+     */
+    default void bindRenewalLiveness(LongSupplier ageNanos) { }
+
+    /** Record a lease found to be owned by another consumer during the renewal
+     *  ownership check — the residual duplicate-execution window, made observable. */
+    default void leaseLost() { }
+
+    /** Record a lease dropped by the renewal age backstop — a settlement path
+     *  that never ran; the claim cycle recovers the entry. */
+    default void leaseLeak() { }
+
+    /** Record a poll skipped because the queue's consumer reported not
+     *  {@code ready()} — an admission-blocked replica, distinct from an idle one. */
+    default void saturated(String queueId) { }
+
+    /** Record a delivery whose consumer returned {@code DEFERRED} — a task took
+     *  the message lease and settles it later. */
+    default void deferred(String queueId) { }
 }

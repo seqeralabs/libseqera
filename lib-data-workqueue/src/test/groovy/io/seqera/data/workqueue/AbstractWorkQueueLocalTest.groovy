@@ -20,10 +20,14 @@ package io.seqera.data.workqueue
 import io.seqera.random.LongRndKey
 import spock.lang.Specification
 
+import java.time.Duration
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.atomic.AtomicInteger
 
 import io.micronaut.test.extensions.spock.annotation.MicronautTest
 import jakarta.inject.Inject
+import static io.seqera.data.workqueue.MessageConsumer.Decision.ACK
+import static io.seqera.data.workqueue.MessageConsumer.Decision.RETRY
 /**
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
@@ -36,23 +40,43 @@ class AbstractWorkQueueLocalTest extends Specification {
 
     def 'should offer and consume some messages' () {
         given:
-        def id1 = "queue-${LongRndKey.rndHex()}"
+        def id1 = "stream-${LongRndKey.rndHex()}"
 
         and:
-        def queue = new TestQueue(target)
-        def sink = new ArrayBlockingQueue(10)
+        def stream = new TestQueue(target)
+        def queue = new ArrayBlockingQueue(10)
         and:
-        queue.addConsumer(id1, { it-> sink.add(it) })
+        stream.addConsumer(id1, { it, lease -> queue.add(it); ACK })
 
         when:
-        queue.offer(id1, new TestMessage('one','two'))
-        queue.offer(id1, new TestMessage('alpha','omega'))
+        stream.offer(id1, new TestMessage('one','two'))
+        stream.offer(id1, new TestMessage('alpha','omega'))
         then:
-        sink.take()==new TestMessage('one','two')
-        sink.take()==new TestMessage('alpha','omega')
+        queue.take()==new TestMessage('one','two')
+        queue.take()==new TestMessage('alpha','omega')
+        
+        cleanup:
+        stream.close()
+    }
+
+    def 'a retrying consumer should be paced by the poll interval, not spin hot' () {
+        given: 'a local stream with ZERO retry delay, isolating the dispatcher pacing'
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def local = new LocalWorkQueue()
+        local.@retryDelay = Duration.ZERO
+        def stream = new TestQueue(local)     // pollInterval = 1s
+        def invocations = new AtomicInteger()
+
+        when: 'a single message whose consumer always asks for a retry'
+        stream.addConsumer(id1, { it, lease -> invocations.incrementAndGet(); RETRY })
+        stream.offer(id1, new TestMessage('a', 'b'))
+        sleep 2_500
+
+        then: 'invocations are bounded by the poll cadence - a RETRY is not progress'
+        invocations.get() <= 4
 
         cleanup:
-        queue.close()
+        stream.close()
     }
 
 }

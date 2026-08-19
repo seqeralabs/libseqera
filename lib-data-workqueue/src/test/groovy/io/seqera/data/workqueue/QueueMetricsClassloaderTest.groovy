@@ -74,10 +74,10 @@ class QueueMetricsClassloaderTest extends Specification {
         def isolated = new URLClassLoader(classpathWithoutMicrometer(), ClassLoader.platformClassLoader)
 
         when: 'classes load through the isolated loader'
-        Class<?> localCls      = Class.forName('io.seqera.data.workqueue.LocalWorkQueue',    true, isolated)
-        Class<?> workQueueIfc  = Class.forName('io.seqera.data.workqueue.WorkQueue',         true, isolated)
-        Class<?> subclassCls   = Class.forName('io.seqera.data.workqueue.TestPlainQueue',    true, isolated)
-        Class<?> abstractCls   = Class.forName('io.seqera.data.workqueue.AbstractWorkQueue', true, isolated)
+        Class<?> localCls    = Class.forName('io.seqera.data.workqueue.LocalWorkQueue',    true, isolated)
+        Class<?> workQueueIfc = Class.forName('io.seqera.data.workqueue.WorkQueue',         true, isolated)
+        Class<?> subclassCls = Class.forName('io.seqera.data.workqueue.TestPlainQueue',    true, isolated)
+        Class<?> abstractCls = Class.forName('io.seqera.data.workqueue.AbstractWorkQueue', true, isolated)
 
         then: 'every class came from the isolated loader, not the parent'
         localCls.classLoader.is(isolated)

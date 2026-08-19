@@ -17,165 +17,234 @@
 
 package io.seqera.data.workqueue
 
+import java.time.Duration
+
 import io.seqera.random.LongRndKey
 import spock.lang.Specification
 
+import io.micronaut.context.annotation.Property
 import io.micronaut.test.extensions.spock.annotation.MicronautTest
+import jakarta.inject.Inject
+import static io.seqera.data.workqueue.MessageConsumer.Decision.ACK
+import static io.seqera.data.workqueue.MessageConsumer.Decision.DEFERRED
+import static io.seqera.data.workqueue.MessageConsumer.Decision.RETRY
 
 /**
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @MicronautTest(environments = ['test'])
+@Property(name = 'workqueue.local.retry-delay', value = '250ms')
 class LocalWorkQueueTest extends Specification {
+
+    @Inject
+    LocalWorkQueue contextQueue
+
+    def 'the retry delay should bind from configuration' () {
+        expect: 'the @Value binding resolved the property - a key typo would silently fall back to 1s'
+        contextQueue.@retryDelay == Duration.ofMillis(250)
+    }
 
     def 'should offer and consume a value' () {
         given:
-        def id1 = "queue-${LongRndKey.rndHex()}"
-        def id2 = "queue-${LongRndKey.rndHex()}"
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def id2 = "stream-${LongRndKey.rndHex()}"
         and:
-        def queue = new LocalWorkQueue()
+        def stream = new LocalWorkQueue()
         and:
-        queue.init(id1)
-        queue.init(id2)
+        stream.init(id1)
+        stream.init(id2)
         when:
-        queue.offer(id1, 'one')
+        stream.offer(id1, 'one')
         and:
-        queue.offer(id2, 'alpha')
-        queue.offer(id2, 'delta')
-        queue.offer(id2, 'gamma')
+        stream.offer(id2, 'alpha')
+        stream.offer(id2, 'delta')
+        stream.offer(id2, 'gamma')
 
         then:
-        queue.consume(id1, { it-> it=='one'})
+        stream.consume(id1, { it, lease -> assert it=='one'; ACK }) == ACK
         and:
-        queue.consume(id2, { it-> it=='alpha'})
-        queue.consume(id2, { it-> it=='delta'})
-        queue.consume(id2, { it-> it=='gamma'})
+        stream.consume(id2, { it, lease -> assert it=='alpha'; ACK }) == ACK
+        stream.consume(id2, { it, lease -> assert it=='delta'; ACK }) == ACK
+        stream.consume(id2, { it, lease -> assert it=='gamma'; ACK }) == ACK
         and:
-        !queue.consume(id2, { it-> assert false /* <-- this should not be invoked */ })
+        stream.consume(id2, { it, lease -> assert false /* <-- this should not be invoked */ }) == null
     }
 
     def 'should offer and consume a value with a failure' () {
-        given:
-        def id1 = "queue-${LongRndKey.rndHex()}"
-        def queue = new LocalWorkQueue()
-        queue.init(id1)
+        given: 'a zero retry delay: this test covers settlement ordering, not pacing'
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def stream = new LocalWorkQueue()
+        stream.@retryDelay = Duration.ZERO
+        stream.init(id1)
         when:
-        queue.offer(id1, 'alpha')
-        queue.offer(id1, 'delta')
-        queue.offer(id1, 'gamma')
+        stream.offer(id1, 'alpha')
+        stream.offer(id1, 'delta')
+        stream.offer(id1, 'gamma')
 
         then:
-        queue.consume(id1, { it-> it=='alpha'})
+        stream.consume(id1, { it, lease -> assert it=='alpha'; ACK }) == ACK
         and:
-        // the default consume() does not catch handler exceptions: it propagates and,
-        // since receive() already removed 'delta' and release() is not reached, it is dropped
-        try {
-            queue.consume(id1, { it-> throw new RuntimeException("Oops")})
-            assert false
-        }
-        catch (RuntimeException e) {
-            assert e.message == 'Oops'
-        }
+        // a consumer throw settles as RETRY - the message is re-queued at the tail
+        stream.consume(id1, { it, lease -> throw new RuntimeException("Oops") }) == RETRY
         and:
-        // next message is 'gamma' as expected ('delta' was dropped on the throw)
-        queue.consume(id1, { it-> it=='gamma'})
+        // next message is 'gamma' as expected
+        stream.consume(id1, { it, lease -> assert it=='gamma'; ACK }) == ACK
         and:
-        !queue.consume(id1, { it-> assert false /* <-- this should not be invoked */ })
+        // now the errored message is available again
+        stream.consume(id1, { it, lease -> assert it=='delta'; ACK }) == ACK
+        and:
+        stream.consume(id1, { it, lease -> assert false /* <-- this should not be invoked */ }) == null
 
         when:
-        queue.offer(id1, 'something')
+        stream.offer(id1, 'something')
         then:
-        queue.consume(id1, { it-> it=='something'})
+        stream.consume(id1, { it, lease -> assert it=='something'; ACK }) == ACK
     }
 
     def 'should validate length method' () {
         given:
-        def id1 = "queue-${LongRndKey.rndHex()}"
-        def queue = new LocalWorkQueue()
-        queue.init(id1)
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def stream = new LocalWorkQueue()
+        stream.init(id1)
 
         expect:
-        queue.length(id1) == 0
+        stream.length(id1) == 0
 
         when:
-        queue.offer(id1, 'alpha')
-        queue.offer(id1, 'delta')
-        queue.offer(id1, 'gamma')
+        stream.offer(id1, 'alpha')
+        stream.offer(id1, 'delta')
+        stream.offer(id1, 'gamma')
         then:
-        queue.length(id1) == 3
+        stream.length(id1) == 3
 
         when:
-        queue.consume(id1, { it-> true})
+        stream.consume(id1, { it, lease -> ACK })
         then:
-        queue.length(id1) == 2
+        stream.length(id1) == 2
     }
 
-    // Local backend: receive returns a lease; renewLease is a no-op; release re-offers
-    def 'should receive and release re-offering the message' () {
-        given:
-        def id1 = "queue-${LongRndKey.rndHex()}"
-        def queue = new LocalWorkQueue()
-        queue.init(id1)
-        queue.offer(id1, 'alpha')
-
-        when: 'receive takes the message off the queue (lease id == message value)'
-        def lease = queue.receive(id1)
-        then:
-        lease != null
-        lease.message() == 'alpha'
-        queue.length(id1) == 0
-
-        when: 'renewLease is a no-op and does not throw nor alter the queue'
-        queue.renewLease(id1, lease.id())
-        then:
-        queue.length(id1) == 0
-
-        when: 'release re-offers the message for later redelivery'
-        queue.release(id1, lease.id())
-        then:
-        queue.length(id1) == 1
-        queue.receive(id1).message() == 'alpha'
-    }
-
-    def 'should ack by dropping the received message' () {
-        given:
-        def id1 = "queue-${LongRndKey.rndHex()}"
-        def queue = new LocalWorkQueue()
-        queue.init(id1)
-        queue.offer(id1, 'alpha')
+    def 'deferred message should stay unavailable until the lease settles' () {
+        given: 'a zero retry delay: this test covers settlement semantics, not pacing'
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def stream = new LocalWorkQueue()
+        stream.@retryDelay = Duration.ZERO
+        stream.init(id1)
+        MessageLease held = null
 
         when:
-        def lease = queue.receive(id1)
-        queue.ack(id1, lease.id())
+        stream.offer(id1, 'alpha')
         then:
-        // ack is a no-op (already removed on receive) and nothing is redelivered
-        queue.length(id1) == 0
-        queue.receive(id1) == null
+        stream.consume(id1, { it, lease -> held = lease; DEFERRED }) == DEFERRED
+        and: 'the message is neither queued nor redeliverable while the lease is open'
+        stream.length(id1) == 0
+        stream.consume(id1, { it, lease -> assert false /* <-- this should not be invoked */ }) == null
+
+        when: 'retry makes it redeliverable (zero delay here)'
+        held.retry()
+        then:
+        stream.length(id1) == 1
+        stream.consume(id1, { it, lease -> assert it=='alpha'; ACK }) == ACK
     }
 
-    // default consume() acks on true (message gone) / releases on false (redelivered)
-    def 'should ack on true and release on false via default consume()' () {
+    def 'ack should remove a deferred message' () {
         given:
-        def id1 = "queue-${LongRndKey.rndHex()}"
-        def queue = new LocalWorkQueue()
-        queue.init(id1)
-        queue.offer(id1, 'keep-me')
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def stream = new LocalWorkQueue()
+        stream.init(id1)
+        MessageLease held = null
 
-        when: 'consumer returns false -> message is released and stays available'
-        def r1 = queue.consume(id1, { it -> false })
+        when:
+        stream.offer(id1, 'alpha')
+        stream.consume(id1, { it, lease -> held = lease; DEFERRED })
+        and: 'settle from a different thread'
+        def settler = new Thread({ held.ack() })
+        settler.start()
+        settler.join()
         then:
-        !r1
-        queue.length(id1) == 1
+        stream.length(id1) == 0
+        stream.consume(id1, { it, lease -> assert false /* <-- this should not be invoked */ }) == null
+    }
 
-        when: 'consumer returns true -> message is acked and removed'
-        def r2 = queue.consume(id1, { it -> it == 'keep-me' })
+    def 'double settlement should be a no-op' () {
+        given:
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def stream = new LocalWorkQueue()
+        stream.init(id1)
+        MessageLease held = null
+
+        when:
+        stream.offer(id1, 'alpha')
+        stream.consume(id1, { it, lease -> held = lease; DEFERRED })
+        and: 'first call wins - the late retry cannot resurrect the acked message'
+        held.ack()
+        held.retry()
+        held.retry()
         then:
-        r2
-        queue.length(id1) == 0
-        and:
-        // nothing left to consume
-        !queue.consume(id1, { it -> assert false /* not invoked */ })
+        stream.length(id1) == 0
+        stream.consume(id1, { it, lease -> assert false /* <-- this should not be invoked */ }) == null
+    }
+
+    def 'retry should delay redelivery by the local retry delay' () {
+        given: 'a stream with a 300ms retry delay - the local analog of the Redis claim cadence'
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def stream = new LocalWorkQueue()
+        stream.@retryDelay = Duration.ofMillis(300)
+        stream.init(id1)
+        MessageLease held = null
+
+        when:
+        stream.offer(id1, 'alpha')
+        stream.consume(id1, { it, lease -> held = lease; DEFERRED })
+        held.retry()
+        then: 'the message is NOT redeliverable before the delay - no hot retry loop'
+        stream.consume(id1, { it, lease -> assert false /* <-- this should not be invoked */ }) == null
+        and: 'it becomes redeliverable once the delay elapses'
+        sleep 400
+        stream.consume(id1, { it, lease -> assert it=='alpha'; ACK }) == ACK
+    }
+
+    def 'retryAfter should delay redelivery by the requested delay' () {
+        given: 'a stream whose plain retry delay is tiny, so the explicit delay is what gates'
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def stream = new LocalWorkQueue()
+        stream.@retryDelay = Duration.ofMillis(10)
+        stream.init(id1)
+        MessageLease held = null
+
+        when:
+        stream.offer(id1, 'alpha')
+        stream.consume(id1, { it, lease -> held = lease; DEFERRED })
+        held.retryAfter(Duration.ofMillis(400))
+        then: 'not redeliverable before the requested delay'
+        sleep 100
+        stream.consume(id1, { it, lease -> assert false /* <-- this should not be invoked */ }) == null
+        and: 'redeliverable once it elapses'
+        sleep 400
+        stream.consume(id1, { it, lease -> assert it=='alpha'; ACK }) == ACK
+        and: 'a late double-settlement is a no-op'
+        held.retry()
+        stream.length(id1) == 0
+    }
+
+    def 'consumer throw should settle as retry leaving nothing leased' () {
+        given: 'a zero retry delay: this test covers settlement semantics, not pacing'
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def stream = new LocalWorkQueue()
+        stream.@retryDelay = Duration.ZERO
+        stream.init(id1)
+        MessageLease held = null
+
+        when:
+        stream.offer(id1, 'alpha')
+        then:
+        stream.consume(id1, { it, lease -> held = lease; throw new RuntimeException('Oops') }) == RETRY
+        and: 'the message is redeliverable (zero delay here)'
+        stream.length(id1) == 1
+        and: 'the lease is already settled - a late retry cannot duplicate the message'
+        held.retry()
+        stream.length(id1) == 1
+        stream.consume(id1, { it, lease -> assert it=='alpha'; ACK }) == ACK
     }
 
 }

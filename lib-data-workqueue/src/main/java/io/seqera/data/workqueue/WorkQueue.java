@@ -17,28 +17,26 @@
 
 package io.seqera.data.workqueue;
 
-import java.time.Duration;
-
 /**
- * Interface for a distributed, reliable work queue with competing consumers.
+ * Interface for a distributed work queue that supports real-time event processing.
  *
- * <p>A work queue provides the following semantics:</p>
+ * <p>A work queue of this kind differs from a fire-and-forget message queue in several
+ * key ways:</p>
  * <ul>
- *   <li><strong>Competing Consumers:</strong> Multiple consumers pull work from the same queue,
- *       but each message is delivered to exactly one <em>live</em> owner at a time</li>
- *   <li><strong>Acknowledgment:</strong> A message is removed only once it is acknowledged;
- *       otherwise it remains available for redelivery</li>
- *   <li><strong>Lease / visibility timeout:</strong> A delivered message is leased to its owner;
- *       the lease is kept alive by heartbeat renewal for as long as the handler runs</li>
- *   <li><strong>Redelivery &amp; dead-owner reclaim:</strong> If the owner dies (its lease lapses
- *       past the visibility timeout) the message is reclaimed by a peer</li>
+ *   <li><strong>Persistent Log:</strong> Messages are stored as an append-only log that can be replayed</li>
+ *   <li><strong>Multiple Consumers:</strong> Multiple consumers can read from the same queue independently</li>
+ *   <li><strong>Ordered Delivery:</strong> Messages are delivered in the order they were added</li>
+ *   <li><strong>Consumer Groups:</strong> Consumers can be grouped for load balancing and fault tolerance</li>
+ *   <li><strong>Log Replay:</strong> Consumers can start reading from any point in the queue history</li>
  * </ul>
  *
  * <p>Work queues are ideal for:</p>
  * <ul>
- *   <li>Task/job distribution across workers</li>
- *   <li>Reliable command processing with at-least-once delivery</li>
- *   <li>Background processing with dead-consumer failover</li>
+ *   <li>Event sourcing and audit logging</li>
+ *   <li>Real-time data processing and analytics</li>
+ *   <li>Microservice event communication</li>
+ *   <li>Activity feeds and notification systems</li>
+ *   <li>Change data capture (CDC) systems</li>
  * </ul>
  *
  * <p>Usage pattern:</p>
@@ -48,20 +46,28 @@ import java.time.Duration;
  * queue.init("user-events");
  * queue.offer("user-events", new UserLoginEvent(userId, timestamp));
  *
- * // Consume messages
- * MessageConsumer<Event> consumer = event -> {
+ * // Consume messages asynchronously
+ * MessageConsumer<Event> consumer = (event, lease) -> {
  *     processEvent(event);
- *     return true; // Acknowledge successful processing
+ *     return MessageConsumer.Decision.ACK; // Acknowledge successful processing
  * };
  *
  * while (hasMoreMessages) {
- *     boolean processed = queue.consume("user-events", consumer);
- *     if (!processed) {
+ *     MessageConsumer.Decision decision = queue.consume("user-events", consumer);
+ *     if (decision == null) {
  *         // No messages available, wait before trying again
  *         Thread.sleep(pollInterval);
  *     }
  * }
  * }</pre>
+ *
+ * <p>Implementations may provide additional features such as:</p>
+ * <ul>
+ *   <li>Message partitioning for scalability</li>
+ *   <li>Consumer group management</li>
+ *   <li>Queue retention policies</li>
+ *   <li>Dead letter handling for failed messages</li>
+ * </ul>
  *
  * @param <M> the type of messages that can be sent through the queue
  *
@@ -95,10 +101,20 @@ public interface WorkQueue<M> {
     /**
      * Adds a message to the specified queue.
      *
-     * <p>Messages are appended to the queue in the order they are offered.</p>
+     * <p>Messages are appended to the queue in the order they are offered, creating
+     * an immutable, ordered log of events. Once added, messages typically cannot be
+     * modified or deleted, ensuring data integrity and enabling replay.</p>
      *
      * <p>This operation is generally atomic and thread-safe, allowing multiple
      * producers to safely add messages concurrently to the same queue.</p>
+     *
+     * <p>Message properties:</p>
+     * <ul>
+     *   <li><strong>Ordering:</strong> Messages maintain their insertion order</li>
+     *   <li><strong>Durability:</strong> Messages are persisted for later consumption</li>
+     *   <li><strong>Uniqueness:</strong> Each message receives a unique sequence number or ID</li>
+     *   <li><strong>Timestamp:</strong> Messages are typically timestamped upon arrival</li>
+     * </ul>
      *
      * @param queueId the unique identifier of the target queue; must not be null or empty
      * @param message the message to be added to the queue; may be null depending on implementation
@@ -110,122 +126,35 @@ public interface WorkQueue<M> {
      * Attempts to consume a single message from the queue using the provided consumer.
      *
      * <p>This method attempts to read one message from the queue and pass it to the
-     * consumer for processing. The method returns {@code true} if a message was
-     * successfully processed, or {@code false} if no message was available or the
-     * consumer rejected the message.</p>
+     * consumer for processing, together with a {@link MessageLease} settlement handle.
+     * The consumer's {@link MessageConsumer.Decision} controls how the message settles.</p>
      *
      * <p>Message consumption behavior:</p>
      * <ul>
      *   <li><strong>Non-blocking:</strong> Returns immediately if no messages are available</li>
+     *   <li><strong>Ordered:</strong> Messages are delivered in queue order</li>
      *   <li><strong>At-least-once:</strong> Messages may be delivered multiple times in failure scenarios</li>
-     *   <li><strong>Consumer Control:</strong> Consumer return value determines acknowledgment</li>
+     *   <li><strong>Consumer Control:</strong> Consumer decision determines settlement</li>
      * </ul>
      *
-     * <p>Consumer acknowledgment:</p>
+     * <p>Settlement semantics:</p>
      * <ul>
-     *   <li>Return {@code true} to acknowledge successful processing</li>
-     *   <li>Return {@code false} to indicate processing failure or rejection</li>
-     *   <li>Unacknowledged messages may be redelivered to other consumers</li>
+     *   <li>{@link MessageConsumer.Decision#ACK} — the message is acknowledged and removed</li>
+     *   <li>{@link MessageConsumer.Decision#RETRY} — the message stays pending and is
+     *       redelivered after the visibility timeout</li>
+     *   <li>{@link MessageConsumer.Decision#DEFERRED} — the message stays leased until
+     *       the consumer's task settles it via {@link MessageLease}</li>
+     *   <li>An exception thrown by the consumer settles the message as {@code RETRY}
+     *       and propagates to the caller</li>
      * </ul>
      *
      * @param queueId the unique identifier of the source queue; must not be null or empty
      * @param consumer the message consumer that will process the message; must not be null
-     * @return {@code true} if a message was successfully consumed and processed,
-     *         {@code false} if no message was available or processing failed
-     * @see MessageConsumer#accept(Object)
+     * @return the consumer's {@link MessageConsumer.Decision}, or {@code null} when no
+     *         message was available
+     * @see MessageConsumer#accept(Object, MessageLease)
      */
-    default boolean consume(String queueId, MessageConsumer<M> consumer) {
-        final Lease<M> lease = receive(queueId);
-        if (lease == null) {
-            return false;
-        }
-        final boolean accepted = consumer.accept(lease.message());
-        if (accepted) {
-            ack(queueId, lease.id());
-        }
-        else {
-            release(queueId, lease.id());
-        }
-        return accepted;
-    }
-
-    /**
-     * A single delivered message paired with the token needed to renew, acknowledge
-     * or release it. The {@code id} is the queue-implementation specific handle
-     * (e.g. the Redis stream entry id) that identifies the delivered entry within
-     * its queue.
-     *
-     * @param <M> the type of the delivered message
-     * @param id the implementation specific identifier of the delivered entry
-     * @param message the delivered message payload
-     */
-    record Lease<M>(String id, M message) {}
-
-    /**
-     * Receives one message (either newly delivered or reclaimed from a stalled consumer)
-     * <strong>without acknowledging</strong> it. The caller becomes responsible for
-     * eventually calling {@link #ack(String, String)} once processing terminates, or
-     * {@link #release(String, String)} to hand it back for later redelivery.
-     *
-     * @param queueId the unique identifier of the source queue; must not be null or empty
-     * @return a {@link Lease} for the delivered message, or {@code null} if none is available
-     */
-    Lease<M> receive(String queueId);
-
-    /**
-     * Resets the idle time of the given lease (heartbeat), so that an alive consumer
-     * keeps ownership of a message for as long as its handler runs. Implementations
-     * without a pending-entries list have no lease semantics and treat this as a no-op.
-     *
-     * @param queueId the unique identifier of the queue; must not be null or empty
-     * @param leaseId the identifier of the lease to renew
-     */
-    void renewLease(String queueId, String leaseId);
-
-    /**
-     * Acknowledges terminal processing of the given lease, removing the message from
-     * the queue so that it is never redelivered.
-     *
-     * @param queueId the unique identifier of the queue; must not be null or empty
-     * @param leaseId the identifier of the lease to acknowledge
-     */
-    void ack(String queueId, String leaseId);
-
-    /**
-     * Releases the given lease without acknowledging it, so that the message becomes
-     * available for redelivery later (a nack; used on shutdown). Implementations
-     * without a pending-entries list re-offer the message.
-     *
-     * @param queueId the unique identifier of the queue; must not be null or empty
-     * @param leaseId the identifier of the lease to release
-     */
-    void release(String queueId, String leaseId);
-
-    /**
-     * How often an in-flight lease must be renewed to retain ownership, so an alive
-     * consumer is never reclaimed by a peer while its handler is still running. The
-     * value is the implementation's own setting (e.g. {@code visibility-timeout / 3} for a
-     * Redis consumer group) and MUST be shorter than the reclaim window. Returns
-     * {@code null} when the implementation has no lease concept (e.g. in-memory), in
-     * which case the caller uses its own default.
-     *
-     * @return the heartbeat interval, or {@code null} if the implementation has no lease
-     */
-    default Duration heartbeatInterval() {
-        return null;
-    }
-
-    /**
-     * Upper bound on a single {@code accept()} invocation before its lease is released
-     * (safety valve); it does not interrupt the handler thread. Returns {@code null}
-     * when the implementation has no lease concept, in which case the caller uses its
-     * own default.
-     *
-     * @return the maximum single-invocation processing time, or {@code null}
-     */
-    default Duration maxProcessingTime() {
-        return null;
-    }
+    MessageConsumer.Decision consume(String queueId, MessageConsumer<M> consumer);
 
     /**
      * Returns the approximate number of messages currently in the specified queue.
@@ -233,6 +162,15 @@ public interface WorkQueue<M> {
      * <p>This method provides a snapshot of the queue length at the time of the call.
      * In a distributed environment with concurrent producers and consumers, the actual
      * number of messages may change immediately after this method returns.</p>
+     *
+     * <p>Common use cases include:</p>
+     * <ul>
+     *   <li>Monitoring queue backlog and processing rates</li>
+     *   <li>Capacity planning and resource allocation</li>
+     *   <li>Alerting on queue growth beyond expected thresholds</li>
+     *   <li>Load balancing decisions across consumer instances</li>
+     *   <li>Testing and debugging queue behavior</li>
+     * </ul>
      *
      * <p>Note: This operation may be expensive for large queues or distributed
      * implementations, so it should not be called excessively in performance-critical paths.</p>

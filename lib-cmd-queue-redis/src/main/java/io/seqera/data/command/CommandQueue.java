@@ -17,11 +17,11 @@
 package io.seqera.data.command;
 
 import io.micronaut.core.annotation.Nullable;
-import io.seqera.data.stream.AbstractMessageStream;
-import io.seqera.data.stream.MessageConsumer;
-import io.seqera.data.stream.MessageStream;
-import io.seqera.data.stream.metrics.NoopStreamMetrics;
-import io.seqera.data.stream.metrics.StreamMetrics;
+import io.seqera.data.workqueue.AbstractWorkQueue;
+import io.seqera.data.workqueue.MessageConsumer;
+import io.seqera.data.workqueue.WorkQueue;
+import io.seqera.data.workqueue.metrics.NoopQueueMetrics;
+import io.seqera.data.workqueue.metrics.QueueMetrics;
 import io.seqera.serde.encode.StringEncodingStrategy;
 import io.seqera.serde.moshi.MoshiEncodeStrategy;
 import jakarta.annotation.PreDestroy;
@@ -30,16 +30,16 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Abstract message queue for command processing.
- * Extends AbstractMessageStream to provide async, fire-and-forget command submission.
+ * Extends AbstractWorkQueue to provide async, fire-and-forget command submission.
  *
  * Subclasses must implement {@link #name()} and {@link #pollInterval()}
  * to configure the queue behavior.
  */
-public abstract class CommandQueue extends AbstractMessageStream<CommandMsg> {
+public abstract class CommandQueue extends AbstractWorkQueue<CommandMsg> {
 
     private static final Logger log = LoggerFactory.getLogger(CommandQueue.class);
 
-    public CommandQueue(MessageStream<String> target) {
+    public CommandQueue(WorkQueue<String> target) {
         super(target);
         log.info("Created command queue - name={}", name());
     }
@@ -47,13 +47,13 @@ public abstract class CommandQueue extends AbstractMessageStream<CommandMsg> {
     /**
      * Constructs a command queue with optional metrics instrumentation.
      *
-     * @param target  the underlying {@link MessageStream}
-     * @param metrics the {@link StreamMetrics} to publish to, or {@code null} for no-op
+     * @param target  the underlying {@link WorkQueue}
+     * @param metrics the {@link QueueMetrics} to publish to, or {@code null} for no-op
      */
-    public CommandQueue(MessageStream<String> target, @Nullable StreamMetrics metrics) {
+    public CommandQueue(WorkQueue<String> target, @Nullable QueueMetrics metrics) {
         super(target, metrics);
         log.info("Created command queue - name={}; metrics={}",
-                name(), metrics != null && !(metrics instanceof NoopStreamMetrics) ? "enabled" : "disabled");
+                name(), metrics != null && !(metrics instanceof NoopQueueMetrics) ? "enabled" : "disabled");
     }
 
     @Override
@@ -62,15 +62,15 @@ public abstract class CommandQueue extends AbstractMessageStream<CommandMsg> {
     }
 
     /**
-     * The name of the command queue. Used for logging and stream name derivation.
+     * The name of the command queue. Used for logging and queue name derivation.
      */
     @Override
     protected abstract String name();
 
     /**
-     * The name of the message stream, derived from {@link #name()}.
+     * The name of the underlying work queue, derived from {@link #name()}.
      */
-    protected String streamName() {
+    protected String queueName() {
         return name() + "/v1";
     }
 
@@ -80,16 +80,20 @@ public abstract class CommandQueue extends AbstractMessageStream<CommandMsg> {
      * @param msg the command message to queue
      */
     public void submit(CommandMsg msg) {
-        offer(streamName(), msg);
+        offer(queueName(), msg);
     }
 
     /**
-     * Register a consumer for commands.
+     * Register a consumer for commands. The consumer returns a
+     * {@link MessageConsumer.Decision} per delivery — {@code ACK} to settle, {@code RETRY}
+     * to redeliver after the visibility timeout, {@code DEFERRED} to transfer settlement to a
+     * task via the {@link io.seqera.data.workqueue.MessageLease} — and may gate admission
+     * through {@link MessageConsumer#ready()}.
      *
      * @param consumer the consumer to process commands
      */
     public void addConsumer(MessageConsumer<CommandMsg> consumer) {
-        addConsumer(streamName(), consumer);
+        addConsumer(queueName(), consumer);
     }
 
     /**
@@ -98,7 +102,7 @@ public abstract class CommandQueue extends AbstractMessageStream<CommandMsg> {
      * @return number of pending commands
      */
     public int length() {
-        return length(streamName());
+        return length(queueName());
     }
 
     @PreDestroy

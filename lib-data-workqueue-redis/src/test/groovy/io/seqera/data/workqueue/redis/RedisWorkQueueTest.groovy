@@ -15,15 +15,16 @@
  *
  */
 
-package io.seqera.data.workqueue
+package io.seqera.data.workqueue.redis
 
 import io.seqera.random.LongRndKey
 import spock.lang.Shared
 import spock.lang.Specification
 
 import io.micronaut.context.ApplicationContext
-import io.seqera.data.workqueue.redis.RedisWorkQueue
 import io.seqera.fixtures.redis.RedisTestContainer
+import static io.seqera.data.workqueue.MessageConsumer.Decision.ACK
+import static io.seqera.data.workqueue.MessageConsumer.Decision.RETRY
 
 /**
  *
@@ -44,112 +45,112 @@ class RedisWorkQueueTest extends Specification implements RedisTestContainer {
 
     def 'should offer and consume a value' () {
         given:
-        def id1 = "queue-${LongRndKey.rndHex()}"
-        def id2 = "queue-${LongRndKey.rndHex()}"
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def id2 = "stream-${LongRndKey.rndHex()}"
         and:
-        def queue = context.getBean(RedisWorkQueue)
+        def stream = context.getBean(RedisWorkQueue)
         and:
-        queue.init(id1)
-        queue.init(id2)
+        stream.init(id1)
+        stream.init(id2)
         when:
-        queue.offer(id1, 'one')
+        stream.offer(id1, 'one')
         and:
-        queue.offer(id2, 'alpha')
-        queue.offer(id2, 'delta')
-        queue.offer(id2, 'gamma')
+        stream.offer(id2, 'alpha')
+        stream.offer(id2, 'delta')
+        stream.offer(id2, 'gamma')
 
         then:
-        queue.consume(id1, { it-> it=='one'})
+        stream.consume(id1, { it, lease -> assert it=='one'; ACK }) == ACK
         and:
-        queue.consume(id2, { it-> it=='alpha'})
-        queue.consume(id2, { it-> it=='delta'})
-        queue.consume(id2, { it-> it=='gamma'})
+        stream.consume(id2, { it, lease -> assert it=='alpha'; ACK }) == ACK
+        stream.consume(id2, { it, lease -> assert it=='delta'; ACK }) == ACK
+        stream.consume(id2, { it, lease -> assert it=='gamma'; ACK }) == ACK
         and:
-        !queue.consume(id2, { it-> assert false /* <-- this should not be invoked */ })
+        stream.consume(id2, { it, lease -> assert false /* <-- this should not be invoked */ }) == null
     }
 
     def 'should offer and consume a value with a failure' () {
         given:
-        def id1 = "queue-${LongRndKey.rndHex()}"
-        def queue = context.getBean(RedisWorkQueue)
-        queue.init(id1)
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def stream = context.getBean(RedisWorkQueue)
+        stream.init(id1)
         when:
-        queue.offer(id1, 'alpha')
-        queue.offer(id1, 'delta')
-        queue.offer(id1, 'gamma')
+        stream.offer(id1, 'alpha')
+        stream.offer(id1, 'delta')
+        stream.offer(id1, 'gamma')
 
         then:
-        queue.consume(id1, { it-> it=='alpha'})
+        stream.consume(id1, { it, lease -> assert it=='alpha'; ACK }) == ACK
         and:
         try {
-            queue.consume(id1, { it-> throw new RuntimeException("Oops")})
+            stream.consume(id1, { it, lease -> throw new RuntimeException("Oops") })
         }
         catch (RuntimeException e) {
             assert e.message == 'Oops'
         }
         and:
         // next message is 'gamma' as expected
-        queue.consume(id1, { it-> it=='gamma'})
+        stream.consume(id1, { it, lease -> assert it=='gamma'; ACK }) == ACK
         and:
         // still nothing
-        !queue.consume(id1, { it-> assert false /* <-- this should not be invoked */ })
+        stream.consume(id1, { it, lease -> assert false /* <-- this should not be invoked */ }) == null
         and:
-        // wait 2 seconds (visibility timeout is 1 sec)
+        // wait 2 seconds (claim timeout is 1 sec)
         sleep 2_000
         // now the errored message is available
-        queue.consume(id1, { it-> it=='delta'})
+        stream.consume(id1, { it, lease -> assert it=='delta'; ACK }) == ACK
         and:
-        !queue.consume(id1, { it-> assert false /* <-- this should not be invoked */ })
+        stream.consume(id1, { it, lease -> assert false /* <-- this should not be invoked */ }) == null
 
         when:
-        queue.offer(id1, 'something')
+        stream.offer(id1, 'something')
         then:
-        queue.consume(id1, { it-> it=='something'})
+        stream.consume(id1, { it, lease -> assert it=='something'; ACK }) == ACK
     }
 
     def 'should validate length method' () {
         given:
-        def id1 = "queue-${LongRndKey.rndHex()}"
-        def queue = context.getBean(RedisWorkQueue)
-        queue.init(id1)
+        def id1 = "stream-${LongRndKey.rndHex()}"
+        def stream = context.getBean(RedisWorkQueue)
+        stream.init(id1)
 
         expect:
-        queue.length(id1) == 0
+        stream.length(id1) == 0
 
         when:
-        queue.offer(id1, 'alpha')
-        queue.offer(id1, 'delta')
-        queue.offer(id1, 'gamma')
+        stream.offer(id1, 'alpha')
+        stream.offer(id1, 'delta')
+        stream.offer(id1, 'gamma')
         then:
-        queue.length(id1) == 3
+        stream.length(id1) == 3
 
         when:
-        queue.consume(id1, { it-> true})
+        stream.consume(id1, { it, lease -> ACK })
         then:
-        queue.length(id1) == 2
+        stream.length(id1) == 2
     }
 
     def 'should claim messages in round-robin fashion to prevent starvation' () {
-        given: 'a queue with multiple messages'
-        def queueId = "queue-${LongRndKey.rndHex()}"
-        def queue = context.getBean(RedisWorkQueue)
-        queue.init(queueId)
+        given: 'a stream with multiple messages'
+        def queueId = "stream-${LongRndKey.rndHex()}"
+        def stream = context.getBean(RedisWorkQueue)
+        stream.init(queueId)
         and: 'track which messages are consumed'
         def consumedMessages = Collections.synchronizedList([])
 
-        when: 'add 5 messages to the queue'
-        queue.offer(queueId, 'msg-1')
-        queue.offer(queueId, 'msg-2')
-        queue.offer(queueId, 'msg-3')
-        queue.offer(queueId, 'msg-4')
-        queue.offer(queueId, 'msg-5')
+        when: 'add 5 messages to the stream'
+        stream.offer(queueId, 'msg-1')
+        stream.offer(queueId, 'msg-2')
+        stream.offer(queueId, 'msg-3')
+        stream.offer(queueId, 'msg-4')
+        stream.offer(queueId, 'msg-5')
 
-        and: 'consume all messages but reject them (return false) - simulating RUNNING tasks'
-        // First pass - read all messages, reject all (they go to PEL)
+        and: 'consume all messages but leave them pending (RETRY) - simulating RUNNING tasks'
+        // First pass - read all messages, retry all (they go to PEL)
         5.times {
-            queue.consume(queueId, { msg ->
+            stream.consume(queueId, { msg, lease ->
                 consumedMessages << msg
-                return false  // reject - message stays in PEL
+                return RETRY  // leave pending - message stays in PEL
             })
         }
 
@@ -157,16 +158,16 @@ class RedisWorkQueueTest extends Specification implements RedisTestContainer {
         consumedMessages.size() == 5
         consumedMessages.containsAll(['msg-1', 'msg-2', 'msg-3', 'msg-4', 'msg-5'])
 
-        when: 'clear tracking and wait for visibility timeout'
+        when: 'clear tracking and wait for claim timeout'
         consumedMessages.clear()
-        sleep 1500  // visibility timeout is 1 second in test config
+        sleep 1500  // claim timeout is 1 second in test config
 
         and: 'consume again multiple times - messages should be reclaimed in round-robin'
         // Consume 10 times to verify round-robin (should see each message ~2 times)
         10.times {
-            queue.consume(queueId, { msg ->
+            stream.consume(queueId, { msg, lease ->
                 consumedMessages << msg
-                return false  // keep rejecting
+                return RETRY  // keep leaving them pending
             })
             sleep 100  // small delay between consumes
         }

@@ -1,27 +1,84 @@
 # lib-data-workqueue
 
-A distributed, reliable **work queue** abstraction with competing consumers, acknowledgment
-and lease/visibility-timeout semantics — plus an in-memory implementation for local and test
-use. The Redis implementation lives in the companion module
-[`lib-data-workqueue-redis`](../lib-data-workqueue-redis).
+A distributed, reliable **work queue**: competing consumers, one live owner per entry,
+acknowledgment, a lease with heartbeat renewal, redelivery and dead-owner reclaim — plus an
+in-memory implementation for local and test use. The Redis backend lives in the companion
+module [`lib-data-workqueue-redis`](../lib-data-workqueue-redis/README.md).
 
-> **Migrating from `lib-data-stream-redis`?** This module (together with
-> `lib-data-workqueue-redis`) is the split/rename of `lib-data-stream-redis` 1.6.0. It keeps
-> the exact behaviour and only renames the abstraction to match its real semantics. See the
-> full guide at
-> [`docs/superpowers/specs/2026-07-11-workqueue-rename-migration.md`](../docs/superpowers/specs/2026-07-11-workqueue-rename-migration.md).
+> **Supersedes `lib-data-stream-redis`.** This module is the reliable work queue that
+> [#86](https://github.com/seqeralabs/libseqera/pull/86) renamed into place and
+> [#100](https://github.com/seqeralabs/libseqera/pull/100) then left unpublished as a
+> placeholder, "because [it carries] the lease-based design forward". 2.0.0 fills that
+> placeholder with the implementation the scheduler has been running: a
+> `MessageConsumer.Decision` returned from `consume()`, a `MessageLease` settlement handle,
+> a cooperative drain, and heartbeat renewal pushed down into the Redis backend.
+>
+> **2.0.0 is a breaking SPI change over the unpublished 1.0.0**, which exposed
+> `receive`/`renewLease`/`ack`/`release` around a `Lease<M>` *record* and drove handlers from
+> an executor and semaphore owned by `AbstractWorkQueue`. This version exposes
+> `init`/`offer`/`consume`/`length`, returns a `Decision` from `consume()`, and hands the
+> consumer a `MessageLease` *interface*. There is no migration path between the two; nothing
+> in production consumed 1.0.0.
+>
+> The published `io.seqera:lib-data-stream-redis` artifact still exists and is still used by
+> other services on older pinned versions; those are unaffected by anything here.
 
 ## Installation
 
-Add this dependency to your `build.gradle`:
-
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-data-workqueue:1.0.0'
+    implementation 'io.seqera:lib-data-workqueue:2.0.0'
     // for the Redis-backed implementation also add:
-    // implementation 'io.seqera:lib-data-workqueue-redis:1.0.0'
+    // implementation 'io.seqera:lib-data-workqueue-redis:2.0.0'
 }
 ```
+
+The library is pure Java: no Groovy runtime dependency, and no jedis — Redis lives entirely in
+`lib-data-workqueue-redis`.
+
+## Cooperative shutdown
+
+`AbstractWorkQueue` never interrupts its dispatcher thread: an interrupt landing in a Redis
+read can hand a RESP-desynced connection back to the pool (libseqera#92), and it was observed
+propagating into a consumer still doing useful work. Shutdown is flag-based instead:
+
+- **`awaitQuiescent(timeout)`** — stop claiming new messages and wait for the dispatcher to finish
+  the message it holds, *without* releasing the queue. Call this first when consumers need
+  collaborators (a datasource, for instance) that are about to be torn down; returns `false` if the
+  dispatcher is still running at the deadline, and the caller decides what that means.
+- **`close(timeout)`** — cooperative stop bounded by the *caller's* remaining budget, for callers
+  that already spent part of an overall shutdown budget on a drain. Never interrupts: the `closing`
+  flag guarantees the dispatcher exits at its next loop-head check, and the thread is a daemon.
+- **`close()`** — same, with the `closeTimeout()` default (10s). **Only the first close waits**;
+  repeated calls — an explicit drain followed by a `@PreDestroy` backstop — return immediately, so
+  a shutdown budget is never spent twice.
+
+## Message leases
+
+`MessageConsumer.accept(message, lease)` returns a `Decision` instead of a boolean:
+
+- **`ACK`** — settle now: the entry is acknowledged and removed from the queue.
+- **`RETRY`** — leave pending: the entry redelivers after the visibility timeout. A thrown
+  exception settles the same way (and propagates to the caller).
+- **`DEFERRED`** — a task now owns the entry via the `MessageLease` handle and settles it
+  later with `lease.ack()` or `lease.retry()`, from any thread. Settlement is idempotent —
+  first call wins.
+
+On the Redis implementation a delivered entry is *leased*: a single background scheduler
+renews every in-flight entry per queue in one round-trip (`XPENDING` ownership check +
+one variadic `XCLAIM JUSTID`) at `visibility-timeout / 4`, so a live consumer can run past
+the visibility timeout without the entry being stolen — the visibility timeout detects dead
+consumers only. Leases stolen during a renewal outage are dropped (never re-seized) and
+counted; leases older than 3× the visibility timeout whose owner is not provably alive are
+treated as registry leaks and released to the claim cycle — `lease.bindLiveness(probe)` binds
+the owning task's liveness (typically `() -> !task.isDone()`), and a lease whose probe reports
+the owner alive is never age-pruned, however long it runs. The local implementation
+mirrors the settlement semantics in-memory, with no visibility clock: a `RETRY` is
+redelivered after a short delay (`workqueue.local.retry-delay`, default 1s).
+
+`MessageConsumer.ready()` (default `true`) is an admission gate: the dispatcher does not
+claim from a queue while its consumer reports not ready; skipped polls count as
+`saturated` in the metrics.
 
 ## Metrics (optional)
 
@@ -48,6 +105,12 @@ references `MeterRegistry`, so subclasses that don't want metrics (using the 1-a
 constructor) can be loaded and instantiated even when `micrometer-core` is absent from
 the classpath.
 
+The lease meters (`seqera.workqueue.leased`, `seqera.workqueue.lease.*`) are recorded one layer
+below, by `RedisWorkQueue`, which injects an *optional* `QueueMetrics` bean from the
+DI context and falls back to a no-op when none exists. Deployments that want the lease
+metrics must therefore provide a `QueueMetrics` bean, typically from the same factory that
+builds the queue and guarded on a `MeterRegistry` being present.
+
 When enabled, the following meters are published. All meters carry the base tags
 `queue` (the subclass `name()`, e.g. `cmd-queue`) and `queue_id` (the actual Redis
 stream key, e.g. `cmd-queue/v1`).
@@ -57,14 +120,23 @@ stream key, e.g. `cmd-queue/v1`).
 | `seqera.workqueue.entries` | Gauge | — | entries | Current queue backlog (Redis `XLEN`, polled at scrape time). |
 | `seqera.workqueue.messages` | Counter | `outcome` | messages | Total messages processed per outcome. |
 | `seqera.workqueue.processing` | Timer | `outcome` | seconds | Per-entry processing time. Includes the full lifecycle from the underlying `queue.consume(...)` entry through the consumer's `accept` and the Redis acknowledge/delete. Published as a Prometheus histogram (with buckets) so quantiles can be aggregated server-side across replicas via `histogram_quantile()`. |
+| `seqera.workqueue.deferred` | Counter | — | — | Deliveries whose consumer returned `DEFERRED` (also counted as `active` on `seqera.workqueue.messages`). |
+| `seqera.workqueue.saturated` | Counter | — | — | Polls skipped because the consumer's `ready()` admission gate was closed. |
+| `seqera.workqueue.leased` | Gauge | — | entries | Entries currently leased (in-flight), sampled at each renewal tick. Tagged `queue` only. |
+| `seqera.workqueue.lease.age.max` | Gauge | — | seconds | Age of the oldest currently-leased entry, sampled at each renewal tick. Tagged `queue` only. |
+| `seqera.workqueue.lease.renewal` | Timer | — | seconds | Duration of one lease-renewal tick. Tagged `queue` only. |
+| `seqera.workqueue.lease.renewal.errors` | Counter | — | — | Failed renewal round-trips (retried on the next tick). Tagged `queue` only. |
+| `seqera.workqueue.lease.renewal.age` | Gauge | — | seconds | Seconds since the last *completed* renewal tick — the stuck-tick detector. Tagged `queue` only. |
+| `seqera.workqueue.lease.lost` | Counter | — | — | Leases found owned by another consumer at renewal — the observable residual duplicate window. Tagged `queue` only. |
+| `seqera.workqueue.lease.leak` | Counter | — | — | Leases dropped by the age backstop: older than 3× the visibility timeout with no provably-alive owner. Tagged `queue` only. |
 
 The `outcome` tag takes one of three values:
 
-- `processed` — the consumer returned `true`; the message was acknowledged and removed from the queue.
-- `active` — the consumer returned `false`; the message remains available for redelivery (work still in progress, not a failure).
+- `processed` — the consumer decided `ACK`; the message was acknowledged and removed from the queue.
+- `active` — the consumer decided `RETRY` or `DEFERRED`; the message remains pending (work still in progress, not a failure).
 - `errored` — an unhandled exception escaped the consumer or the underlying queue implementation.
 
-Empty receives (no message available) are **ignored** — they do not increment
+Empty polls (no message available) are **ignored** — they do not increment
 `seqera.workqueue.messages_total` and do not contribute to the timer, keeping the timer's
 `_count`/`_sum`/`_max` aligned with "an entry was processed".
 
@@ -96,7 +168,7 @@ rate(seqera_workqueue_messages_total{outcome="errored"}[1m])
   sum by (queue) (rate(seqera_workqueue_messages_total{outcome="errored"}[5m]))
 / sum by (queue) (rate(seqera_workqueue_messages_total[5m]))
 
-# active-redelivery rate (in-progress receives, not failures)
+# active-redelivery rate (in-progress polls, not failures)
 rate(seqera_workqueue_messages_total{outcome="active"}[1m])
 
 # percentile latencies (server-side aggregation across replicas)
@@ -122,7 +194,7 @@ Every metric in the JVM — including these — will then carry an `application`
 
 ## Usage
 
-Work distribution with competing consumers and message acknowledgment:
+Work distribution with consumer groups and message acknowledgment:
 
 ```groovy
 @Inject
@@ -142,82 +214,14 @@ workQueue.offer("user-activity", event)
 // Consume events
 class ActivityConsumer implements MessageConsumer<ActivityEvent> {
     @Override
-    boolean accept(ActivityEvent event) {
+    MessageConsumer.Decision accept(ActivityEvent event, MessageLease lease) {
         analyticsService.recordActivity(event)
-        return true // Acknowledge message
+        return MessageConsumer.Decision.ACK // Acknowledge message
     }
 }
 
-// Register the consumer; the queue dispatches messages to it asynchronously
-workQueue.addConsumer("user-activity", new ActivityConsumer())
+workQueue.consume("user-activity", new ActivityConsumer())
 ```
-
-## Architecture
-
-`AbstractWorkQueue` runs handlers **asynchronously and concurrently** while
-guaranteeing that a given message is processed by exactly one *live* consumer at a
-time. A message is owned by its consumer for as long as the handler keeps working —
-independent of how long that takes — and ownership is relinquished only when the work
-finishes or the consumer dies.
-
-```
-  offer(msg)                                    ┌──────────────────────────────┐
-      │                                         │       AbstractWorkQueue       │
-      ▼                                         │                               │
- ┌──────────┐   receive (XREADGROUP/XAUTOCLAIM) │  dispatcher thread            │
- │  Redis   │◀─────────────────────────────────┤   • acquire a semaphore slot  │
- │  stream  │                                   │   • receive one message       │
- │  (PEL,   │  renewLease (XCLAIM … JUSTID)      │   • hand it to the executor   │
- │  group)  │◀──────────── heartbeat daemon ────┤     (never runs it inline)    │
- │          │      every visibility-timeout/3    │                               │
- │          │   ack (XACK + XDEL)                │  worker (executor thread)     │
- │          │◀──────────── on terminal ─────────┤   accept(msg):                │
- └──────────┘                                   │    ├─ true  → ack + free slot │
-      ▲                                         │    └─ false → keep lease,     │
-      │ reclaimed by a peer only if the owner   │       re-run after pollInterval│
-      │ dies (heartbeat stops → idle > visibility-timeout) via the re-poll sched │
-      └─────────────────────────────────────────────────────────────────────────┘
-```
-
-**Three mechanisms:**
-
-1. **Async dispatch (no head-of-line blocking).** The dispatcher thread never runs a
-   handler; it hands each message to a worker executor and moves on. Handlers run on the
-   executor supplied via `withHandlerExecutor(...)` — **mandatory, no default** (Micronaut
-   consumers inject the `@Named(BLOCKING)` executor). A `Semaphore` sized by
-   `concurrency()` bounds how many messages are in flight at once (backpressure: excess
-   messages stay in the queue).
-
-2. **Heartbeat lease (single live runner + safe long handlers).** While a message is in
-   flight, a daemon renews its Redis consumer-group entry (`XCLAIM … JUSTID`) every
-   `visibility-timeout / 3`, pinning its idle time near zero so no peer's `XAUTOCLAIM` can
-   reclaim it — no matter how long the handler runs. If the owning process dies, the
-   heartbeat stops, idle time crosses the visibility timeout, and a peer reclaims the message
-   (real dead-consumer failover). A `max-processing-time` safety valve stops renewing a
-   single invocation that runs pathologically long (logged as *stalled*), without
-   interrupting its thread.
-
-3. **In-process re-poll for not-yet-terminal work.** When a handler returns `false` (work
-   in progress), the message keeps its lease and the handler is **re-invoked in-process**
-   after `pollInterval` via a scheduler — Redis is not re-read. This makes the re-poll
-   cadence independent of `visibility-timeout` (which then governs only failover). The next
-   invocation is scheduled only after the previous one returns, so a given message is
-   never processed by two overlapping invocations.
-
-Delivery is **at-least-once** (a crash/pause beyond `visibility-timeout`, or the
-`max-processing-time` valve, can hand a still-running message to a peer), so consumers
-must be idempotent. The in-memory `LocalWorkQueue` has no pending-entries list, so it
-has no lease/heartbeat (renewLease is a no-op); it still benefits from async, concurrent dispatch.
-
-### Configuration
-
-| Knob | Where | Default | Governs |
-|---|---|---|---|
-| `pollInterval()` | `AbstractWorkQueue` | — (subclass) | Idle backoff **and** in-process re-poll cadence |
-| `concurrency()` | `AbstractWorkQueue` | `1` | Max in-flight messages (semaphore ceiling) |
-| `getVisibilityTimeout()` | `RedisWorkQueueConfig` | — | Dead-consumer failover window |
-| `getHeartbeatInterval()` | `RedisWorkQueueConfig` | `visibility-timeout / 3` | Lease renewal cadence |
-| `getMaxProcessingTime()` | `RedisWorkQueueConfig` | `15m` | Upper bound on a single `accept()` before its lease is released |
 
 ## Testing
 

@@ -1,5 +1,39 @@
 # lib-cmd-queue-redis changelog
 
+1.0.0 - 19 Aug 2026
+- BREAKING change over 0.4.0. Re-lands the lease-based command queue withdrawn by PR #100,
+  promoted from the Seqera scheduler where it has been running, and supersedes the abandoned
+  0.5.0/0.5.1/0.6.0/0.7.0 line for good.
+- Depends on lib-data-workqueue + lib-data-workqueue-redis 2.0.0 instead of
+  lib-data-stream-redis. CommandQueue extends AbstractWorkQueue<CommandMsg>; queueName() (was
+  streamName()) still returns name() + "/v1", so the Redis keys and the consumer group are
+  unchanged.
+- CommandServiceImpl replaces 0.4.0's synchronous dispatch with lease-held execution: the
+  handler settles the message, a command that is not yet terminal holds its lease and is
+  re-invoked in-process, and a handler that throws is retried rather than terminal-failed.
+- CommandStatus: SUBMITTED -> PENDING, RUNNING -> PROCESSING, both carrying @JsonAlias. The
+  aliases are load-bearing - CommandState is persisted as JSON with the status as a bare enum
+  name - and must never be removed.
+- CommandState transitions use the versioned compare-and-swap of lib-data-store-state-redis
+  1.2.0+: CommandState implements VersionAware and the CAS witness is a store-stamped version,
+  not re-serialized bytes. Byte-equality CAS broke cross-replica under JVM-dependent property
+  ordering.
+- Hardening added while the scheduler ran this code: a per-command write mutex guarding
+  CommandState transitions, configurable lock timings, a caller-budgeted close(), a retry-safe
+  PROCESSING mark (markProcessing()), rejection-safe in-flight counting (submitCounted()), and
+  a wait-once close().
+- Error tracking on CommandState (errorsCount, error, modifiedAt), re-landed from the reverted
+  0.6.0.
+- api rather than implementation for lib-data-workqueue and lib-data-store-state-redis:
+  CommandQueue publicly extends AbstractWorkQueue and CommandState publicly implements
+  VersionAware, so both are part of this module's surface.
+- DOWNGRADE WARNING: this release persists command state with the PENDING/PROCESSING names and
+  a 7-day TTL. 0.4.0 cannot decode them (PROCESSING fails deserialization; PENDING was a dead
+  constant there), so if 1.0.0 has run against a given Redis, wait out the TTL or flush the
+  affected command-state keys before rolling back onto 0.4.0.
+- Design notes: docs/plans/command-execution-guarantee-message-lease.md and
+  docs/plans/2026-07-31-command-state-write-mutex-design.md.
+
 REVERTED - 0.5.0, 0.5.1, 0.6.0, 0.7.0 (13 - 18 Jul 2026)
 - These releases have been reverted; this module is back at 0.4.0 and to its
   lib-data-stream-redis dependency:

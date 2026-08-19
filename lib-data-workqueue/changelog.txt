@@ -1,5 +1,29 @@
 # lib-data-workqueue changelog
 
+2.0.0 - 19 Aug 2026
+- BREAKING SPI change over the unpublished 1.0.0. This release replaces the placeholder left
+  by PR #100 with the lease-based implementation that has been running in the Seqera
+  scheduler, promoted here as the canonical source.
+- WorkQueue: receive()/renewLease()/ack()/release() around a Lease<M> record are replaced by
+  init()/offer()/consume()/length(); consume(queueId, consumer) returns a
+  MessageConsumer.Decision.
+- MessageConsumer: returns Decision{ACK, RETRY, DEFERRED} instead of a boolean, and receives a
+  MessageLease alongside the message. A returned DEFERRED transfers lease ownership to a task;
+  a thrown exception settles as RETRY. Adds the optional ready() admission gate for
+  backpressure.
+- MessageLease (new): the settlement handle - ack(), retry(), retryAfter(Duration) and
+  bindLiveness(BooleanSupplier). Settlement is idempotent, first call wins.
+- AbstractWorkQueue: the handler ExecutorService, semaphore slots, re-poll scheduler and
+  heartbeat daemon are gone; heartbeat renewal now lives in the Redis backend, driven by
+  MessageLease.bindLiveness. withHandlerExecutor() is removed. Adds a cooperative shutdown:
+  awaitQuiescent(Duration) stops the dispatcher claiming new work, close(Duration) waits on a
+  caller budget, and a second close() does not wait again.
+- LocalWorkQueue: backed by DelayQueue instead of LinkedBlockingQueue, so a RETRY settlement is
+  re-queued after a redelivery delay (workqueue.local.retry-delay, default 1s) rather than
+  spinning. Mirrors the Redis lease semantics in memory.
+- No migration path from 1.0.0, which was published but never consumed in production.
+- Dropped the lib-lang test dependency; no test imports io.seqera.lang.
+
 1.0.0 - 11 Jul 2026
 - Initial release. This module is the redis-free split of lib-data-stream-redis 1.6.0,
   renamed to reflect the reliable work-queue semantics it actually implements (competing

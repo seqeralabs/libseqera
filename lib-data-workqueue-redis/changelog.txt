@@ -1,5 +1,19 @@
 # lib-data-workqueue-redis changelog
 
+2.0.0 - 19 Aug 2026
+- BREAKING change over the unpublished 1.0.0, versioned in lockstep with lib-data-workqueue
+  2.0.0. The two must be upgraded together.
+- Implements the consume()/Decision/MessageLease SPI in place of receive()/Lease<M>.
+- Owns the lease-renewal daemon that used to live in AbstractWorkQueue: every in-flight entry
+  is renewed per queue in one round-trip, gated on the liveness supplier bound to its lease, so
+  an entry whose owner is provably alive is never reclaimed while a dead owner's entry is.
+- RedisWorkQueueConfig gains lease-renewal-period and max-lease-age (both derived from
+  visibility-timeout by default). Startup fails on a renewal period at or above the visibility
+  timeout.
+- Tests move from package io.seqera.data.workqueue to io.seqera.data.workqueue.redis, matching
+  the main sources, and add lease and config coverage.
+- Dropped the lib-lang test dependency; no test imports io.seqera.lang.
+
 1.0.0 - 11 Jul 2026
 - Initial release. This module is the Redis split of lib-data-stream-redis 1.6.0, renamed
   to reflect the reliable work-queue semantics it implements on top of Redis Streams

@@ -20,8 +20,8 @@ package io.seqera.data.workqueue.redis;
 import java.time.Duration;
 
 /**
- * Configuration interface for Redis-backed work queues that defines timeout and consumer
- * group settings for reliable message processing.
+ * Configuration interface for work queues that defines timeout and consumer group settings
+ * for queue-based message processing.
  *
  * <p>This interface provides configuration parameters for:
  * <ul>
@@ -31,7 +31,7 @@ import java.time.Duration;
  * </ul>
  *
  * <p>Implementations should provide appropriate values based on the underlying
- * work-queue technology (Redis Streams consumer groups) and application requirements.
+ * queue technology (e.g., Redis Streams) and application requirements.
  *
  * <p>Example usage:
  * <pre>{@code
@@ -44,12 +44,12 @@ import java.time.Duration;
  * }</pre>
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
- * @since 1.0
+ * @since 1.1
  */
 public interface RedisWorkQueueConfig {
 
     /**
-     * Returns the default consumer group name used when creating work queue consumers
+     * Returns the default consumer group name used when creating queue consumers
      * without an explicitly specified group.
      *
      * @return the default consumer group name, must not be null or empty
@@ -57,11 +57,9 @@ public interface RedisWorkQueueConfig {
     String getDefaultConsumerGroupName();
 
     /**
-     * Returns the visibility timeout duration for messages delivered from the queue.
+     * Returns the visibility timeout for messages handed to a consumer.
      * This timeout determines how long a consumer can hold a message before
-     * it becomes available for reclaiming by other consumers (mapped to the Redis
-     * consumer-group min-idle used by {@code XAUTOCLAIM}). Backed by the
-     * {@code visibility-timeout} configuration property.
+     * it becomes available for claiming by other consumers.
      *
      * @return the visibility timeout duration, must be positive
      */
@@ -97,46 +95,53 @@ public interface RedisWorkQueueConfig {
     }
 
     /**
-     * Returns how often in-flight leases are renewed (heartbeated) to keep them
-     * from being reclaimed by peer consumers while a handler is still running.
-     * Must be shorter than {@link #getVisibilityTimeout()}; defaults to {@code visibility-timeout / 3}
-     * so that up to two consecutive misses are tolerated.
+     * Period of the lease-renewal tick that keeps in-flight entries from going stalled.
      *
-     * @return the heartbeat interval duration
+     * <p>Defaults to a quarter of the visibility timeout, so the margin math tracks a
+     * re-tuned visibility timeout automatically: with a successful renewal at {@code t0},
+     * ticks fire at {@code t0+P, t0+2P, t0+3P} while the entry becomes claimable at
+     * {@code t0+4P} — two consecutive failed or missed ticks are tolerated with a
+     * quarter-timeout margin remaining. Must be well below the visibility timeout: a
+     * period at or above it means every lease is claimable before its first renewal.
+     *
+     * @return the lease renewal period, must be positive and below the visibility timeout
      */
-    default Duration getHeartbeatInterval() {
-        return getVisibilityTimeout().dividedBy(3);
+    default Duration getLeaseRenewalPeriod() {
+        return getVisibilityTimeout().dividedBy(4);
     }
 
     /**
-     * Returns the heartbeat interval in milliseconds for convenience.
-     * This is a derived value from {@link #getHeartbeatInterval()}.
+     * Returns the lease renewal period in milliseconds for convenience.
+     * This is a derived value from {@link #getLeaseRenewalPeriod()}.
      *
-     * @return the heartbeat interval in milliseconds
+     * @return the lease renewal period in milliseconds
      */
-    default long getHeartbeatIntervalMillis() {
-        return getHeartbeatInterval().toMillis();
+    default long getLeaseRenewalPeriodMillis() {
+        return getLeaseRenewalPeriod().toMillis();
     }
 
     /**
-     * Returns the upper bound on a single {@code accept()} invocation before its
-     * lease is released (safety valve). This bounds one handler invocation, not the
-     * total lease lifetime; past this bound the heartbeat daemon stops renewing the
-     * lease so it becomes reclaimable. Defaults to {@code 15m}.
+     * Age past which an unsettled lease whose owner is not provably alive is treated as a
+     * registry leak: renewal stops, loudly, so the claim cycle can recover the entry.
+     * A lease whose bound owner is still running is never age-pruned, however long it
+     * runs — this bound only limits how long a leaked registration can keep an entry
+     * from going stalled.
      *
-     * @return the maximum single-invocation processing time duration
+     * <p>Defaults to three visibility timeouts.
+     *
+     * @return the maximum lease age, must be positive
      */
-    default Duration getMaxProcessingTime() {
-        return Duration.ofMinutes(15);
+    default Duration getMaxLeaseAge() {
+        return getVisibilityTimeout().multipliedBy(3);
     }
 
     /**
-     * Returns the maximum processing time in milliseconds for convenience.
-     * This is a derived value from {@link #getMaxProcessingTime()}.
+     * Returns the maximum lease age in milliseconds for convenience.
+     * This is a derived value from {@link #getMaxLeaseAge()}.
      *
-     * @return the maximum processing time in milliseconds
+     * @return the maximum lease age in milliseconds
      */
-    default long getMaxProcessingTimeMillis() {
-        return getMaxProcessingTime().toMillis();
+    default long getMaxLeaseAgeMillis() {
+        return getMaxLeaseAge().toMillis();
     }
 }
