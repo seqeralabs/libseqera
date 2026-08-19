@@ -146,7 +146,7 @@ class CommandStateSerializationTest extends Specification {
         decoded.result.deleted
     }
 
-    def 'should handle null result for running commands'() {
+    def 'should handle null result for processing commands'() {
         given:
         def encoder = new JacksonEncodingStrategy<TypedCommandState<?, ?>>() {}
         def now = Instant.now()
@@ -154,7 +154,7 @@ class CommandStateSerializationTest extends Specification {
         def state = new TypedCommandState<>(
                 'cmd-xyz',
                 'create-job',
-                CommandStatus.RUNNING,
+                CommandStatus.PROCESSING,
                 params,
                 null,  // No result yet
                 null,
@@ -171,7 +171,7 @@ class CommandStateSerializationTest extends Specification {
         decoded.params instanceof CreateJobParams
         decoded.params.image == 'ubuntu:22.04'
         decoded.result == null
-        decoded.status == CommandStatus.RUNNING
+        decoded.status == CommandStatus.PROCESSING
     }
 
     def 'should decode legacy JSON without error-tracking fields into the real record'() {
@@ -198,11 +198,59 @@ class CommandStateSerializationTest extends Specification {
 
         then: 'existing fields survive'
         decoded.id() == 'cmd-legacy'
-        decoded.status() == CommandStatus.RUNNING
+        decoded.status() == CommandStatus.PROCESSING
         decoded.params() instanceof CreateJobParams
         decoded.params().image == 'alpine:latest'
         and: 'new fields default without a stored value — safe rolling deploy'
         decoded.errorsCount() == 0
         decoded.modifiedAt() == null
+        and: 'a payload never carries a version — pre-versioning entries read as 0 (see VersionAware)'
+        decoded.version() == 0
+    }
+
+    def 'should decode the legacy status names written before the WorkQueue rename'() {
+        given: '''the encoder as wired by CommandStateStoreFactory, and state persisted by a replica
+                  that still called the statuses SUBMITTED and RUNNING — during a rolling deploy, or
+                  before it, for as long as the stored state lives (state-ttl)'''
+        def encoder = new JacksonEncodingStrategy<CommandState>() {}
+        def json = """\
+            {
+                "id": "cmd-wire",
+                "type": "create-job",
+                "status": "${legacy}",
+                "params": null,
+                "result": null,
+                "error": null,
+                "errorsCount": 0,
+                "createdAt": "${Instant.now()}",
+                "startedAt": null,
+                "modifiedAt": null,
+                "completedAt": null
+            }""".stripIndent()
+
+        when:
+        def decoded = encoder.decode(json)
+
+        then: 'the @JsonAlias mapping carries it onto the current name — removing it strands the entry'
+        decoded.status() == current
+
+        where:
+        legacy      || current
+        'SUBMITTED' || CommandStatus.PENDING
+        'RUNNING'   || CommandStatus.PROCESSING
+    }
+
+    def 'version should never leak into the serialized payload'() {
+        given: 'the encoder as wired by CommandStateStoreFactory, and a state carrying a version'
+        def encoder = new JacksonEncodingStrategy<CommandState>() {}
+        def state = CommandState.create('cmd-ver', 'test', null).withVersion(42)
+
+        when:
+        def json = encoder.encode(state)
+
+        then: 'the version travels in the store frame, not the payload — the frame is the single source of truth'
+        !json.contains('"version"')
+        and: 'decoding yields version 0 until the store injects the frame version'
+        encoder.decode(json).version() == 0
     }
 }

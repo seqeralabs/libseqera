@@ -2,6 +2,18 @@
 
 Message streaming with Redis Streams and local implementations for persistent event processing.
 
+> **Superseded by [`lib-data-workqueue`](../lib-data-workqueue/README.md)** (+
+> [`lib-data-workqueue-redis`](../lib-data-workqueue-redis/README.md)), which carries the same
+> abstraction forward under names that match what it actually implements — a reliable work
+> queue with competing consumers and a message lease — and adds lease settlement, heartbeat
+> renewal and a cooperative drain.
+>
+> This module stays published and supported at 1.5.0 for the services that pin it; it has no
+> in-repo consumer of its own. New consumers should start on `lib-data-workqueue`. Migrating is
+> not transparent: the SPI differs, and the metric names and tags changed
+> (`seqera.stream.*` → `seqera.workqueue.*`, tag `stream` → `queue`, `stream_id` → `queue_id`),
+> so dashboards and alerts have to be updated with the swap.
+
 ## Installation
 
 Add this dependency to your `build.gradle`:

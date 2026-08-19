@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * End-to-end tests for the CommandService.
  */
-@MicronautTest(packages = ["io.seqera.data.stream"], transactional = false)
+@MicronautTest(packages = ["io.seqera.data.workqueue"], transactional = false)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CommandServiceTest extends Specification implements TestPropertyProvider {
 
@@ -111,8 +111,11 @@ class CommandServiceTest extends Specification implements TestPropertyProvider {
     }
 
     def 'should cancel pending command'() {
-        given:
-        def params = new TestParams(42, 'fast')
+        given: "a 'slow' command, so the cancel cannot lose the race against the dispatcher"
+        // 'slow' execute() declares PROCESSING - a non-terminal write - so cancel() succeeds
+        // regardless of interleaving; a 'fast' command may reach SUCCEEDED before cancel()
+        // runs, which refuses the cancel correctly (flaky on CI)
+        def params = new TestParams(42, 'slow')
         def command = new TestCommand(TsidCreator.getTsid().toLowerCase(), 'test', params)
 
         when: 'command is submitted and immediately cancelled'
@@ -159,8 +162,8 @@ class CommandServiceTest extends Specification implements TestPropertyProvider {
         sleep(500)
         def state = commandService.getState(command.id()).orElseThrow()
 
-        then: 'status is RUNNING'
-        state.status() == CommandStatus.RUNNING
+        then: 'status is PROCESSING'
+        state.status() == CommandStatus.PROCESSING
 
         when: 'wait for periodic checker'
         sleep(3000)
@@ -208,6 +211,28 @@ class CommandServiceTest extends Specification implements TestPropertyProvider {
         state.errorsCount() >= 1
         state.error() == 'Persistent boom'
         state.modifiedAt() != null
+    }
+
+    def 'a null handler result should stay retryable, never ack the message'() {
+        given: 'a handler that returns null - a handler bug, not a terminal outcome'
+        commandService.registerHandler(new CommandHandler<TestParams, TestResult>() {
+            @Override
+            String type() { 'null-result' }
+            @Override
+            CommandResult<TestResult> execute(Command<TestParams> command) { null }
+            @Override
+            CommandResult<TestResult> checkStatus(Command<TestParams> command, CommandState state) { null }
+        })
+        def command = new TestCommand(TsidCreator.getTsid().toLowerCase(), 'null-result', new TestParams(1, 'x'))
+
+        when:
+        commandService.submit(command)
+        sleep(2000)
+        def state = commandService.getState(command.id()).orElseThrow()
+
+        then: 'the command is still live and visibly retrying - the message was never acked'
+        !state.status().isTerminal()
+        state.errorsCount() >= 1
     }
 
     def 'should handle unknown command type'() {
@@ -304,7 +329,7 @@ class TestCommandHandler implements CommandHandler<TestParams, TestResult> {
 
         if (params.mode == 'slow') {
             startTime = Instant.now()
-            return CommandResult.running()
+            return CommandResult.processing()
         }
 
         def result = new TestResult('Processed', params.value)
@@ -322,6 +347,6 @@ class TestCommandHandler implements CommandHandler<TestParams, TestResult> {
             }
         }
 
-        return CommandResult.running()
+        return CommandResult.processing()
     }
 }

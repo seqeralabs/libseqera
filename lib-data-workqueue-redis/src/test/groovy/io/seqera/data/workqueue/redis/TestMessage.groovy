@@ -15,33 +15,16 @@
  *
  */
 
-package io.seqera.data.workqueue
+package io.seqera.data.workqueue.redis
 
-import java.time.Duration
+import groovy.transform.Canonical
 
-import io.micronaut.context.annotation.Requires
-import io.seqera.data.workqueue.redis.RedisWorkQueueConfig
-import jakarta.inject.Singleton
 /**
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-@Requires(env = 'test')
-@Singleton
-class TestConfig implements RedisWorkQueueConfig {
-
-    @Override
-    String getDefaultConsumerGroupName() {
-        return "wave-work-queue"
-    }
-
-    @Override
-    Duration getVisibilityTimeout() {
-        return Duration.ofSeconds(1)
-    }
-
-    @Override
-    Duration getConsumerWarnTimeout() {
-        return Duration.ofSeconds(5)
-    }
+@Canonical
+class TestMessage {
+    String x
+    String y
 }

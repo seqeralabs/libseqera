@@ -32,12 +32,16 @@ dependencies {
     // JSON serialization
     implementation project(':lib-serde-jackson')
 
-    // Message stream
-    implementation project(':lib-data-stream-redis')
+    // The work queue this command queue is built on. `api`, not `implementation`:
+    // CommandQueue publicly extends AbstractWorkQueue and callers construct a
+    // RedisWorkQueue / LocalWorkQueue to hand to it, so those types are part of
+    // this module's surface.
+    api project(':lib-data-workqueue')
     implementation project(':lib-serde-moshi')
 
-    // State store
-    implementation project(':lib-data-store-state-redis')
+    // State store. `api`, not `implementation`: CommandState publicly implements
+    // VersionAware, so the interface is part of this module's surface.
+    api project(':lib-data-store-state-redis')
 
     // Utilities (includes type resolution)
     implementation project(':lib-lang')
@@ -50,6 +54,14 @@ dependencies {
 
     // Test dependencies
     testImplementation testFixtures(project(':lib-fixtures-redis'))
+    // The Redis backend is a test-only dependency: RedisWorkQueue replicas are built by
+    // hand in the lease container tests (CommandServiceLeaseRedisTest)
+    testImplementation project(':lib-data-workqueue-redis')
+    // JedisPool is wired directly into those manually-built RedisWorkQueue replicas; the
+    // Groovy compiler also resolves the full CommandQueue supertype hierarchy, which
+    // reaches lib-retry (an `implementation` dep of lib-data-workqueue, so not transitive)
+    testImplementation 'redis.clients:jedis:5.1.4'
+    testImplementation project(':lib-retry')
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
     testImplementation 'org.apache.groovy:groovy'

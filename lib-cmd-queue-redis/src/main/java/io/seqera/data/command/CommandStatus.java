@@ -17,16 +17,26 @@
 
 package io.seqera.data.command;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+
 /**
  * Status of a command in the queue.
+ *
+ * <p>{@code PENDING} and {@code PROCESSING} were named {@code SUBMITTED} and {@code RUNNING}
+ * before the queue vocabulary was aligned with {@code WorkQueue}. The {@link JsonAlias}
+ * annotations are what keep state written by the previous naming readable: {@code CommandState}
+ * is persisted as Jackson-encoded JSON with the status as a bare enum name, so an entry stored
+ * as {@code "SUBMITTED"} or {@code "RUNNING"} — by an older replica during a rolling deploy, or
+ * before it, for as long as the stored state lives — only deserializes because of them. They must
+ * never be removed.
  */
 public enum CommandStatus {
-    /** Created, not yet submitted to queue */
+    /** In queue, awaiting first processing */
+    @JsonAlias("SUBMITTED")
     PENDING,
-    /** In queue, waiting for pickup */
-    SUBMITTED,
-    /** Being executed */
-    RUNNING,
+    /** Being processed by a handler */
+    @JsonAlias("RUNNING")
+    PROCESSING,
     /** Completed successfully */
     SUCCEEDED,
     /** Completed with error */

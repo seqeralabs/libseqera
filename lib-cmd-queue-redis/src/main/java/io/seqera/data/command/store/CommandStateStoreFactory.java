@@ -41,6 +41,6 @@ public class CommandStateStoreFactory {
     @Singleton
     public CommandStateStore commandStateStore(StateProvider<String, String> provider) {
         final var encoder = new JacksonEncodingStrategy<CommandState>(){};
-        return new CommandStateStoreImpl(provider, encoder, config.stateTtl());
+        return new CommandStateStoreImpl(provider, encoder, config);
     }
 }

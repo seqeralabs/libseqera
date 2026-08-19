@@ -37,12 +37,20 @@ public interface CommandConfig {
     }
 
     /**
-     * Timeout for synchronous command execution.
-     * If execute() takes longer than this, the command is marked as RUNNING
-     * and checkStatus() will be called on subsequent queue deliveries.
+     * Admission cap: the maximum number of handler executions in flight at once.
+     * The dispatcher stops claiming messages from the queue while the cap is
+     * reached, resuming as tasks finish.
+     *
+     * <p>Replaces the implicit throttle the deleted 1-second execute-timeout used
+     * to be: with fire-and-submit dispatch every delivery spawns a task immediately,
+     * so without an explicit cap a backlog flood would spawn unbounded tasks.
+     *
+     * <p>Size it below the shared JDBC connection pool minus request-path headroom:
+     * handler tasks make several sequential JDBC round-trips each, and bursts beyond
+     * the cap should queue in the work queue, not in the connection pool.
      */
-    default Duration executeTimeout() {
-        return Duration.ofSeconds(1);
+    default int maxConcurrency() {
+        return 20;
     }
 
     /**
@@ -51,5 +59,31 @@ public interface CommandConfig {
      */
     default Duration stateTtl() {
         return Duration.ofDays(7);
+    }
+
+    /**
+     * Bound on the compare-and-swap retry loop of a command state transition. A miss
+     * means another writer transitioned the state between the read and the write; the
+     * loop re-reads and re-applies, converging in one or two rounds under real
+     * contention (at most a handful of writers ever touch one command). The bound is a
+     * livelock backstop, not a throughput tunable — must be positive.
+     */
+    default int stateUpdateAttempts() {
+        return 5;
+    }
+
+    /**
+     * Re-poll cadence for commands whose handler declared PROCESSING: how often
+     * {@code checkStatus()} is invoked while the async work is in flight.
+     *
+     * <p>Deliberately decoupled from the queue's visibility timeout, which paces crash
+     * detection and transient-error retries: shortening that clock must not multiply
+     * the polling load {@code checkStatus()} puts on its downstream dependencies
+     * (database reads, cloud describe calls). A cadence at or below the visibility
+     * timeout degrades to the claim cadence — the visibility timeout is the effective
+     * floor.
+     */
+    default Duration checkStatusInterval() {
+        return Duration.ofSeconds(45);
     }
 }

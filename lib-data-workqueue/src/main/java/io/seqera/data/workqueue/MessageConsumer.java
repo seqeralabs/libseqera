@@ -21,113 +21,78 @@ package io.seqera.data.workqueue;
  * Interface for consuming messages from a work queue.
  *
  * <p>A message consumer defines how individual messages should be processed when they
- * are read from a queue. The consumer's return value determines whether the message
- * was successfully processed and should be acknowledged, or if it failed and may need
- * to be reprocessed.</p>
+ * are read from a queue. The consumer returns a {@link Decision} that determines how
+ * the message settles: acknowledged and removed, left pending for redelivery, or
+ * deferred to a task that settles it later through the {@link MessageLease} handle.</p>
  *
- * <p>Key characteristics:</p>
+ * <p>Decision semantics:</p>
  * <ul>
- *   <li><strong>Single Message Processing:</strong> Each invocation processes exactly one message</li>
- *   <li><strong>Acknowledgment Control:</strong> Return value controls message acknowledgment</li>
- *   <li><strong>Error Handling:</strong> Failed processing can trigger redelivery</li>
- *   <li><strong>Stateless:</strong> Should be stateless and thread-safe when possible</li>
+ *   <li><strong>{@link Decision#ACK}:</strong> the message was processed; it is
+ *       acknowledged and removed from the queue immediately.</li>
+ *   <li><strong>{@link Decision#RETRY}:</strong> the message was not processed; it is
+ *       left pending and redelivered after the queue's visibility timeout.</li>
+ *   <li><strong>{@link Decision#DEFERRED}:</strong> a task now owns the message lease;
+ *       the entry stays leased (heartbeated where the underlying queue supports it)
+ *       until the task settles it via {@link MessageLease#ack()} or
+ *       {@link MessageLease#retry()}. Only a <em>returned</em> {@code DEFERRED}
+ *       transfers the lease — a thrown exception settles as {@code RETRY}.</li>
  * </ul>
  *
- * <p>Common implementation patterns:</p>
- * <pre>{@code
- * // Simple message processor
- * MessageConsumer<OrderEvent> orderProcessor = order -> {
- *     try {
- *         processOrder(order);
- *         return true; // Success - acknowledge message
- *     } catch (Exception e) {
- *         log.error("Failed to process order", e);
- *         return false; // Failure - don't acknowledge
- *     }
- * };
- *
- * // Conditional processing
- * MessageConsumer<NotificationEvent> notificationFilter = event -> {
- *     if (event.getPriority() == Priority.HIGH) {
- *         sendImmediateNotification(event);
- *         return true; // Processed
- *     }
- *     return false; // Skip - let another consumer handle it
- * };
- *
- * // Batch processing with validation
- * MessageConsumer<DataRecord> batchProcessor = record -> {
- *     if (isValidRecord(record)) {
- *         addToBatch(record);
- *         if (batchIsFull()) {
- *             processBatch();
- *         }
- *         return true; // Successfully added to batch
- *     } else {
- *         log.warn("Invalid record: {}", record);
- *         return true; // Acknowledge to prevent reprocessing invalid data
- *     }
- * };
- * }</pre>
- *
- * <p>Return value semantics:</p>
- * <ul>
- *   <li><strong>{@code true}:</strong> Message processed successfully, acknowledge and remove from queue</li>
- *   <li><strong>{@code false}:</strong> Message not processed, leave available for other consumers</li>
- * </ul>
- *
- * <p>Error handling strategies:</p>
- * <ul>
- *   <li><strong>Retry:</strong> Return {@code false} to allow reprocessing</li>
- *   <li><strong>Dead Letter:</strong> Return {@code true} after logging to prevent infinite retries</li>
- *   <li><strong>Circuit Breaker:</strong> Temporarily return {@code false} when downstream services are unavailable</li>
- * </ul>
+ * <p>The optional {@link #ready()} admission gate lets a consumer signal backpressure:
+ * the dispatcher does not claim messages from a queue while its consumer reports
+ * {@code false}.</p>
  *
  * @param <T> the type of messages that this consumer can process
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  * @since 1.0
  * @see WorkQueue#consume(String, MessageConsumer)
+ * @see MessageLease
  * @see AbstractWorkQueue
  */
 @FunctionalInterface
 public interface MessageConsumer<T> {
 
     /**
+     * How a delivered message settles.
+     */
+    enum Decision {
+        /** Settle now: acknowledge and remove the message from the queue. */
+        ACK,
+        /** Leave pending: the message is redelivered after the visibility timeout. */
+        RETRY,
+        /** A task owns the lease; it will settle via {@link MessageLease}. */
+        DEFERRED
+    }
+
+    /**
      * Processes a single message from a queue.
      *
      * <p>This method is called by the queue infrastructure when a message is available
-     * for processing. The implementation should handle the message according to its
-     * business logic and return an appropriate acknowledgment status.</p>
+     * for processing. The implementation handles the message according to its business
+     * logic and returns the {@link Decision} that settles it — or {@link Decision#DEFERRED}
+     * to transfer the settlement responsibility to a task via the given lease.</p>
      *
-     * <p>Processing guidelines:</p>
-     * <ul>
-     *   <li><strong>Idempotent:</strong> Should handle duplicate messages gracefully</li>
-     *   <li><strong>Fast:</strong> Avoid long-running operations that block other messages</li>
-     *   <li><strong>Exception Safe:</strong> Handle exceptions appropriately, don't let them propagate</li>
-     *   <li><strong>Logging:</strong> Log important events for debugging and monitoring</li>
-     * </ul>
-     *
-     * <p>Return value meaning:</p>
-     * <ul>
-     *   <li><strong>{@code true}:</strong> Message was successfully processed and should be acknowledged.
-     *       The message will be marked as consumed and will not be delivered to other consumers.</li>
-     *   <li><strong>{@code false}:</strong> Message was not processed successfully or was rejected.
-     *       The message remains available for consumption by other consumers or for retry.</li>
-     * </ul>
-     *
-     * <p>Common scenarios for returning {@code false}:</p>
-     * <ul>
-     *   <li>Temporary downstream service unavailability</li>
-     *   <li>Message doesn't match consumer's processing criteria</li>
-     *   <li>Resource constraints (memory, connections, etc.)</li>
-     *   <li>Backpressure from downstream systems</li>
-     * </ul>
+     * <p>An exception thrown out of this method settles the message as
+     * {@link Decision#RETRY}: nothing stays leased, and the message is redelivered on
+     * the queue's claim cadence.</p>
      *
      * @param message the message to be processed; may be null depending on queue implementation
-     * @return {@code true} if the message was successfully processed and should be acknowledged,
-     *         {@code false} if the message was not processed and should remain available
+     * @param lease the settlement handle for this delivery; only relevant when returning
+     *        {@link Decision#DEFERRED}, ignored otherwise
+     * @return the settlement decision; must not be null
      */
-    boolean accept(T message);
+    Decision accept(T message, MessageLease lease);
+
+    /**
+     * Admission gate: the dispatcher does not claim messages from this queue while
+     * this method returns {@code false}. A skipped queue counts as an empty poll for
+     * the dispatcher's idle pause.
+     *
+     * @return {@code true} when the consumer can accept a new message
+     */
+    default boolean ready() {
+        return true;
+    }
 
 }

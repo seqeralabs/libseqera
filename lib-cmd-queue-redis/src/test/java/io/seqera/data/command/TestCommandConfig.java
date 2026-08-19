@@ -32,11 +32,15 @@ public class TestCommandConfig implements CommandConfig {
     @Value("${command.poll-interval:100ms}")
     private Duration pollInterval;
 
-    @Value("${command.execute-timeout:1s}")
-    private Duration executeTimeout;
+    @Value("${command.max-concurrency:25}")
+    private int maxConcurrency;
 
     @Value("${command.state.ttl:1h}")
     private Duration stateTtl;
+
+    /** Short default so RUNNING re-polls stay fast in tests (prod default is 45s). */
+    @Value("${command.check-status-interval:300ms}")
+    private Duration checkStatusInterval;
 
     @Override
     public Duration pollInterval() {
@@ -44,8 +48,13 @@ public class TestCommandConfig implements CommandConfig {
     }
 
     @Override
-    public Duration executeTimeout() {
-        return executeTimeout;
+    public Duration checkStatusInterval() {
+        return checkStatusInterval;
+    }
+
+    @Override
+    public int maxConcurrency() {
+        return maxConcurrency;
     }
 
     @Override

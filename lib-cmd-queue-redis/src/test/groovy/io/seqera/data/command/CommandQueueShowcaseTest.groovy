@@ -92,7 +92,7 @@ class CommandQueueShowcaseTest extends Specification {
     // =========================================================================
 
     /**
-     * Demonstrates a long-running command that returns RUNNING status initially
+     * Demonstrates a long-running command that returns PROCESSING status initially
      * and completes asynchronously. The command queue periodically checks status
      * until the command reaches a terminal state.
      *
@@ -128,8 +128,8 @@ class CommandQueueShowcaseTest extends Specification {
         sleep(500)
         def initialState = commandService.getState(commandId).orElseThrow()
 
-        then: 'command is in RUNNING state (async processing started)'
-        initialState.status() == CommandStatus.RUNNING
+        then: 'command is in PROCESSING state (async processing started)'
+        initialState.status() == CommandStatus.PROCESSING
 
         when: 'wait for async completion via periodic status checks'
         sleep(4000)
@@ -476,7 +476,7 @@ class DataProcessingCommand implements Command<DataProcessingParams> {
 
 /**
  * Handler for data processing commands - executes asynchronously.
- * Returns RUNNING immediately, then checkStatus() is called periodically
+ * Returns PROCESSING immediately, then checkStatus() is called periodically
  * until processing completes.
  */
 class DataProcessingHandler implements CommandHandler<DataProcessingParams, DataProcessingResult> {
@@ -492,8 +492,8 @@ class DataProcessingHandler implements CommandHandler<DataProcessingParams, Data
         // Start async processing - record start time
         jobStartTimes.put(command.id(), Instant.now())
 
-        // Return RUNNING - the periodic checker will call checkStatus()
-        return CommandResult.running()
+        // Return PROCESSING - the periodic checker will call checkStatus()
+        return CommandResult.processing()
     }
 
     @Override
@@ -522,7 +522,7 @@ class DataProcessingHandler implements CommandHandler<DataProcessingParams, Data
         }
 
         // Still running
-        return CommandResult.running()
+        return CommandResult.processing()
     }
 }
 

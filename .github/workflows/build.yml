@@ -78,6 +78,8 @@ jobs:
           bash publish.sh lib-data-store-future-redis
           bash publish.sh lib-data-store-state-redis
           bash publish.sh lib-data-stream-redis
+          bash publish.sh lib-data-workqueue
+          bash publish.sh lib-data-workqueue-redis
           bash publish.sh lib-fixtures-redis
           bash publish.sh lib-hashx
           bash publish.sh lib-lang

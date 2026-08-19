@@ -45,10 +45,10 @@ public record CommandResult<R>(
     }
 
     /**
-     * Indicate that the command is still running (for long-running commands).
+     * Indicate that the command is still being processed (for long-running commands).
      */
-    public static <R> CommandResult<R> running() {
-        return new CommandResult<>(CommandStatus.RUNNING, null, null);
+    public static <R> CommandResult<R> processing() {
+        return new CommandResult<>(CommandStatus.PROCESSING, null, null);
     }
 
     /**

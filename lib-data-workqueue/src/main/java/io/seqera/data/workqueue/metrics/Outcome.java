@@ -22,13 +22,13 @@ package io.seqera.data.workqueue.metrics;
  * {@code seqera.workqueue.messages} counter and {@code seqera.workqueue.processing} timer.
  */
 public enum Outcome {
-    /** Consumer.accept returned true; message was acknowledged and removed. */
+    /** Consumer decided ACK; message was acknowledged and removed. */
     PROCESSED("processed"),
-    /** Consumer.accept returned false; message remains available for redelivery. */
+    /** Consumer decided RETRY or DEFERRED; message remains pending (leased or redeliverable). */
     ACTIVE("active"),
     /** Exception escaped the consumer or the underlying queue implementation. */
     ERRORED("errored"),
-    /** Receive found no message available. Not counted or timed. */
+    /** Poll found no message available. Not counted or timed. */
     EMPTY("empty");
 
     private final String tag;
