@@ -35,7 +35,7 @@ jobs:
           fetch-depth: 1
 
       - name: Run Claude PR Action
-        uses: anthropics/claude-code-action@9db594c7a0e82298c121c18b7f08aa1579ce7341 # ratchet:anthropics/claude-code-action@v1.0.185
+        uses: anthropics/claude-code-action@dcb57747bfceeaa1fa72638cae52295d1d853d4a # v1.0.199
         timeout-minutes: 60
         with:
           anthropic_api_key: ${{ secrets.ENG_ANTHROPIC_API_KEY }}
