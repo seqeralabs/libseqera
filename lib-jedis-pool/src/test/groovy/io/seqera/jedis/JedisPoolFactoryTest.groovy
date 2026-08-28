@@ -33,7 +33,7 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory(meterRegistry: Mock(MeterRegistry))
 
         when:
-        def pool = factory.createRedisPool(URI_STRING, MIN_IDLE, MAX_IDLE, MAX_TOTAL, false, -1, TIMEOUT, 'password')
+        def pool = factory.createRedisPool(URI_STRING, MIN_IDLE, MAX_IDLE, MAX_TOTAL, false, -1, TIMEOUT, -1, 'password')
 
         then:
         pool != null
@@ -56,7 +56,7 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory()
 
         when:
-        def clientConfig = factory.clientConfig(URI.create(URI_STRING), null, 5000)
+        def clientConfig = factory.clientConfig(URI.create(URI_STRING), null, 5000, -1)
 
         then:
         clientConfig.database == EXPECTED_DB
@@ -75,7 +75,7 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory(meterRegistry: Mock(MeterRegistry))
 
         when:
-        factory.createRedisPool(URI_STRING, 0, 10, 50, false, -1, 5000, null)
+        factory.createRedisPool(URI_STRING, 0, 10, 50, false, -1, 5000, -1, null)
 
         then:
         def e = thrown(InvalidURIException)
@@ -92,7 +92,7 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory()
 
         when:
-        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, ON_BORROW, -1, 5000, null)
+        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, ON_BORROW, -1, 5000, -1, null)
 
         then:
         pool.testOnBorrow == ON_BORROW
@@ -109,7 +109,7 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory()
 
         when:
-        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, false, MAX_WAIT, 5000, null)
+        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, false, MAX_WAIT, 5000, -1, null)
 
         then:
         pool.maxWaitDuration == java.time.Duration.ofMillis(EXPECTED)
@@ -123,12 +123,51 @@ class JedisPoolFactoryTest extends Specification {
         -1       | -1        // default: block indefinitely - the pre-existing commons-pool2 behavior, unchanged
     }
 
+    def 'should apply the blocking socket timeout'() {
+        given:
+        def factory = new JedisPoolFactory()
+
+        when:
+        def clientConfig = factory.clientConfig(URI.create('redis://localhost:6379'), null, 5000, BLOCKING)
+
+        then:
+        clientConfig.blockingSocketTimeoutMillis == EXPECTED
+        and: 'the non-blocking timeout is unaffected'
+        clientConfig.socketTimeoutMillis == 5000
+
+        where:
+        BLOCKING | EXPECTED
+        0        | 0         // no timeout — an idle pub/sub subscriber is not torn down between messages
+        1000     | 1000
+        -1       | 5000      // inherit `timeout`, the pre-existing behavior
+    }
+
+    def 'should ignore a blank password override'() {
+        given:
+        def factory = new JedisPoolFactory()
+
+        when:
+        def clientConfig = factory.clientConfig(URI.create(URI_STRING), PASSWORD, 5000, -1)
+
+        then:
+        clientConfig.password == EXPECTED
+
+        where:
+        URI_STRING                         | PASSWORD | EXPECTED
+        'redis://localhost:6379'           | ''       | null        // must not become AUTH ""
+        'redis://localhost:6379'           | '   '    | null
+        'redis://localhost:6379'           | null     | null
+        'redis://localhost:6379'           | 'secret' | 'secret'
+        'redis://:from-uri@localhost:6379' | ''       | 'from-uri'  // blank override falls back to the URI
+        'redis://:from-uri@localhost:6379' | 'secret' | 'secret'
+    }
+
     def 'should create pool without meter registry'() {
         given:
         def factory = new JedisPoolFactory()
 
         when:
-        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, false, -1, 5000, null)
+        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, false, -1, 5000, -1, null)
 
         then:
         pool != null

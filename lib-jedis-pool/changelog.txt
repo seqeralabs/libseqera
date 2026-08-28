@@ -1,5 +1,14 @@
 # lib-jedis-pool changelog
 
+1.3.0 - 4 Aug 2026
+- Close the pool on bean disposal via @Bean(preDestroy='close'); previously the pool was
+  never disposed, letting background threads borrow from a pool whose connections were gone
+- Add redis.client.blockingTimeout option for the blocking-read socket timeout (pub/sub
+  subscribe, BLPOP/BRPOP, XREAD BLOCK); default -1 inherits redis.client.timeout, 0 disables
+  the timeout as long-lived subscribers require
+- Treat a blank redis.password override as absent instead of sending AUTH "" and failing
+  every connection against a password-less Redis
+
 1.2.0 - 2 Aug 2026
 - Add redis.pool.maxWait option bounding a borrow against an exhausted pool (millis);
   default -1 preserves the pre-existing unbounded blocking behavior

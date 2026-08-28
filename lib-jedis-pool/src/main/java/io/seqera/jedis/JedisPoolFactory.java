@@ -20,6 +20,7 @@ import java.net.URI;
 import java.time.Duration;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micronaut.context.annotation.Bean;
 import io.micronaut.context.annotation.Factory;
 import io.micronaut.context.annotation.Requires;
 import io.micronaut.context.annotation.Value;
@@ -56,7 +57,13 @@ public class JedisPoolFactory {
     @Inject
     private MeterRegistry meterRegistry;
 
+    // preDestroy = 'close' makes Micronaut close the pool during bean disposal (reverse
+    // dependency-injection order), so beans that injected this pool are guaranteed to have
+    // run their @PreDestroy first. Without it the pool is never closed — JedisPool is
+    // Closeable but not a Micronaut LifeCycle, so nothing disposes it — and background
+    // consumer threads can call getResource() on a pool whose Redis connections are gone.
     @Singleton
+    @Bean(preDestroy = "close")
     public JedisPool createRedisPool(
             @Value("${redis.uri}") String connection,
             @Value("${redis.pool.minIdle:0}") int minIdle,
@@ -65,6 +72,7 @@ public class JedisPoolFactory {
             @Value("${redis.pool.testOnBorrow:false}") boolean testOnBorrow,
             @Value("${redis.pool.maxWait:-1}") long maxWait,
             @Value("${redis.client.timeout:5000}") int timeout,
+            @Value("${redis.client.blockingTimeout:-1}") int blockingTimeout,
             @Nullable @Value("${redis.password}") String password
     ) {
         final URI uri = URI.create(connection);
@@ -73,8 +81,8 @@ public class JedisPoolFactory {
         }
         final int database = JedisURIHelper.getDBIndex(uri);
 
-        log.info("Creating Redis pool - uri={}; database={}; minIdle={}; maxIdle={}; maxTotal={}; testOnBorrow={}; maxWait={}; timeout={}",
-                maskPassword(connection), database, minIdle, maxIdle, maxTotal, testOnBorrow, maxWait, timeout);
+        log.info("Creating Redis pool - uri={}; database={}; minIdle={}; maxIdle={}; maxTotal={}; testOnBorrow={}; maxWait={}; timeout={}; blockingTimeout={}",
+                maskPassword(connection), database, minIdle, maxIdle, maxTotal, testOnBorrow, maxWait, timeout, blockingTimeout);
 
         // Pool config
         final JedisPoolConfig config = new JedisPoolConfig();
@@ -93,7 +101,7 @@ public class JedisPoolFactory {
         config.setMaxWait(Duration.ofMillis(maxWait));
 
         // Client config with database support
-        final JedisClientConfig clientConfig = clientConfig(uri, password, timeout);
+        final JedisClientConfig clientConfig = clientConfig(uri, password, timeout, blockingTimeout);
 
         // Create the Jedis pool
         final JedisPool pool = new JedisPool(config, JedisURIHelper.getHostAndPort(uri), clientConfig);
@@ -109,12 +117,15 @@ public class JedisPoolFactory {
     /**
      * Creates the Jedis client configuration from the URI.
      *
-     * @param uri      the Redis URI
-     * @param password optional password override (if null, extracted from URI)
-     * @param timeout  connection timeout in milliseconds
+     * @param uri             the Redis URI
+     * @param password        optional password override (blank or null → extracted from URI)
+     * @param timeout         connection and socket timeout in milliseconds
+     * @param blockingTimeout socket timeout applied to blocking reads (pub/sub subscribe,
+     *                        BLPOP/BRPOP, XREAD BLOCK) in milliseconds; 0 means no timeout
+     *                        and any negative value inherits {@code timeout}
      * @return the configured JedisClientConfig
      */
-    protected JedisClientConfig clientConfig(URI uri, String password, int timeout) {
+    protected JedisClientConfig clientConfig(URI uri, String password, int timeout, int blockingTimeout) {
         if (!JedisURIHelper.isValid(uri)) {
             throw new InvalidURIException("Invalid Redis connection URI: " + uri);
         }
@@ -122,9 +133,15 @@ public class JedisPoolFactory {
         return DefaultJedisClientConfig.builder()
                 .connectionTimeoutMillis(timeout)
                 .socketTimeoutMillis(timeout)
-                .blockingSocketTimeoutMillis(timeout)
+                // Jedis applies this timeout only while a blocking read is in flight, and treats
+                // 0 as "no timeout" — which a long-lived pub/sub subscriber needs, since it sits
+                // idle on the socket between messages and would otherwise be torn down every
+                // `timeout` ms. Negative inherits `timeout` to keep the previous behavior.
+                .blockingSocketTimeoutMillis(blockingTimeout < 0 ? timeout : blockingTimeout)
                 .user(JedisURIHelper.getUser(uri))
-                .password(password != null ? password : JedisURIHelper.getPassword(uri))
+                // an empty override means "no password configured" — passing it through would make
+                // Jedis send AUTH "" and fail every connection against a password-less Redis
+                .password(password != null && !password.isBlank() ? password : JedisURIHelper.getPassword(uri))
                 .database(JedisURIHelper.getDBIndex(uri))
                 .protocol(JedisURIHelper.getRedisProtocol(uri))
                 .ssl(JedisURIHelper.isRedisSSLScheme(uri))
