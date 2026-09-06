@@ -270,6 +270,14 @@ class ProxyConfigTest extends Specification {
         !ProxyConfig.fromUri('http://foo:secret1234@proxy.example.com').toString().contains('secret1234')
     }
 
+    def 'Endpoint toString should redact the password' () {
+        given:
+        def ep = ProxyConfig.fromUri('http://foo:secret1234@proxy.example.com:3128').httpProxy
+        expect:
+        !ep.toString().contains('secret1234')
+        ep.toString().contains('****')
+    }
+
     def 'should not leak the proxy password in the error for an invalid proxy uri' () {
         when: 'an unsupported scheme carrying credentials'
         ProxyConfig.fromUri('socks5://foo:secret1234@proxy.example.com:1080')

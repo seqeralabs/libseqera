@@ -66,6 +66,12 @@ public final class ProxyConfig {
         public InetSocketAddress address() {
             return InetSocketAddress.createUnresolved(host, port);
         }
+        @Override
+        public String toString() {
+            // never render the password (Endpoint is public, returned by getHttpProxy()/getHttpsProxy())
+            return "Endpoint[host=" + host + ", port=" + port + ", username=" + username
+                    + ", password=" + (password != null ? "****" : null) + "]";
+        }
     }
 
     private final Endpoint httpProxy;    // nullable
