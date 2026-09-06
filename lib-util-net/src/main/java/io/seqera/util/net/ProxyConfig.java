@@ -266,18 +266,23 @@ public final class ProxyConfig {
 
     // ------------------------------------------------------------------ parsing (source of truth: nextflow.util.ProxyConfig)
 
-    /** The components of a parsed proxy URI. */
-    record Parsed(String protocol, String host, String port, String username, String password) { }
+    /**
+     * The components of a parsed proxy URI. Percent-encoded {@code username}/{@code password} are
+     * decoded; any path/query in the URI is ignored. Fields not present in the input are {@code null}.
+     */
+    public record Parsed(String protocol, String host, String port, String username, String password) { }
 
     /**
      * Parse a proxy string retrieving its protocol, host, port, username and password components.
+     * Exposed so callers that need the individual components (e.g. to set {@code -Dhttp.proxyHost}
+     * system properties) can reuse the same parsing instead of duplicating it.
      *
      * @param value A proxy string e.g. {@code host}, {@code host:port}, {@code scheme://host:port}
      *      or {@code scheme://user:pass@host:port}
      * @return The parsed components, or {@code null} when {@code value} is empty
      * @throws IllegalArgumentException when {@code value} is not a valid proxy URL
      */
-    static Parsed parse(String value) {
+    public static Parsed parse(String value) {
         if( value == null || value.isEmpty() )
             return null;
         try {

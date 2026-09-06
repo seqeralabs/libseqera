@@ -59,6 +59,9 @@ class ProxyConfigTest extends Specification {
         'http://foo:p%40ss@proxy.example.com'       | 'http'    | 'proxy.example.com'   | null      | 'foo'     | 'p@ss'
         'http://foo:p+ss@proxy.example.com'         | 'http'    | 'proxy.example.com'   | null      | 'foo'     | 'p+ss'
         'http://foo:b:ar@proxy.example.com:1234'    | 'http'    | 'proxy.example.com'   | '1234'    | 'foo'     | 'b:ar'
+        // a path/query in the URI is ignored
+        'http://10.20.30.40:333/some/path'          | 'http'    | '10.20.30.40'         | '333'     | null      | null
+        'http://user:pass@10.20.30.40:333/some/path'| 'http'    | '10.20.30.40'         | '333'     | 'user'    | 'pass'
     }
 
     def 'should resolve a proxy uri applying it to both http and https destinations' () {
