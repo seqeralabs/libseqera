@@ -1,0 +1,534 @@
+/*
+ * Copyright 2026, Seqera Labs
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+package io.seqera.util.net;
+
+import java.io.IOException;
+import java.net.Authenticator;
+import java.net.InetSocketAddress;
+import java.net.MalformedURLException;
+import java.net.PasswordAuthentication;
+import java.net.Proxy;
+import java.net.ProxySelector;
+import java.net.SocketAddress;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Immutable HTTP/HTTPS forward (egress) proxy configuration resolved from a proxy URI or from the
+ * {@code HTTP_PROXY}/{@code HTTPS_PROXY}/{@code NO_PROXY} environment variables, exposed as a
+ * {@link ProxySelector} and a proxy-scoped {@link Authenticator} suitable for a
+ * {@link java.net.http.HttpClient}.
+ *
+ * <p>Parsing, credential-decoding, no-proxy and Basic-over-CONNECT semantics mirror Nextflow's
+ * {@code nextflow.util.ProxyConfig} (the source of truth), so products sharing this class share the
+ * same proxy behaviour. This class depends only on the JDK (and the slf4j-api logging facade); it
+ * never reads {@link System#getenv()} on its own — the caller passes the URI or environment map in.
+ *
+ * <p>{@code NO_PROXY} entries are matched as host names or domain suffixes (optionally prefixed with
+ * {@code .} or {@code *.}); the single entry {@code *} disables proxying entirely, and loopback
+ * targets always bypass the proxy. CIDR notation is not supported.
+ *
+ * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
+ */
+public final class ProxyConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(ProxyConfig.class);
+
+    /** A single proxy endpoint with optional Basic credentials. */
+    public record Endpoint(String host, int port, String username, String password) {
+        public boolean hasCredentials() {
+            return username != null && !username.isEmpty();
+        }
+        public InetSocketAddress address() {
+            return InetSocketAddress.createUnresolved(host, port);
+        }
+        @Override
+        public String toString() {
+            // never render the password (Endpoint is public, returned by getHttpProxy()/getHttpsProxy())
+            return "Endpoint[host=" + host + ", port=" + port + ", username=" + username
+                    + ", password=" + (password != null ? "****" : null) + "]";
+        }
+    }
+
+    private final Endpoint httpProxy;    // nullable
+    private final Endpoint httpsProxy;   // nullable
+    private final List<String> noProxyHosts;
+
+    private ProxyConfig(Endpoint httpProxy, Endpoint httpsProxy, List<String> noProxyHosts) {
+        this.httpProxy = httpProxy;
+        this.httpsProxy = httpsProxy;
+        this.noProxyHosts = normalizeNoProxy(noProxyHosts);
+    }
+
+    // ------------------------------------------------------------------ factories
+
+    /**
+     * Resolve a proxy applied to both http and https destinations from a single URI.
+     *
+     * @param uri A proxy URI e.g. {@code http://user:pass@proxy:3128}, or {@code null}/empty for none
+     * @return The corresponding {@link ProxyConfig}, or {@code null} when {@code uri} is empty
+     */
+    public static ProxyConfig fromUri(String uri) {
+        return fromUri(uri, null, null, null);
+    }
+
+    /**
+     * Resolve a proxy applied to both http and https destinations from a single URI. When an explicit
+     * {@code username} is provided it (with {@code password}) takes precedence over any credentials
+     * embedded in the URI.
+     *
+     * @param uri A proxy URI e.g. {@code http://user:pass@proxy:3128}, or {@code null}/empty for none
+     * @param username Proxy username overriding the URI user-info; may be {@code null}
+     * @param password Proxy password used together with an explicit {@code username}; may be {@code null}
+     * @param noProxy Hosts that must bypass the proxy; may be {@code null}
+     * @return The corresponding {@link ProxyConfig}, or {@code null} when {@code uri} is empty
+     */
+    public static ProxyConfig fromUri(String uri, String username, String password, List<String> noProxy) {
+        final Parsed p = warnIfTlsProxy(parse(uri));
+        if( p == null )
+            return null;
+        final boolean explicit = username != null && !username.isEmpty();
+        final String user = explicit ? username : p.username();
+        final String pass = explicit ? password : p.password();
+        final Endpoint ep = new Endpoint(p.host(), portAsInt(p.port(), defaultPort(p)), user, pass);
+        final ProxyConfig cfg = new ProxyConfig(ep, ep, noProxy);
+        log.debug("Proxy config from uri: {}", cfg);
+        return cfg;
+    }
+
+    /**
+     * Resolve per-protocol proxies from a {@code HTTP_PROXY}/{@code HTTPS_PROXY}/{@code NO_PROXY}
+     * environment map (upper- and lower-case names, with an {@code ALL_PROXY} fallback). The caller
+     * supplies the map — this method never reads {@link System#getenv()} itself.
+     *
+     * @param env The environment variables map
+     * @return The corresponding {@link ProxyConfig}, or {@code null} when no proxy variable is present
+     */
+    public static ProxyConfig fromEnvironment(Map<String,String> env) {
+        if( env == null )
+            return null;
+        // ambient environment may carry an unsupported scheme (e.g. socks5://) or a malformed value -
+        // treat it as "no proxy" rather than failing the process (unlike the explicit fromUri path)
+        final Parsed http = warnIfTlsProxy(parseLenient(firstNonEmpty(env, "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")));
+        final Parsed https = warnIfTlsProxy(parseLenient(firstNonEmpty(env, "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")));
+        if( http == null && https == null )
+            return null;
+        // the default port follows the proxy scheme (http->80, https->443), not the traffic protocol,
+        // so HTTPS_PROXY=http://proxy (no port) reaches the proxy on 80 - consistent with fromUri
+        final Endpoint httpEp = http != null
+                ? new Endpoint(http.host(), portAsInt(http.port(), defaultPort(http)), http.username(), http.password())
+                : null;
+        final Endpoint httpsEp = https != null
+                ? new Endpoint(https.host(), portAsInt(https.port(), defaultPort(https)), https.username(), https.password())
+                : null;
+        final ProxyConfig cfg = new ProxyConfig(httpEp, httpsEp, split(firstNonEmpty(env, "NO_PROXY", "no_proxy")));
+        log.debug("Proxy config from environment: {}", cfg);
+        return cfg;
+    }
+
+    // ------------------------------------------------------------------ java.net views
+
+    /**
+     * @return {@code true} when at least one configured proxy carries credentials
+     */
+    public boolean hasCredentials() {
+        return (httpProxy != null && httpProxy.hasCredentials())
+                || (httpsProxy != null && httpsProxy.hasCredentials());
+    }
+
+    /** @return The resolved HTTP proxy endpoint, or {@code null} when none is configured */
+    public Endpoint getHttpProxy() {
+        return httpProxy;
+    }
+
+    /** @return The resolved HTTPS proxy endpoint, or {@code null} when none is configured */
+    public Endpoint getHttpsProxy() {
+        return httpsProxy;
+    }
+
+    /** @return The {@code NO_PROXY} host entries (normalized to lower-case), never {@code null} */
+    public List<String> getNoProxyHosts() {
+        return noProxyHosts;
+    }
+
+    /**
+     * @return A {@link ProxySelector} routing per scheme, bypassing loopback and {@code NO_PROXY} targets
+     */
+    public ProxySelector toProxySelector() {
+        // precompute the proxy lists - select() runs once per outbound request
+        final List<Proxy> direct = List.of(Proxy.NO_PROXY);
+        final List<Proxy> viaHttp = httpProxy != null
+                ? List.of(new Proxy(Proxy.Type.HTTP, httpProxy.address()))
+                : direct;
+        final List<Proxy> viaHttps = httpsProxy != null
+                ? List.of(new Proxy(Proxy.Type.HTTP, httpsProxy.address()))
+                : direct;
+        return new ProxySelector() {
+            @Override
+            public List<Proxy> select(URI uri) {
+                if( uri == null || isBypassed(uri.getHost()) )
+                    return direct;
+                return "https".equalsIgnoreCase(uri.getScheme()) ? viaHttps : viaHttp;
+            }
+            @Override
+            public void connectFailed(URI uri, SocketAddress sa, IOException e) {
+                log.debug("Failed to connect to proxy {} for {}: {}", sa, uri, e.getMessage());
+            }
+        };
+    }
+
+    /**
+     * Creates a proxy-scoped {@link Authenticator}, or {@code null} when no credentials are configured.
+     *
+     * <p>Credentials are released only for {@link Authenticator.RequestorType#PROXY} challenges whose
+     * host and port match a configured proxy — never for origin-server challenges. Matching on host+port
+     * (not protocol) inherently covers the HTTPS {@code CONNECT} tunnel, where the JDK reports the
+     * requesting protocol as {@code http} even for an https destination.
+     *
+     * @return A new {@link Authenticator}, or {@code null} when no proxy credentials are configured
+     */
+    public Authenticator toAuthenticator() {
+        if( !hasCredentials() )
+            return null;
+        return new Authenticator() {
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication() {
+                if( getRequestorType() != RequestorType.PROXY )
+                    return null;
+                final Endpoint ep = credentialsFor(getRequestingHost(), getRequestingPort());
+                if( ep == null )
+                    return null;
+                final String pass = ep.password() != null ? ep.password() : "";
+                return new PasswordAuthentication(ep.username(), pass.toCharArray());
+            }
+        };
+    }
+
+    /**
+     * Determines whether the given target host must bypass the proxy, because it is a loopback address
+     * or matches a {@code NO_PROXY} entry.
+     *
+     * @param host The target host name
+     * @return {@code true} when the target must be reached directly
+     */
+    public boolean isBypassed(String host) {
+        if( host == null )
+            return true;
+        final String target = host.toLowerCase(Locale.ROOT);
+        // always bypass loopback targets, consistent with the JDK default `http.nonProxyHosts`
+        if( target.equals("localhost") || target.startsWith("127.") || target.equals("::1") || target.equals("[::1]") )
+            return true;
+        for( String entry : noProxyHosts ) {
+            if( entry.equals("*") )
+                return true;
+            // "*.example.com" and ".example.com" match sub-domains only;
+            // "example.com" matches the host itself and any sub-domain
+            final String suffix = entry.startsWith("*.") ? entry.substring(1) : entry;
+            if( suffix.startsWith(".") ) {
+                if( target.endsWith(suffix) )
+                    return true;
+            }
+            else if( target.equals(suffix) || target.endsWith("." + suffix) ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Endpoint credentialsFor(String host, int port) {
+        if( httpsProxy != null && httpsProxy.hasCredentials() && httpsProxy.host().equalsIgnoreCase(host) && httpsProxy.port() == port )
+            return httpsProxy;
+        if( httpProxy != null && httpProxy.hasCredentials() && httpProxy.host().equalsIgnoreCase(host) && httpProxy.port() == port )
+            return httpProxy;
+        return null;
+    }
+
+    // ------------------------------------------------------------------ Basic-over-CONNECT toggle
+
+    /**
+     * The JDK disables the Basic scheme for proxy authentication over HTTPS {@code CONNECT} tunnelling
+     * by default ({@code jdk.http.auth.tunneling.disabledSchemes=Basic}), which blocks authenticating
+     * proxies for {@code https} targets. This clears that property so Basic credentials reach the proxy,
+     * but only when it is unset — an operator's explicit value (e.g. via {@code JAVA_TOOL_OPTIONS}) wins.
+     *
+     * <p>Call once at startup, before the first outbound request: the JDK reads this property lazily and
+     * only once.
+     *
+     * @return {@code true} when the property was changed, {@code false} when it was already set
+     */
+    public static boolean enableBasicProxyTunneling() {
+        final String key = "jdk.http.auth.tunneling.disabledSchemes";
+        if( System.getProperty(key) == null ) {
+            System.setProperty(key, "");
+            log.debug("Cleared '{}' to allow Basic proxy authentication over HTTPS tunnelling", key);
+            return true;
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------------------ JVM-global setup from the environment
+
+    /**
+     * Resolve the http/https/ftp proxies from the environment and install them into the JVM, mirroring
+     * the setup Nextflow's launcher performs so JVM-global HTTP/FTP code (e.g. {@code URLConnection})
+     * honours the proxy:
+     * <ul>
+     *   <li>sets the per-protocol {@code <proto>.proxyHost}/{@code <proto>.proxyPort} system properties
+     *       (each var falling back to {@code ALL_PROXY});</li>
+     *   <li>sets {@code http.nonProxyHosts} from {@code NO_PROXY};</li>
+     *   <li>when credentials are present, installs the proxy-scoped {@link Authenticator} as the JVM
+     *       default and clears {@code jdk.http.auth.tunneling.disabledSchemes}.</li>
+     * </ul>
+     * The caller supplies the map — this method never reads {@link System#getenv()} itself. A malformed
+     * proxy value is logged and skipped rather than raised.
+     *
+     * @param env The environment variables map
+     * @return The resolved http/https {@link ProxyConfig} for wiring {@code java.net.http} clients
+     *      explicitly (ftp has no {@code java.net.http} representation - it is applied via system
+     *      properties only, so this can return {@code null} even after {@code FTP_PROXY} installed
+     *      ftp system properties), or {@code null} when no http/https proxy variable is present
+     */
+    public static ProxyConfig setupFromEnvironment(Map<String,String> env) {
+        if( env == null )
+            return null;
+        // per-protocol JVM system properties (honoured by URLConnection, FTP and other JVM-global code)
+        applyProxySystemProperty(env, "http");
+        applyProxySystemProperty(env, "https");
+        applyProxySystemProperty(env, "ftp");
+        final String noProxy = firstNonEmpty(env, "NO_PROXY", "no_proxy");
+        if( noProxy != null && !noProxy.isBlank() ) {
+            final String nonProxyHosts = toNonProxyHosts(split(noProxy));
+            // http.nonProxyHosts covers both http and https; ftp has its own property
+            System.setProperty("http.nonProxyHosts", nonProxyHosts);
+            System.setProperty("ftp.nonProxyHosts", nonProxyHosts);
+        }
+        // http/https config for java.net.http clients (ftp is not an HttpClient scheme)
+        final ProxyConfig cfg = fromEnvironment(env);
+        if( cfg != null && cfg.hasCredentials() ) {
+            Authenticator.setDefault(cfg.toAuthenticator());
+            enableBasicProxyTunneling();
+        }
+        return cfg;
+    }
+
+    private static void applyProxySystemProperty(Map<String,String> env, String proto) {
+        final Parsed p = parseLenient(firstNonEmpty(env, proto.toUpperCase(Locale.ROOT) + "_PROXY", proto + "_proxy", "ALL_PROXY", "all_proxy"));
+        if( p == null )
+            return;
+        System.setProperty(proto + ".proxyHost", p.host());
+        if( p.port() != null && !p.port().isBlank() )
+            System.setProperty(proto + ".proxyPort", p.port());
+    }
+
+    /**
+     * Translate {@code NO_PROXY} entries to the JDK {@code http.nonProxyHosts} grammar (exact host or
+     * {@code *} wildcard, {@code |}-separated). Setting the property replaces the JDK default, so the
+     * loopback bypass ({@code localhost|127.*|[::1]|0.0.0.0|[::0]}) is prepended; and because a bare
+     * {@code example.com} means "host and sub-domains" here (see {@link #isBypassed(String)}) it is
+     * expanded to {@code example.com|*.example.com}, while {@code .x}/{@code *.x} become {@code *.x}.
+     */
+    private static String toNonProxyHosts(List<String> entries) {
+        final StringBuilder sb = new StringBuilder("localhost|127.*|[::1]|0.0.0.0|[::0]");
+        for( String entry : entries ) {
+            if( entry.equals("*") )
+                sb.append("|*");
+            else if( entry.startsWith("*.") )
+                sb.append('|').append(entry);
+            else if( entry.startsWith(".") )
+                sb.append("|*").append(entry);            // ".corp" -> "*.corp"
+            else
+                sb.append('|').append(entry).append("|*.").append(entry);   // "x" -> "x|*.x"
+        }
+        return sb.toString();
+    }
+
+    // ------------------------------------------------------------------ parsing (source of truth: nextflow.util.ProxyConfig)
+
+    /**
+     * The components of a parsed proxy URI. Percent-encoded {@code username}/{@code password} are
+     * decoded; any path/query in the URI is ignored. Fields not present in the input are {@code null}.
+     */
+    public record Parsed(String protocol, String host, String port, String username, String password) {
+        @Override
+        public String toString() {
+            // never render the password
+            return "Parsed[protocol=" + protocol + ", host=" + host + ", port=" + port
+                    + ", username=" + username + ", password=" + (password != null ? "****" : null) + "]";
+        }
+    }
+
+    /**
+     * Like {@link #parse(String)} but lenient: an unsupported scheme (e.g. {@code socks5://}) or an
+     * otherwise malformed value is logged and treated as absent rather than raised. Used for the
+     * ambient environment, which the caller does not control.
+     */
+    private static Parsed parseLenient(String value) {
+        try {
+            return parse(value);
+        }
+        catch( IllegalArgumentException e ) {
+            log.warn("Ignoring unsupported or invalid proxy value '{}': {}", redactUserInfo(value), e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Warn when a proxy is addressed over {@code https}: the JDK {@link java.net.http.HttpClient} has
+     * no TLS-to-proxy support, so it will speak plaintext to the proxy. Returns the argument unchanged.
+     */
+    private static Parsed warnIfTlsProxy(Parsed p) {
+        if( p != null && "https".equalsIgnoreCase(p.protocol()) )
+            log.warn("Proxy '{}' is addressed over https, but connecting to a proxy over TLS is not supported - the connection to the proxy will use plaintext", p.host());
+        return p;
+    }
+
+    /**
+     * Parse a proxy string retrieving its protocol, host, port, username and password components.
+     * Exposed so callers that need the individual components (e.g. to set {@code -Dhttp.proxyHost}
+     * system properties) can reuse the same parsing instead of duplicating it.
+     *
+     * <p>Limitations (unchanged, mirroring Nextflow): a bracketed IPv6 literal without a scheme
+     * ({@code [::1]:3128}) is not parsed correctly - give it a scheme ({@code http://[::1]:3128});
+     * and {@code NO_PROXY} entries do not carry ports.
+     *
+     * @param value A proxy string e.g. {@code host}, {@code host:port}, {@code scheme://host:port}
+     *      or {@code scheme://user:pass@host:port}
+     * @return The parsed components, or {@code null} when {@code value} is empty
+     * @throws IllegalArgumentException when {@code value} is not a valid proxy URL
+     */
+    public static Parsed parse(String value) {
+        if( value == null || value.isEmpty() )
+            return null;
+        try {
+            if( value.contains("://") ) {
+                final URL url = new URL(value);
+                String user = null, pass = null;
+                final String info = url.getUserInfo();
+                if( info != null && !info.isEmpty() ) {
+                    final int p = info.indexOf(':');
+                    if( p == -1 ) {
+                        user = decodeUserInfo(info);   // username-only (e.g. a token proxy), no password
+                    }
+                    else {
+                        user = decodeUserInfo(info.substring(0, p));
+                        pass = decodeUserInfo(info.substring(p + 1));
+                    }
+                }
+                final String port = url.getPort() > 0 ? String.valueOf(url.getPort()) : null;
+                return new Parsed(url.getProtocol(), url.getHost(), port, user, pass);
+            }
+            final int p = value.indexOf(':');
+            if( p != -1 )
+                return new Parsed(null, value.substring(0, p), value.substring(p + 1), null, null);
+            return new Parsed(null, value, null, null, null);
+        }
+        catch( MalformedURLException e ) {
+            // never include the raw value verbatim - it may carry the proxy password in its user-info
+            throw new IllegalArgumentException("Invalid proxy URL: " + redactUserInfo(value), e);
+        }
+    }
+
+    /**
+     * Replace the user-info of a proxy URI with {@code ****} so credentials are never logged or
+     * surfaced in an exception message, e.g. {@code http://user:pass@host} → {@code http://****@host}.
+     */
+    private static String redactUserInfo(String value) {
+        return value != null ? value.replaceAll("://[^@/]+@", "://****@") : null;
+    }
+
+    /**
+     * Percent-decode a userinfo component (username or password) per RFC 3986, so proxy credentials
+     * carrying special characters (e.g. {@code @}, {@code :}) work. A literal {@code +} is preserved —
+     * userinfo is not form-encoded — so it is shielded from the {@code +}→space rule of
+     * {@link URLDecoder}.
+     */
+    private static String decodeUserInfo(String s) {
+        return s != null ? URLDecoder.decode(s.replace("+", "%2B"), StandardCharsets.UTF_8) : null;
+    }
+
+    /** @return the default proxy port for the parsed scheme: 443 for https, 80 otherwise */
+    private static int defaultPort(Parsed p) {
+        return "https".equalsIgnoreCase(p.protocol()) ? 443 : 80;
+    }
+
+    private static int portAsInt(String port, int defaultPort) {
+        if( port == null || port.isBlank() )
+            return defaultPort;
+        try {
+            return Integer.parseInt(port.trim());
+        }
+        catch( NumberFormatException e ) {
+            log.warn("Ignoring invalid proxy port '{}' - using default {}", port, defaultPort);
+            return defaultPort;
+        }
+    }
+
+    // ------------------------------------------------------------------ helpers
+
+    private static List<String> normalizeNoProxy(List<String> hosts) {
+        if( hosts == null )
+            return List.of();
+        final List<String> result = new ArrayList<>();
+        for( String h : hosts ) {
+            if( h == null )
+                continue;
+            final String t = h.trim().toLowerCase(Locale.ROOT);
+            if( !t.isEmpty() )
+                result.add(t);
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<String> split(String csv) {
+        if( csv == null || csv.isBlank() )
+            return List.of();
+        final List<String> result = new ArrayList<>();
+        for( String s : csv.split(",") )
+            if( !s.isBlank() )
+                result.add(s.trim());
+        return result;
+    }
+
+    private static String firstNonEmpty(Map<String,String> env, String... keys) {
+        for( String k : keys ) {
+            final String v = env.get(k);
+            if( v != null && !v.isEmpty() )
+                return v;
+        }
+        return null;
+    }
+
+    @Override
+    public String toString() {
+        return "ProxyConfig[http=" + describe(httpProxy) + "; https=" + describe(httpsProxy) + "; noProxy=" + noProxyHosts + "]";
+    }
+
+    private static String describe(Endpoint ep) {
+        // credentials are never rendered
+        return ep == null ? "-" : ep.host() + ":" + ep.port() + (ep.hasCredentials() ? " (auth)" : "");
+    }
+}

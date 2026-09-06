@@ -701,7 +701,7 @@ public class HxConfig implements Retryable.Config {
          *
          * @param proxySelector the proxy selector, or null to use the JVM default behaviour
          * @return this builder instance for method chaining
-         * @see HxProxyConfig
+         * @see io.seqera.util.net.ProxyConfig
          */
         public Builder proxySelector(ProxySelector proxySelector) {
             this.proxySelector = proxySelector;
@@ -711,12 +711,12 @@ public class HxConfig implements Retryable.Config {
         /**
          * Sets the authenticator used to supply credentials to an authenticating forward proxy,
          * applied to the main HTTP client and the internal token refresh clients. See
-         * {@link HxProxyConfig} for the {@code Authenticator.setDefault} and Basic-over-HTTPS
-         * tunnelling caveats.
+         * {@link io.seqera.util.net.ProxyConfig} for the {@code Authenticator.setDefault} and
+         * Basic-over-HTTPS tunnelling caveats.
          *
          * @param proxyAuthenticator the authenticator providing proxy credentials, or null for none
          * @return this builder instance for method chaining
-         * @see HxProxyConfig#toAuthenticator()
+         * @see io.seqera.util.net.ProxyConfig#toAuthenticator()
          */
         public Builder proxyAuthenticator(Authenticator proxyAuthenticator) {
             this.proxyAuthenticator = proxyAuthenticator;
