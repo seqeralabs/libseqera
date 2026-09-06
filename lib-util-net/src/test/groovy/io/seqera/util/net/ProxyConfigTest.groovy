@@ -17,6 +17,7 @@
 
 package io.seqera.util.net
 
+import spock.lang.ResourceLock
 import spock.lang.Specification
 import spock.lang.Unroll
 
@@ -269,10 +270,28 @@ class ProxyConfigTest extends Specification {
         !ProxyConfig.fromUri('http://foo:secret1234@proxy.example.com').toString().contains('secret1234')
     }
 
+    def 'should not leak the proxy password in the error for an invalid proxy uri' () {
+        when: 'an unsupported scheme carrying credentials'
+        ProxyConfig.fromUri('socks5://foo:secret1234@proxy.example.com:1080')
+        then:
+        def e = thrown(IllegalArgumentException)
+        !e.message.contains('secret1234')
+        e.message.contains('****')
+    }
+
+    def 'fromEnvironment should default the proxy port from the proxy scheme, not the traffic protocol' () {
+        expect: 'HTTPS_PROXY reached over http with no port -> 80 (proxy scheme), consistent with fromUri'
+        (ProxyConfig.fromEnvironment([HTTPS_PROXY: 'http://proxy.corp']).toProxySelector().select(new URI('https://x/'))[0].address() as InetSocketAddress).port == 80
+        and: 'an https-scheme proxy still defaults to 443'
+        (ProxyConfig.fromEnvironment([HTTPS_PROXY: 'https://proxy.corp']).toProxySelector().select(new URI('https://x/'))[0].address() as InetSocketAddress).port == 443
+    }
+
+    @ResourceLock('proxy-jvm-globals')
     def 'setupFromEnvironment should install per-protocol system properties and return the http/https config' () {
         given:
         def keys = ['http.proxyHost','http.proxyPort','https.proxyHost','https.proxyPort',
-                    'ftp.proxyHost','ftp.proxyPort','http.nonProxyHosts','jdk.http.auth.tunneling.disabledSchemes']
+                    'ftp.proxyHost','ftp.proxyPort','http.nonProxyHosts','ftp.nonProxyHosts',
+                    'jdk.http.auth.tunneling.disabledSchemes']
         def saved = keys.collectEntries { [(it): System.getProperty(it)] }
         keys.each { System.clearProperty(it) }
         def savedAuth = Authenticator.default
@@ -291,8 +310,9 @@ class ProxyConfigTest extends Specification {
         System.getProperty('https.proxyPort') == '8080'
         System.getProperty('ftp.proxyHost') == 'ftp-proxy'
         System.getProperty('ftp.proxyPort') == '2121'
-        and: 'NO_PROXY is installed as pipe-separated http.nonProxyHosts'
-        System.getProperty('http.nonProxyHosts') == 'internal.example.com|.corp'
+        and: 'NO_PROXY -> http.nonProxyHosts in JDK grammar, keeping the loopback defaults and http+ftp'
+        System.getProperty('http.nonProxyHosts') == 'localhost|127.*|[::1]|0.0.0.0|[::0]|internal.example.com|*.internal.example.com|*.corp'
+        System.getProperty('ftp.nonProxyHosts') == System.getProperty('http.nonProxyHosts')
         and: 'credentials present -> tunnelling Basic scheme is enabled'
         System.getProperty('jdk.http.auth.tunneling.disabledSchemes') == ''
         and: 'the returned config carries the http/https proxies and no-proxy for java.net.http clients'
@@ -311,6 +331,7 @@ class ProxyConfigTest extends Specification {
         ProxyConfig.setupFromEnvironment([:]) == null
     }
 
+    @ResourceLock('proxy-jvm-globals')
     def 'setupFromEnvironment should fall back to ALL_PROXY for the system properties' () {
         given:
         def keys = ['http.proxyHost','http.proxyPort','https.proxyHost','https.proxyPort']
@@ -330,6 +351,7 @@ class ProxyConfigTest extends Specification {
     }
 
     @Unroll
+    @ResourceLock('proxy-jvm-globals')
     def 'setupFromEnvironment disabledSchemes handling: preset=#PRESET creds=#CREDS -> #EXPECTED' () {
         given:
         def key = 'jdk.http.auth.tunneling.disabledSchemes'
@@ -353,6 +375,7 @@ class ProxyConfigTest extends Specification {
         'NTLM'  | true  || 'NTLM'    // operator value always wins
     }
 
+    @ResourceLock('proxy-jvm-globals')
     def 'should clear the tunnelling disabledSchemes property only when unset' () {
         given:
         def key = 'jdk.http.auth.tunneling.disabledSchemes'

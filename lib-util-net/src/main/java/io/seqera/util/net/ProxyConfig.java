@@ -60,10 +60,10 @@ public final class ProxyConfig {
 
     /** A single proxy endpoint with optional Basic credentials. */
     public record Endpoint(String host, int port, String username, String password) {
-        boolean hasCredentials() {
+        public boolean hasCredentials() {
             return username != null && !username.isEmpty();
         }
-        InetSocketAddress address() {
+        public InetSocketAddress address() {
             return InetSocketAddress.createUnresolved(host, port);
         }
     }
@@ -108,8 +108,7 @@ public final class ProxyConfig {
         final boolean explicit = username != null && !username.isEmpty();
         final String user = explicit ? username : p.username();
         final String pass = explicit ? password : p.password();
-        final int port = portAsInt(p.port(), "https".equalsIgnoreCase(p.protocol()) ? 443 : 80);
-        final Endpoint ep = new Endpoint(p.host(), port, user, pass);
+        final Endpoint ep = new Endpoint(p.host(), portAsInt(p.port(), defaultPort(p)), user, pass);
         final ProxyConfig cfg = new ProxyConfig(ep, ep, noProxy);
         log.debug("Proxy config from uri: {}", cfg);
         return cfg;
@@ -132,11 +131,13 @@ public final class ProxyConfig {
         final Parsed https = warnIfTlsProxy(parseLenient(firstNonEmpty(env, "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")));
         if( http == null && https == null )
             return null;
+        // the default port follows the proxy scheme (http->80, https->443), not the traffic protocol,
+        // so HTTPS_PROXY=http://proxy (no port) reaches the proxy on 80 - consistent with fromUri
         final Endpoint httpEp = http != null
-                ? new Endpoint(http.host(), portAsInt(http.port(), 80), http.username(), http.password())
+                ? new Endpoint(http.host(), portAsInt(http.port(), defaultPort(http)), http.username(), http.password())
                 : null;
         final Endpoint httpsEp = https != null
-                ? new Endpoint(https.host(), portAsInt(https.port(), 443), https.username(), https.password())
+                ? new Endpoint(https.host(), portAsInt(https.port(), defaultPort(https)), https.username(), https.password())
                 : null;
         final ProxyConfig cfg = new ProxyConfig(httpEp, httpsEp, split(firstNonEmpty(env, "NO_PROXY", "no_proxy")));
         log.debug("Proxy config from environment: {}", cfg);
@@ -302,7 +303,8 @@ public final class ProxyConfig {
      * @param env The environment variables map
      * @return The resolved http/https {@link ProxyConfig} for wiring {@code java.net.http} clients
      *      explicitly (ftp has no {@code java.net.http} representation - it is applied via system
-     *      properties only), or {@code null} when no proxy variable is present
+     *      properties only, so this can return {@code null} even after {@code FTP_PROXY} installed
+     *      ftp system properties), or {@code null} when no http/https proxy variable is present
      */
     public static ProxyConfig setupFromEnvironment(Map<String,String> env) {
         if( env == null )
@@ -312,8 +314,12 @@ public final class ProxyConfig {
         applyProxySystemProperty(env, "https");
         applyProxySystemProperty(env, "ftp");
         final String noProxy = firstNonEmpty(env, "NO_PROXY", "no_proxy");
-        if( noProxy != null && !noProxy.isBlank() )
-            System.setProperty("http.nonProxyHosts", String.join("|", split(noProxy)));
+        if( noProxy != null && !noProxy.isBlank() ) {
+            final String nonProxyHosts = toNonProxyHosts(split(noProxy));
+            // http.nonProxyHosts covers both http and https; ftp has its own property
+            System.setProperty("http.nonProxyHosts", nonProxyHosts);
+            System.setProperty("ftp.nonProxyHosts", nonProxyHosts);
+        }
         // http/https config for java.net.http clients (ftp is not an HttpClient scheme)
         final ProxyConfig cfg = fromEnvironment(env);
         if( cfg != null && cfg.hasCredentials() ) {
@@ -330,6 +336,28 @@ public final class ProxyConfig {
         System.setProperty(proto + ".proxyHost", p.host());
         if( p.port() != null && !p.port().isBlank() )
             System.setProperty(proto + ".proxyPort", p.port());
+    }
+
+    /**
+     * Translate {@code NO_PROXY} entries to the JDK {@code http.nonProxyHosts} grammar (exact host or
+     * {@code *} wildcard, {@code |}-separated). Setting the property replaces the JDK default, so the
+     * loopback bypass ({@code localhost|127.*|[::1]|0.0.0.0|[::0]}) is prepended; and because a bare
+     * {@code example.com} means "host and sub-domains" here (see {@link #isBypassed(String)}) it is
+     * expanded to {@code example.com|*.example.com}, while {@code .x}/{@code *.x} become {@code *.x}.
+     */
+    private static String toNonProxyHosts(List<String> entries) {
+        final StringBuilder sb = new StringBuilder("localhost|127.*|[::1]|0.0.0.0|[::0]");
+        for( String entry : entries ) {
+            if( entry.equals("*") )
+                sb.append("|*");
+            else if( entry.startsWith("*.") )
+                sb.append('|').append(entry);
+            else if( entry.startsWith(".") )
+                sb.append("|*").append(entry);            // ".corp" -> "*.corp"
+            else
+                sb.append('|').append(entry).append("|*.").append(entry);   // "x" -> "x|*.x"
+        }
+        return sb.toString();
     }
 
     // ------------------------------------------------------------------ parsing (source of truth: nextflow.util.ProxyConfig)
@@ -357,7 +385,7 @@ public final class ProxyConfig {
             return parse(value);
         }
         catch( IllegalArgumentException e ) {
-            log.warn("Ignoring unsupported or invalid proxy value '{}': {}", value, e.getMessage());
+            log.warn("Ignoring unsupported or invalid proxy value '{}': {}", redactUserInfo(value), e.getMessage());
             return null;
         }
     }
@@ -376,6 +404,10 @@ public final class ProxyConfig {
      * Parse a proxy string retrieving its protocol, host, port, username and password components.
      * Exposed so callers that need the individual components (e.g. to set {@code -Dhttp.proxyHost}
      * system properties) can reuse the same parsing instead of duplicating it.
+     *
+     * <p>Limitations (unchanged, mirroring Nextflow): a bracketed IPv6 literal without a scheme
+     * ({@code [::1]:3128}) is not parsed correctly - give it a scheme ({@code http://[::1]:3128});
+     * and {@code NO_PROXY} entries do not carry ports.
      *
      * @param value A proxy string e.g. {@code host}, {@code host:port}, {@code scheme://host:port}
      *      or {@code scheme://user:pass@host:port}
@@ -409,8 +441,17 @@ public final class ProxyConfig {
             return new Parsed(null, value, null, null, null);
         }
         catch( MalformedURLException e ) {
-            throw new IllegalArgumentException("Invalid proxy URL: " + value, e);
+            // never include the raw value verbatim - it may carry the proxy password in its user-info
+            throw new IllegalArgumentException("Invalid proxy URL: " + redactUserInfo(value), e);
         }
+    }
+
+    /**
+     * Replace the user-info of a proxy URI with {@code ****} so credentials are never logged or
+     * surfaced in an exception message, e.g. {@code http://user:pass@host} → {@code http://****@host}.
+     */
+    private static String redactUserInfo(String value) {
+        return value != null ? value.replaceAll("://[^@/]+@", "://****@") : null;
     }
 
     /**
@@ -421,6 +462,11 @@ public final class ProxyConfig {
      */
     private static String decodeUserInfo(String s) {
         return s != null ? URLDecoder.decode(s.replace("+", "%2B"), StandardCharsets.UTF_8) : null;
+    }
+
+    /** @return the default proxy port for the parsed scheme: 443 for https, 80 otherwise */
+    private static int defaultPort(Parsed p) {
+        return "https".equalsIgnoreCase(p.protocol()) ? 443 : 80;
     }
 
     private static int portAsInt(String port, int defaultPort) {
