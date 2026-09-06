@@ -62,6 +62,39 @@ class ProxyConfigTest extends Specification {
         // a path/query in the URI is ignored
         'http://10.20.30.40:333/some/path'          | 'http'    | '10.20.30.40'         | '333'     | null      | null
         'http://user:pass@10.20.30.40:333/some/path'| 'http'    | '10.20.30.40'         | '333'     | 'user'    | 'pass'
+        // username-only user-info (e.g. a token proxy) keeps the username, no password
+        'http://token@proxy.example.com:3128'       | 'http'    | 'proxy.example.com'   | '3128'    | 'token'   | null
+    }
+
+    def 'should treat an unsupported or malformed proxy scheme in the environment as no proxy' () {
+        expect: 'socks5 (and other unsupported schemes) are ignored, not raised'
+        ProxyConfig.fromEnvironment([ALL_PROXY: 'socks5://proxy:1080']) == null
+        and: 'a bad entry for one protocol does not sink a valid one'
+        ProxyConfig.fromEnvironment([HTTP_PROXY: 'http://ok:3128', HTTPS_PROXY: 'socks5://bad:1'])
+                .toProxySelector().select(new URI('http://x/')) == proxied('ok', 3128)
+    }
+
+    def 'should throw for an unsupported scheme on the explicit fromUri path' () {
+        when:
+        ProxyConfig.fromUri('socks5://proxy:1080')
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def 'should return null for a null environment map' () {
+        expect:
+        ProxyConfig.fromEnvironment(null) == null
+        ProxyConfig.setupFromEnvironment(null) == null
+    }
+
+    def 'a username-only proxy releases credentials with an empty password' () {
+        given:
+        def auth = ProxyConfig.fromUri('http://token@proxy.example.com:3128').toAuthenticator()
+        when:
+        def result = auth.requestPasswordAuthenticationInstance('proxy.example.com', null, 3128, 'http', 'auth', 'basic', null, Authenticator.RequestorType.PROXY)
+        then:
+        result.userName == 'token'
+        result.password == ''.toCharArray()
     }
 
     def 'should resolve a proxy uri applying it to both http and https destinations' () {

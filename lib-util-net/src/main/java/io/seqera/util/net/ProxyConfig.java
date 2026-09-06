@@ -102,7 +102,7 @@ public final class ProxyConfig {
      * @return The corresponding {@link ProxyConfig}, or {@code null} when {@code uri} is empty
      */
     public static ProxyConfig fromUri(String uri, String username, String password, List<String> noProxy) {
-        final Parsed p = parse(uri);
+        final Parsed p = warnIfTlsProxy(parse(uri));
         if( p == null )
             return null;
         final boolean explicit = username != null && !username.isEmpty();
@@ -124,8 +124,12 @@ public final class ProxyConfig {
      * @return The corresponding {@link ProxyConfig}, or {@code null} when no proxy variable is present
      */
     public static ProxyConfig fromEnvironment(Map<String,String> env) {
-        final Parsed http = parse(firstNonEmpty(env, "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"));
-        final Parsed https = parse(firstNonEmpty(env, "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"));
+        if( env == null )
+            return null;
+        // ambient environment may carry an unsupported scheme (e.g. socks5://) or a malformed value -
+        // treat it as "no proxy" rather than failing the process (unlike the explicit fromUri path)
+        final Parsed http = warnIfTlsProxy(parseLenient(firstNonEmpty(env, "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")));
+        final Parsed https = warnIfTlsProxy(parseLenient(firstNonEmpty(env, "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")));
         if( http == null && https == null )
             return null;
         final Endpoint httpEp = http != null
@@ -301,6 +305,8 @@ public final class ProxyConfig {
      *      properties only), or {@code null} when no proxy variable is present
      */
     public static ProxyConfig setupFromEnvironment(Map<String,String> env) {
+        if( env == null )
+            return null;
         // per-protocol JVM system properties (honoured by URLConnection, FTP and other JVM-global code)
         applyProxySystemProperty(env, "http");
         applyProxySystemProperty(env, "https");
@@ -309,14 +315,7 @@ public final class ProxyConfig {
         if( noProxy != null && !noProxy.isBlank() )
             System.setProperty("http.nonProxyHosts", String.join("|", split(noProxy)));
         // http/https config for java.net.http clients (ftp is not an HttpClient scheme)
-        ProxyConfig cfg;
-        try {
-            cfg = fromEnvironment(env);
-        }
-        catch( IllegalArgumentException e ) {
-            log.warn("Ignoring invalid proxy environment variable: {}", e.getMessage());
-            cfg = null;
-        }
+        final ProxyConfig cfg = fromEnvironment(env);
         if( cfg != null && cfg.hasCredentials() ) {
             Authenticator.setDefault(cfg.toAuthenticator());
             enableBasicProxyTunneling();
@@ -325,15 +324,7 @@ public final class ProxyConfig {
     }
 
     private static void applyProxySystemProperty(Map<String,String> env, String proto) {
-        final String value = firstNonEmpty(env, proto.toUpperCase(Locale.ROOT) + "_PROXY", proto + "_proxy", "ALL_PROXY", "all_proxy");
-        final Parsed p;
-        try {
-            p = parse(value);
-        }
-        catch( IllegalArgumentException e ) {
-            log.warn("Ignoring invalid {} proxy '{}': {}", proto, value, e.getMessage());
-            return;
-        }
+        final Parsed p = parseLenient(firstNonEmpty(env, proto.toUpperCase(Locale.ROOT) + "_PROXY", proto + "_proxy", "ALL_PROXY", "all_proxy"));
         if( p == null )
             return;
         System.setProperty(proto + ".proxyHost", p.host());
@@ -347,7 +338,39 @@ public final class ProxyConfig {
      * The components of a parsed proxy URI. Percent-encoded {@code username}/{@code password} are
      * decoded; any path/query in the URI is ignored. Fields not present in the input are {@code null}.
      */
-    public record Parsed(String protocol, String host, String port, String username, String password) { }
+    public record Parsed(String protocol, String host, String port, String username, String password) {
+        @Override
+        public String toString() {
+            // never render the password
+            return "Parsed[protocol=" + protocol + ", host=" + host + ", port=" + port
+                    + ", username=" + username + ", password=" + (password != null ? "****" : null) + "]";
+        }
+    }
+
+    /**
+     * Like {@link #parse(String)} but lenient: an unsupported scheme (e.g. {@code socks5://}) or an
+     * otherwise malformed value is logged and treated as absent rather than raised. Used for the
+     * ambient environment, which the caller does not control.
+     */
+    private static Parsed parseLenient(String value) {
+        try {
+            return parse(value);
+        }
+        catch( IllegalArgumentException e ) {
+            log.warn("Ignoring unsupported or invalid proxy value '{}': {}", value, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Warn when a proxy is addressed over {@code https}: the JDK {@link java.net.http.HttpClient} has
+     * no TLS-to-proxy support, so it will speak plaintext to the proxy. Returns the argument unchanged.
+     */
+    private static Parsed warnIfTlsProxy(Parsed p) {
+        if( p != null && "https".equalsIgnoreCase(p.protocol()) )
+            log.warn("Proxy '{}' is addressed over https, but connecting to a proxy over TLS is not supported - the connection to the proxy will use plaintext", p.host());
+        return p;
+    }
 
     /**
      * Parse a proxy string retrieving its protocol, host, port, username and password components.
@@ -367,10 +390,15 @@ public final class ProxyConfig {
                 final URL url = new URL(value);
                 String user = null, pass = null;
                 final String info = url.getUserInfo();
-                final int p = info != null ? info.indexOf(':') : -1;
-                if( p != -1 ) {
-                    user = decodeUserInfo(info.substring(0, p));
-                    pass = decodeUserInfo(info.substring(p + 1));
+                if( info != null && !info.isEmpty() ) {
+                    final int p = info.indexOf(':');
+                    if( p == -1 ) {
+                        user = decodeUserInfo(info);   // username-only (e.g. a token proxy), no password
+                    }
+                    else {
+                        user = decodeUserInfo(info.substring(0, p));
+                        pass = decodeUserInfo(info.substring(p + 1));
+                    }
                 }
                 final String port = url.getPort() > 0 ? String.valueOf(url.getPort()) : null;
                 return new Parsed(url.getProtocol(), url.getHost(), port, user, pass);

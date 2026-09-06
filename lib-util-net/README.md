@@ -37,12 +37,6 @@ when the host:
 - resolves to a cloud metadata service IP (AWS `169.254.169.254`, ECS `169.254.170.2`, IMDSv2 IPv6)
 - cannot be resolved (fail closed)
 
-## Limitations
-
-Validation resolves DNS at call time; a caller that later opens a connection
-resolves DNS again, leaving a TOCTOU / DNS-rebinding window. Pin the resolved
-address if that gap matters for your use case.
-
 ### Egress proxy configuration
 
 `io.seqera.util.net.ProxyConfig` resolves an HTTP/HTTPS forward (egress) proxy —
@@ -74,3 +68,15 @@ if (proxy != null) {
 `NO_PROXY` entries match host names or domain suffixes (optionally prefixed with
 `.` or `*.`); `*` disables proxying entirely, and loopback targets always bypass
 the proxy. CIDR notation is not supported.
+
+To honour the proxy JVM-wide — installing the per-protocol `<proto>.proxyHost`/
+`<proto>.proxyPort` and `http.nonProxyHosts` system properties and a default
+`Authenticator` (also covering `FTP_PROXY`), the way a CLI launcher would — use
+`ProxyConfig.setupFromEnvironment(System.getenv())`, which returns the same
+http/https config for wiring `java.net.http` clients explicitly.
+
+## Limitations
+
+`SsrfValidator` resolves DNS at call time; a caller that later opens a connection
+resolves DNS again, leaving a TOCTOU / DNS-rebinding window. Pin the resolved
+address if that gap matters for your use case.
