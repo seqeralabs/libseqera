@@ -212,6 +212,25 @@ class ProxyConfigTest extends Specification {
         result.password == 'bar'.toCharArray()
     }
 
+    def 'should expose the resolved per-protocol endpoints and no-proxy hosts' () {
+        when:
+        def cfg = ProxyConfig.fromEnvironment([HTTPS_PROXY: 'http://foo:bar@https-proxy:3129', HTTP_PROXY: 'http://http-proxy:3128', NO_PROXY: 'a.com,b.com'])
+        then:
+        cfg.httpProxy.host() == 'http-proxy'
+        cfg.httpProxy.port() == 3128
+        cfg.httpProxy.username() == null
+        cfg.httpsProxy.host() == 'https-proxy'
+        cfg.httpsProxy.port() == 3129
+        cfg.httpsProxy.username() == 'foo'
+        cfg.httpsProxy.password() == 'bar'
+        cfg.noProxyHosts == ['a.com','b.com']
+        and: 'fromUri applies the same endpoint to both protocols'
+        with(ProxyConfig.fromUri('proxy:8080')) {
+            httpProxy.host() == 'proxy' && httpProxy.port() == 8080
+            httpsProxy.host() == 'proxy' && httpsProxy.port() == 8080
+        }
+    }
+
     def 'should redact password in string representation' () {
         expect:
         !ProxyConfig.fromUri('http://foo:secret1234@proxy.example.com').toString().contains('secret1234')

@@ -59,7 +59,7 @@ public final class ProxyConfig {
     private static final Logger log = LoggerFactory.getLogger(ProxyConfig.class);
 
     /** A single proxy endpoint with optional Basic credentials. */
-    private record Endpoint(String host, int port, String username, String password) {
+    public record Endpoint(String host, int port, String username, String password) {
         boolean hasCredentials() {
             return username != null && !username.isEmpty();
         }
@@ -147,6 +147,21 @@ public final class ProxyConfig {
     public boolean hasCredentials() {
         return (httpProxy != null && httpProxy.hasCredentials())
                 || (httpsProxy != null && httpsProxy.hasCredentials());
+    }
+
+    /** @return The resolved HTTP proxy endpoint, or {@code null} when none is configured */
+    public Endpoint getHttpProxy() {
+        return httpProxy;
+    }
+
+    /** @return The resolved HTTPS proxy endpoint, or {@code null} when none is configured */
+    public Endpoint getHttpsProxy() {
+        return httpsProxy;
+    }
+
+    /** @return The {@code NO_PROXY} host entries (normalized to lower-case), never {@code null} */
+    public List<String> getNoProxyHosts() {
+        return noProxyHosts;
     }
 
     /**
