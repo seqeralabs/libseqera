@@ -1,5 +1,22 @@
 # lib-httpx changelog
 
+2.7.0
+- BREAKING (see note below): remove HxProxyConfig in favour of io.seqera.util.net.ProxyConfig
+  (io.seqera:lib-util-net), so the proxy selector / authenticator / no-proxy semantics live in a
+  single place shared with Wave and Nextflow
+- HxClient.Builder.withProxyConfig now accepts an io.seqera.util.net.ProxyConfig; callers that built an
+  HxProxyConfig should resolve a ProxyConfig instead - its toProxySelector()/toAuthenticator() are
+  unchanged. For raw credentials prefer the explicit overload
+  ProxyConfig.fromUri(uri, user, pass, noProxy) over embedding them in the URI, so a password with
+  '@'/':'/'%' does not need percent-encoding; fromEnvironment(env) reads HTTP_PROXY/HTTPS_PROXY/NO_PROXY
+- Note: HxProxyConfig could hold an http proxy without an https one (or vice versa); fromUri applies one
+  endpoint to both protocols, so asymmetric per-protocol config from explicit values is now only
+  expressible via fromEnvironment
+- lib-httpx now depends on io.seqera:lib-util-net
+- NOTE: this removes a public type, so it is source-incompatible for any caller of HxProxyConfig.
+  It is released as a minor (2.7.0) rather than a major because the only affected consumer is
+  Nextflow, which is migrated in lock-step; callers pinning <= 2.6.0 are unaffected.
+
 2.6.0 - 12 Aug 2026
 - Add HxClient.shouldRetryOnException(HttpRequest, Throwable) - the hook the retry policy now
   consults - so a subclass can decide on the exception per request

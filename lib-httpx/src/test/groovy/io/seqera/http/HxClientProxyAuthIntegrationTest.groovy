@@ -24,6 +24,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 
+import io.seqera.util.net.ProxyConfig
 import spock.lang.Specification
 
 /**
@@ -202,11 +203,9 @@ class HxClientProxyAuthIntegrationTest extends Specification {
         client.getConfig().getProxyAuthenticator().is(authenticator)
     }
 
-    def 'should route through the proxy via withProxyConfig and the HxProxyConfig builder'() {
-        given: 'a proxy config assembled from explicit values'
-        def proxyConfig = HxProxyConfig.newBuilder()
-                .httpProxy('127.0.0.1', proxyPort, 'alice', 's3cret')
-                .build()
+    def 'should route through the proxy via withProxyConfig and a lib-util-net ProxyConfig'() {
+        given: 'a proxy config resolved from an explicit uri'
+        def proxyConfig = ProxyConfig.fromUri("http://alice:s3cret@127.0.0.1:${proxyPort}".toString())
         def client = HxClient.newBuilder()
                 .withProxyConfig(proxyConfig)
                 .build()
