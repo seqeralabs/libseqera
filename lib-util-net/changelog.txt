@@ -1,4 +1,7 @@
 # lib-util-net changelog
 
+0.2.0
+- Add ProxyConfig: resolve an HTTP/HTTPS forward (egress) proxy - including an authenticating one - from a proxy URI or the HTTP_PROXY/HTTPS_PROXY/NO_PROXY environment variables, exposed as a java.net ProxySelector and proxy-scoped Authenticator (parsing and no-proxy semantics mirror Nextflow's nextflow.util.ProxyConfig)
+
 0.1.0
 - Initial release with SsrfValidator providing SSRF host validation (rejects localhost, loopback, link-local, private and cloud-metadata addresses)
