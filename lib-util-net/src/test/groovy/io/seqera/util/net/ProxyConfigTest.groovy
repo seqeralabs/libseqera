@@ -217,6 +217,48 @@ class ProxyConfigTest extends Specification {
         !ProxyConfig.fromUri('http://foo:secret1234@proxy.example.com').toString().contains('secret1234')
     }
 
+    def 'setupFromEnvironment should install per-protocol system properties and return the http/https config' () {
+        given:
+        def keys = ['http.proxyHost','http.proxyPort','https.proxyHost','https.proxyPort',
+                    'ftp.proxyHost','ftp.proxyPort','http.nonProxyHosts','jdk.http.auth.tunneling.disabledSchemes']
+        def saved = keys.collectEntries { [(it): System.getProperty(it)] }
+        keys.each { System.clearProperty(it) }
+        def savedAuth = Authenticator.default
+
+        when:
+        def cfg = ProxyConfig.setupFromEnvironment([
+                HTTP_PROXY : 'http://alice:secret@http-proxy:3128',
+                HTTPS_PROXY: 'http://https-proxy:8080',
+                FTP_PROXY  : 'ftp-proxy:2121',
+                NO_PROXY   : 'internal.example.com, .corp' ])
+
+        then: 'per-protocol system properties are set (ftp too)'
+        System.getProperty('http.proxyHost') == 'http-proxy'
+        System.getProperty('http.proxyPort') == '3128'
+        System.getProperty('https.proxyHost') == 'https-proxy'
+        System.getProperty('https.proxyPort') == '8080'
+        System.getProperty('ftp.proxyHost') == 'ftp-proxy'
+        System.getProperty('ftp.proxyPort') == '2121'
+        and: 'NO_PROXY is installed as pipe-separated http.nonProxyHosts'
+        System.getProperty('http.nonProxyHosts') == 'internal.example.com|.corp'
+        and: 'credentials present -> tunnelling Basic scheme is enabled'
+        System.getProperty('jdk.http.auth.tunneling.disabledSchemes') == ''
+        and: 'the returned config carries the http/https proxies and no-proxy for java.net.http clients'
+        cfg.hasCredentials()
+        cfg.toProxySelector().select(new URI('http://x/')) == proxied('http-proxy', 3128)
+        cfg.toProxySelector().select(new URI('https://x/')) == proxied('https-proxy', 8080)
+        cfg.toProxySelector().select(new URI('https://internal.example.com/')) == DIRECT
+
+        cleanup:
+        keys.each { saved[it] != null ? System.setProperty(it, saved[it]) : System.clearProperty(it) }
+        Authenticator.setDefault(savedAuth)
+    }
+
+    def 'setupFromEnvironment should return null and touch nothing when no proxy var is set' () {
+        expect:
+        ProxyConfig.setupFromEnvironment([:]) == null
+    }
+
     def 'should clear the tunnelling disabledSchemes property only when unset' () {
         given:
         def key = 'jdk.http.auth.tunneling.disabledSchemes'

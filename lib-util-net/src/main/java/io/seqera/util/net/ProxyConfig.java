@@ -264,6 +264,68 @@ public final class ProxyConfig {
         return false;
     }
 
+    // ------------------------------------------------------------------ JVM-global setup from the environment
+
+    /**
+     * Resolve the http/https/ftp proxies from the environment and install them into the JVM, mirroring
+     * the setup Nextflow's launcher performs so JVM-global HTTP/FTP code (e.g. {@code URLConnection})
+     * honours the proxy:
+     * <ul>
+     *   <li>sets the per-protocol {@code <proto>.proxyHost}/{@code <proto>.proxyPort} system properties
+     *       (each var falling back to {@code ALL_PROXY});</li>
+     *   <li>sets {@code http.nonProxyHosts} from {@code NO_PROXY};</li>
+     *   <li>when credentials are present, installs the proxy-scoped {@link Authenticator} as the JVM
+     *       default and clears {@code jdk.http.auth.tunneling.disabledSchemes}.</li>
+     * </ul>
+     * The caller supplies the map — this method never reads {@link System#getenv()} itself. A malformed
+     * proxy value is logged and skipped rather than raised.
+     *
+     * @param env The environment variables map
+     * @return The resolved http/https {@link ProxyConfig} for wiring {@code java.net.http} clients
+     *      explicitly (ftp has no {@code java.net.http} representation - it is applied via system
+     *      properties only), or {@code null} when no proxy variable is present
+     */
+    public static ProxyConfig setupFromEnvironment(Map<String,String> env) {
+        // per-protocol JVM system properties (honoured by URLConnection, FTP and other JVM-global code)
+        applyProxySystemProperty(env, "http");
+        applyProxySystemProperty(env, "https");
+        applyProxySystemProperty(env, "ftp");
+        final String noProxy = firstNonEmpty(env, "NO_PROXY", "no_proxy");
+        if( noProxy != null && !noProxy.isBlank() )
+            System.setProperty("http.nonProxyHosts", String.join("|", split(noProxy)));
+        // http/https config for java.net.http clients (ftp is not an HttpClient scheme)
+        ProxyConfig cfg;
+        try {
+            cfg = fromEnvironment(env);
+        }
+        catch( IllegalArgumentException e ) {
+            log.warn("Ignoring invalid proxy environment variable: {}", e.getMessage());
+            cfg = null;
+        }
+        if( cfg != null && cfg.hasCredentials() ) {
+            Authenticator.setDefault(cfg.toAuthenticator());
+            enableBasicProxyTunneling();
+        }
+        return cfg;
+    }
+
+    private static void applyProxySystemProperty(Map<String,String> env, String proto) {
+        final String value = firstNonEmpty(env, proto.toUpperCase(Locale.ROOT) + "_PROXY", proto + "_proxy", "ALL_PROXY", "all_proxy");
+        final Parsed p;
+        try {
+            p = parse(value);
+        }
+        catch( IllegalArgumentException e ) {
+            log.warn("Ignoring invalid {} proxy '{}': {}", proto, value, e.getMessage());
+            return;
+        }
+        if( p == null )
+            return;
+        System.setProperty(proto + ".proxyHost", p.host());
+        if( p.port() != null && !p.port().isBlank() )
+            System.setProperty(proto + ".proxyPort", p.port());
+    }
+
     // ------------------------------------------------------------------ parsing (source of truth: nextflow.util.ProxyConfig)
 
     /**
