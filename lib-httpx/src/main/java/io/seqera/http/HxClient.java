@@ -40,6 +40,7 @@ import io.seqera.http.auth.AuthenticationCallback;
 import io.seqera.http.auth.AuthenticationChallenge;
 import io.seqera.http.auth.AuthenticationScheme;
 import io.seqera.http.auth.WwwAuthenticateParser;
+import io.seqera.util.net.ProxyConfig;
 import io.seqera.util.retry.Retryable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1195,12 +1196,12 @@ public class HxClient {
          * <p>The selector is forwarded to the inner {@link HttpClient.Builder} and is also
          * inherited by the internal HTTP clients used for JWT token refresh and anonymous
          * Bearer token retrieval. Proxy settings are never resolved from the environment
-         * automatically; supply them explicitly here (or via {@link #withProxyConfig(HxProxyConfig)}).
+         * automatically; supply them explicitly here (or via {@link #withProxyConfig(ProxyConfig)}).
          *
          * @param proxySelector the proxy selector to use
          * @return this Builder instance
          * @see HttpClient.Builder#proxy(ProxySelector)
-         * @see HxProxyConfig
+         * @see ProxyConfig
          */
         public Builder proxy(ProxySelector proxySelector) {
             this.proxySelector = proxySelector;
@@ -1220,12 +1221,12 @@ public class HxClient {
          * {@link Authenticator#setDefault(Authenticator)} - proxy credentials only take effect
          * when supplied via this method. For Basic proxy authentication of HTTPS traffic the JDK's
          * {@code jdk.http.auth.tunneling.disabledSchemes} property must also be cleared - see
-         * {@link HxProxyConfig} for details.
+         * {@link ProxyConfig} for details.
          *
          * @param authenticator the authenticator providing credentials
          * @return this Builder instance
          * @see HttpClient.Builder#authenticator(Authenticator)
-         * @see HxProxyConfig#toAuthenticator()
+         * @see ProxyConfig#toAuthenticator()
          */
         public Builder authenticator(Authenticator authenticator) {
             this.proxyAuthenticator = authenticator;
@@ -1233,16 +1234,17 @@ public class HxClient {
         }
 
         /**
-         * Applies the proxy selector and authenticator carried by the given {@link HxProxyConfig},
-         * a convenience over calling {@link #proxy(ProxySelector)} and
-         * {@link #authenticator(Authenticator)} separately. A {@code null} config is a no-op, so
-         * callers can pass an optionally-resolved configuration directly.
+         * Applies the proxy selector and authenticator carried by the given
+         * {@link ProxyConfig} (from {@code io.seqera:lib-util-net}), a convenience over calling
+         * {@link #proxy(ProxySelector)} and {@link #authenticator(Authenticator)} separately. A
+         * {@code null} config is a no-op, so callers can pass an optionally-resolved configuration
+         * directly.
          *
          * @param config the proxy configuration to apply, or null for none
          * @return this Builder instance
-         * @see HxProxyConfig
+         * @see ProxyConfig
          */
-        public Builder withProxyConfig(HxProxyConfig config) {
+        public Builder withProxyConfig(ProxyConfig config) {
             if( config == null )
                 return this;
             if( config.getHttpProxy() != null || config.getHttpsProxy() != null )

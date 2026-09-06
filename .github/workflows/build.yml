@@ -85,6 +85,7 @@ jobs:
           bash publish.sh lib-lang
           bash publish.sh lib-lock
           bash publish.sh lib-lock-redis
+          bash publish.sh lib-util-net
           bash publish.sh lib-httpx
           bash publish.sh lib-mail
           bash publish.sh lib-node-id-redis
@@ -94,7 +95,6 @@ jobs:
           bash publish.sh lib-util-string
           bash publish.sh lib-util-time
           bash publish.sh lib-util-tsid
-          bash publish.sh lib-util-net
           bash publish.sh lib-pool
           bash publish.sh lib-random
           bash publish.sh lib-retry

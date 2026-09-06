@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-httpx:2.6.0'
+    implementation 'io.seqera:lib-httpx:2.7.0'
 }
 ```
 
@@ -25,7 +25,7 @@ dependencies {
 - **Custom Token Storage**: Pluggable token store interface for distributed deployments (Redis, database, etc.)
 - **WWW-Authenticate Support**: Automatic handling of HTTP authentication challenges (Basic and Bearer schemes)
 - **Anonymous Authentication**: Fallback to anonymous authentication when credentials aren't provided
-- **Proxy Support**: Authenticated forward-proxy support via `.proxy(...)`/`.authenticator(...)`, or an `HxProxyConfig` value applied with `.withProxyConfig(...)`
+- **Proxy Support**: Authenticated forward-proxy support via `.proxy(...)`/`.authenticator(...)`, or an `io.seqera.util.net.ProxyConfig` (from `io.seqera:lib-util-net`) applied with `.withProxyConfig(...)`
 - **Configurable**: Customizable retry policies, timeouts, token refresh, authentication settings, and cookie policies
 - **Generic Integration**: Compatible with any `Retryable.Config` for flexible retry configuration
 - **Thread-safe**: Safe for concurrent use with atomic token refresh coordination
@@ -403,16 +403,17 @@ HxClient client = HxClient.newBuilder()
     .build();
 ```
 
-For callers that resolve proxy settings themselves (host, port, optional credentials per protocol and
-`NO_PROXY` entries), `HxProxyConfig` bundles them into a single value and produces the matching selector
-and a proxy-only authenticator (credentials are supplied only for proxy authentication challenges, never
-to origin servers). Apply it in one call with `.withProxyConfig(...)`:
+For callers that resolve proxy settings themselves, `io.seqera.util.net.ProxyConfig` (from
+`io.seqera:lib-util-net`, an `api` dependency of this library) bundles a proxy URI or the
+`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` environment variables into a single value and produces the matching
+selector and a proxy-only authenticator (credentials are supplied only for proxy authentication
+challenges, never to origin servers). Apply it in one call with `.withProxyConfig(...)`:
 
 ```java
-HxProxyConfig proxy = HxProxyConfig.newBuilder()
-    .httpsProxy("proxy.example.com", 8080, "user", "pass")
-    .noProxy(List.of("internal.example.com"))
-    .build();
+// prefer the explicit-credentials overload - it avoids having to percent-encode a password
+// containing '@', ':' or '%' that would otherwise be embedded in the URI
+ProxyConfig proxy = ProxyConfig.fromUri("http://proxy.example.com:8080", "user", "pass",
+    List.of("internal.example.com"));
 HxClient client = HxClient.newBuilder()
     .withProxyConfig(proxy)   // no-op if proxy is null
     .build();
@@ -469,7 +470,7 @@ HxClient client = HxClient.newBuilder()
 
 - **`HxClient`**: Main HTTP client with retry, JWT, and WWW-Authenticate functionality
 - **`HxConfig`**: Configuration builder with all available options
-- **`HxProxyConfig`**: Forward-proxy settings (selector + proxy-only authenticator) assembled from explicit values via its builder
+- **`io.seqera.util.net.ProxyConfig`** (from `io.seqera:lib-util-net`): Forward-proxy settings (selector + proxy-only authenticator) resolved from a URI or the environment, applied via `HxClient.Builder.withProxyConfig(...)`
 - **`HxAuth`**: Interface for authentication credentials with stable identity across refreshes
 - **`HxTokenStore`**: Interface for pluggable token storage (default: in-memory ConcurrentHashMap)
 - **`HxTokenManager`**: Thread-safe JWT token lifecycle management with multi-session support
