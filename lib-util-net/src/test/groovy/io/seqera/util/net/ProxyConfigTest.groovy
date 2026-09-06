@@ -278,6 +278,48 @@ class ProxyConfigTest extends Specification {
         ProxyConfig.setupFromEnvironment([:]) == null
     }
 
+    def 'setupFromEnvironment should fall back to ALL_PROXY for the system properties' () {
+        given:
+        def keys = ['http.proxyHost','http.proxyPort','https.proxyHost','https.proxyPort']
+        def saved = keys.collectEntries { [(it): System.getProperty(it)] }
+        keys.each { System.clearProperty(it) }
+
+        when: 'ALL_PROXY is the only variable set'
+        ProxyConfig.setupFromEnvironment([ALL_PROXY: 'all.example.com:9090'])
+        then: 'it feeds both http and https system properties'
+        System.getProperty('http.proxyHost') == 'all.example.com'
+        System.getProperty('http.proxyPort') == '9090'
+        System.getProperty('https.proxyHost') == 'all.example.com'
+        System.getProperty('https.proxyPort') == '9090'
+
+        cleanup:
+        keys.each { saved[it] != null ? System.setProperty(it, saved[it]) : System.clearProperty(it) }
+    }
+
+    @Unroll
+    def 'setupFromEnvironment disabledSchemes handling: preset=#PRESET creds=#CREDS -> #EXPECTED' () {
+        given:
+        def key = 'jdk.http.auth.tunneling.disabledSchemes'
+        def previous = System.getProperty(key)
+        PRESET != null ? System.setProperty(key, PRESET) : System.clearProperty(key)
+        def savedAuth = Authenticator.default
+
+        when:
+        ProxyConfig.setupFromEnvironment([HTTPS_PROXY: CREDS ? 'http://user:pass@proxy:8080' : 'http://proxy:8080'])
+        then:
+        System.getProperty(key) == EXPECTED
+
+        cleanup:
+        previous != null ? System.setProperty(key, previous) : System.clearProperty(key)
+        Authenticator.setDefault(savedAuth)
+
+        where:
+        PRESET  | CREDS || EXPECTED
+        null    | true  || ''       // credentials + unset -> cleared to enable Basic over CONNECT
+        null    | false || null     // no credentials -> left untouched
+        'NTLM'  | true  || 'NTLM'    // operator value always wins
+    }
+
     def 'should clear the tunnelling disabledSchemes property only when unset' () {
         given:
         def key = 'jdk.http.auth.tunneling.disabledSchemes'
