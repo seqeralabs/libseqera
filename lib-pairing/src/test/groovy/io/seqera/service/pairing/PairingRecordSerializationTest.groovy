@@ -70,6 +70,50 @@ class PairingRecordSerializationTest extends Specification {
         decoded.expiration == null
     }
 
+    def 'should serialize and deserialize the token issuer'() {
+        given:
+        def encoder = new MoshiEncodeStrategy<PairingRecord>() {}
+        def record = new PairingRecord(
+                'tower',
+                'https://api.cloud.seqera.io',
+                'pairing-123',
+                'private-key-data'.bytes,
+                'public-key-data'.bytes,
+                Instant.parse('2025-06-15T10:30:00Z'),
+                'checksum-abc',
+                'https://cloud.seqera.io/api'
+        )
+
+        when:
+        def json = encoder.encode(record)
+        def decoded = encoder.decode(json)
+
+        then: 'the issuer round-trips, and is distinct from the endpoint'
+        decoded.issuer == 'https://cloud.seqera.io/api'
+        decoded.endpoint == 'https://api.cloud.seqera.io'
+        decoded.issuer != decoded.endpoint
+    }
+
+    def 'should decode a record written before the issuer field existed'() {
+        given: 'a record encoded WITH an issuer, then stripped of it — the shape a pre-issuer release wrote'
+        def encoder = new MoshiEncodeStrategy<PairingRecord>() {}
+        def full = encoder.encode(new PairingRecord(
+                'tower', 'https://tower.example.com', 'pairing-123',
+                'private-key-data'.bytes, 'public-key-data'.bytes,
+                Instant.parse('2025-06-15T10:30:00Z'), 'checksum-abc', 'https://tower.example.com/api'))
+        // derived rather than hand-written so the byte[] encoding stays whatever Moshi actually uses
+        def json = full.replaceAll(/,?"issuer":"[^"]*"/, '')
+        assert !json.contains('issuer')
+
+        when:
+        def decoded = encoder.decode(json)
+
+        then: 'it still decodes, with a null issuer rather than an error'
+        decoded.service == 'tower'
+        decoded.token == 'checksum-abc'
+        decoded.issuer == null
+    }
+
     def 'should serialize and deserialize the license token'() {
         given:
         def encoder = new MoshiEncodeStrategy<PairingRecord>() {}

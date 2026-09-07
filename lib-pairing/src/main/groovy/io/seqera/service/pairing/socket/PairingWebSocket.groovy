@@ -50,7 +50,7 @@ import static io.seqera.random.LongRndKey.rndHex
 @CompileStatic
 @Singleton
 @ExecuteOn(TaskExecutors.BLOCKING)
-@ServerWebSocket("/pairing/{service}/token/{token}{?endpoint}")
+@ServerWebSocket("/pairing/{service}/token/{token}{?endpoint,issuer}")
 class PairingWebSocket {
 
     @Inject
@@ -66,9 +66,15 @@ class PairingWebSocket {
     @Nullable
     private LicenseValidator licenseValidator
 
+    /**
+     * @param issuer The {@code iss} the remote service stamps on the tokens it signs, sent as an
+     *        optional query param. {@link Nullable} deliberately: a client that predates the param
+     *        omits it, and binding would otherwise fail for every existing caller. It cannot be
+     *        derived from {@code endpoint} — on Seqera Cloud the API host and the issuer differ.
+     */
     @OnOpen
-    void onOpen(String service, String token, String endpoint, WebSocketSession session) {
-        log.debug "Opening pairing session - endpoint: ${endpoint} [sessionId: $session.id]"
+    void onOpen(String service, String token, String endpoint, @Nullable String issuer, WebSocketSession session) {
+        log.debug "Opening pairing session - endpoint: ${endpoint}; issuer: ${issuer} [sessionId: $session.id]"
 
         if( isDenyHost(endpoint) ) {
             log.warn "Pairing not allowed for endpoint: ${endpoint}"
@@ -93,8 +99,9 @@ class PairingWebSocket {
 
         // acquire a pairing key and send it to the remote client, recording the
         // license token the remote service presented so requests declaring this
-        // endpoint can later be validated against the license binding
-        final resp = this.pairingService.acquirePairingKey(service, endpoint, token)
+        // endpoint can later be validated against the license binding, and its
+        // token issuer so the paired service can be used as a trust anchor
+        final resp = this.pairingService.acquirePairingKey(service, endpoint, token, issuer)
         final msg = new PairingResponse(
                 msgId: rndHex(),
                 pairingId: resp.pairingId,

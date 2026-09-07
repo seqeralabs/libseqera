@@ -49,11 +49,16 @@ class PairingServiceImpl implements PairingService {
 
     @Override
     PairingResponse acquirePairingKey(String service, String endpoint) {
-        return acquirePairingKey(service, endpoint, null)
+        return acquirePairingKey(service, endpoint, null, null)
     }
 
     @Override
     PairingResponse acquirePairingKey(String service, String endpoint, String token) {
+        return acquirePairingKey(service, endpoint, token, null)
+    }
+
+    @Override
+    PairingResponse acquirePairingKey(String service, String endpoint, String token, String issuer) {
         final key = makeKey(service,endpoint)
 
         def entry = store.get(key)
@@ -62,17 +67,26 @@ class PairingServiceImpl implements PairingService {
             log.debug "Pairing with service '${service}' at address $endpoint - pairing id: $pairingId (key: $key)"
             final keyPair = generate()
             final expiration = Instant.now() + config.keyLease
-            final newEntry = new PairingRecord(service, endpoint, pairingId, keyPair.getPrivate().getEncoded(), keyPair.getPublic().getEncoded(), expiration, token)
+            final newEntry = new PairingRecord(service, endpoint, pairingId, keyPair.getPrivate().getEncoded(), keyPair.getPublic().getEncoded(), expiration, token, issuer)
             store.put(key,newEntry)
             entry = newEntry
         } else {
             log.trace "Paired already with service '${service}' at address $endpoint - pairing id: $entry.pairingId (key: $key)"
-            // refresh the license token on the existing record so a token rotation
-            // is reflected without waiting for the record to expire
+            // refresh the license token and issuer on the existing record so a rotation
+            // is reflected without waiting for the record to expire. Written in one
+            // store.put so a record cannot be persisted with only half the update.
+            boolean changed = false
             if (token != null && token != entry.token) {
                 entry.token = token
-                store.put(key, entry)
+                changed = true
             }
+            if (issuer != null && issuer != entry.issuer) {
+                log.debug "Updating pairing issuer for service '${service}' at address $endpoint - issuer: $issuer (key: $key)"
+                entry.issuer = issuer
+                changed = true
+            }
+            if (changed)
+                store.put(key, entry)
         }
 
         return new PairingResponse( pairingId: entry.pairingId, publicKey: entry.publicKey.encodeBase64() )

@@ -69,6 +69,24 @@ interface PairingService {
     PairingResponse acquirePairingKey(String service, String endpoint, String token)
 
     /**
+     * Generates and returns a key pair for the provided {@code service} available
+     * at {@code endpoint}, recording both the license {@code token} and the
+     * {@code issuer} the remote service presented when opening the pairing session.
+     *
+     * The key-pair is generated only if it is not already available for
+     * (service,endpoint); otherwise the current key is returned. Both {@code token}
+     * and {@code issuer} on the stored {@link PairingRecord} are kept up to date so a
+     * later rotation is reflected without waiting for the record to expire.
+     *
+     * @param service The service name
+     * @param endpoint The endpoint of the service
+     * @param token The license token presented at pairing time (may be {@code null})
+     * @param issuer The {@code iss} the remote service stamps on its tokens (may be {@code null})
+     * @return {@link PairingResponse} with the generated encoded public key
+     */
+    PairingResponse acquirePairingKey(String service, String endpoint, String token, String issuer)
+
+    /**
      * Get the {@link PairingRecord} associated with {@code service} and {@code endpoint}
      * generated with {@link #getPairingRecord(java.lang.String, java.lang.String)}
      *

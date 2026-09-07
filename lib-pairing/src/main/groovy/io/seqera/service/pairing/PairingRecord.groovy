@@ -33,6 +33,16 @@ import groovy.transform.ToString
  * for records created before this field existed, or when the remote service
  * paired without a token.
  *
+ * <p>The optional {@code issuer} is the {@code iss} claim the remote service stamps
+ * on the tokens it signs — for Platform, its OIDC issuer. It is <em>not</em>
+ * derivable from {@code endpoint}: on Seqera Cloud the API is served at
+ * {@code https://api.cloud.seqera.io} while the issuer is
+ * {@code https://cloud.seqera.io/api}. It is captured so a paired service can be
+ * used as a trust anchor — resolving its key set from the issuer, and requiring
+ * that an inbound token's {@code iss} belong to a service that actually paired,
+ * rather than to a caller-supplied header. It is {@code null} for records created
+ * before this field existed, or when the remote service paired without one.
+ *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Canonical
@@ -45,6 +55,7 @@ class PairingRecord {
     byte[] publicKey
     Instant expiration
     String token
+    String issuer
 
     boolean isExpiredAt(Instant time) {
         return expiration == null || expiration.isBefore(time)
