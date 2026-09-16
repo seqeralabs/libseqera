@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-jedis-pool:1.2.0'
+    implementation 'io.seqera:lib-jedis-pool:1.3.0'
 }
 ```
 
@@ -32,8 +32,13 @@ redis:
     maxIdle: 10                     # Default: 10
     maxTotal: 50                    # Default: 50
     testOnBorrow: false             # Default: false — PING-validate connections on borrow
+    maxWait: -1                     # Default: -1 (block indefinitely on an exhausted pool), millis
   client:
-    timeout: 5000                   # Default: 5000ms
+    timeout: 5000                   # Default: 5000ms — connection and socket timeout
+    blockingTimeout: -1             # Default: -1 (inherit `timeout`), millis. Socket timeout for
+                                    # blocking reads (pub/sub subscribe, BLPOP/BRPOP, XREAD BLOCK).
+                                    # Use 0 for no timeout, required by long-lived subscribers that
+                                    # sit idle on the socket between messages.
 ```
 
 ## Usage
