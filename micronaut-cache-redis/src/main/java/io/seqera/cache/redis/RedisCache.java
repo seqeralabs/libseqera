@@ -268,11 +268,12 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                     // when the scanned keys hash to different slots — even on a single-shard
                     // cluster. A pipeline sends each single-key command independently (no
                     // cross-slot check) while still flushing the whole batch in one round-trip.
-                    final Pipeline pipeline = jedis.pipelined();
-                    for (byte[] key : keys) {
-                        pipeline.del(key);
+                    try (Pipeline pipeline = jedis.pipelined()) {
+                        for (byte[] key : keys) {
+                            pipeline.del(key);
+                        }
+                        pipeline.sync();
                     }
-                    pipeline.sync();
                     totalDeleted += keys.size();
                     log.trace("Cache '{}' INVALIDATE-ALL deleted {} keys in this batch", getName(), keys.size());
                 }
