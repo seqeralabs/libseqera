@@ -262,7 +262,12 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                 ScanResult<byte[]> scanResult = jedis.scan(cursor.getBytes(redisCacheConfiguration.getCharset()), params);
                 List<byte[]> keys = scanResult.getResult();
                 if (!keys.isEmpty()) {
-                    jedis.del(keys.toArray(new byte[0][]));
+                    // Delete one key per command: a single multi-key DEL fails with CROSSSLOT
+                    // against a cluster-mode server (e.g. AWS MemoryDB) when the scanned keys
+                    // hash to different slots — even on a single-shard cluster.
+                    for (byte[] key : keys) {
+                        jedis.del(key);
+                    }
                     totalDeleted += keys.size();
                     log.trace("Cache '{}' INVALIDATE-ALL deleted {} keys in this batch", getName(), keys.size());
                 }
