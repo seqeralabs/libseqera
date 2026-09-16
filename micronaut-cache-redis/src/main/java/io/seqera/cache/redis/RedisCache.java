@@ -33,6 +33,7 @@ import jakarta.annotation.PreDestroy;
 import org.jspecify.annotations.NonNull;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.params.ScanParams;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.resps.ScanResult;
@@ -262,12 +263,16 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
                 ScanResult<byte[]> scanResult = jedis.scan(cursor.getBytes(redisCacheConfiguration.getCharset()), params);
                 List<byte[]> keys = scanResult.getResult();
                 if (!keys.isEmpty()) {
-                    // Delete one key per command: a single multi-key DEL fails with CROSSSLOT
-                    // against a cluster-mode server (e.g. AWS MemoryDB) when the scanned keys
-                    // hash to different slots — even on a single-shard cluster.
+                    // Pipeline single-key DELs instead of one multi-key DEL: a multi-key DEL
+                    // fails with CROSSSLOT against a cluster-mode server (e.g. AWS MemoryDB)
+                    // when the scanned keys hash to different slots — even on a single-shard
+                    // cluster. A pipeline sends each single-key command independently (no
+                    // cross-slot check) while still flushing the whole batch in one round-trip.
+                    final Pipeline pipeline = jedis.pipelined();
                     for (byte[] key : keys) {
-                        jedis.del(key);
+                        pipeline.del(key);
                     }
+                    pipeline.sync();
                     totalDeleted += keys.size();
                     log.trace("Cache '{}' INVALIDATE-ALL deleted {} keys in this batch", getName(), keys.size());
                 }
