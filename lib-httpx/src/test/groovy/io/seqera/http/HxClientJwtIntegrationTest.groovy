@@ -416,4 +416,37 @@ class HxClientJwtIntegrationTest extends Specification {
         wireMockServer.verify(1, getRequestedFor(urlEqualTo('/api/bearer-preserve'))
                 .withHeader('Authorization', equalTo(tokenWithBearer)))
     }
+
+    def 'should reuse one refresh client without leaking cookies between refreshes'() {
+        given:
+        def base = "http://localhost:${wireMockServer.port()}"
+        def manager = new HxTokenManager(HxConfig.newBuilder().build())
+
+        and: 'first refresh returns the token via cookies, second only via JSON'
+        wireMockServer.stubFor(post(urlEqualTo('/oauth/cookie'))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader('Set-Cookie', "JWT=${REFRESHED_JWT}; Path=/; HttpOnly")
+                        .withHeader('Set-Cookie', "JWT_REFRESH_TOKEN=${NEW_REFRESH_TOKEN}; Path=/; HttpOnly")))
+        wireMockServer.stubFor(post(urlEqualTo('/oauth/json'))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader('Content-Type', 'application/json')
+                        .withBody("""{"access_token":"${INITIAL_JWT}"}""")))
+
+        when:
+        def first = manager.doRefreshTokenInternal('user-a', new DefaultHxAuth('old-a', 'refresh-a', "${base}/oauth/cookie"))
+        def client = manager.@refreshHttpClient
+        def second = manager.doRefreshTokenInternal('user-b', new DefaultHxAuth('old-b', 'refresh-b', "${base}/oauth/json"))
+
+        then:
+        first.accessToken() == REFRESHED_JWT
+        first.refreshToken() == NEW_REFRESH_TOKEN
+        and: 'user-a cookies do not leak into user-b refresh'
+        second.accessToken() == INITIAL_JWT
+        second.refreshToken() == 'refresh-b'
+        and:
+        client != null
+        manager.@refreshHttpClient.is(client)
+    }
 }

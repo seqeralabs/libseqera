@@ -107,6 +107,10 @@ class HxTokenManager {
     // Coordination for concurrent token refresh operations per key
     private final ConcurrentMap<String, CompletableFuture<HxAuth>> ongoingRefreshes = new ConcurrentHashMap<>();
 
+    // Shared by all refreshes and created on first use; it holds no cookie handler,
+    // so nothing leaks between users (each refresh parses cookies into its own manager)
+    private volatile HttpClient refreshHttpClient;
+
     public HxTokenManager(HxConfig config) {
         this(config, new HxMapTokenStore());
     }
@@ -437,18 +441,10 @@ class HxTokenManager {
             final var refreshUrl = URI.create(resolveRefreshUrl(auth));
             log.trace("Attempting to refresh JWT token for key {} at URL: {}", key, refreshUrl);
 
-            // Create per-refresh CookieManager and HttpClient to avoid cross-user cookie leaking
+            // Per-refresh CookieManager to avoid cross-user cookie leaking
             final CookieManager cookieManager = (config.getRefreshCookiePolicy() != null)
                     ? new CookieManager(null, config.getRefreshCookiePolicy())
                     : new CookieManager();
-            final HttpClient.Builder refreshClientBuilder = HttpClient.newBuilder()
-                    .version(HttpClient.Version.HTTP_1_1)
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    .cookieHandler(cookieManager)
-                    .connectTimeout(config.getTokenRefreshTimeout());
-            // inherit the proxy configuration of the enclosing HxClient
-            config.applyProxySettings(refreshClientBuilder);
-            final HttpClient refreshHttpClient = refreshClientBuilder.build();
 
             final String body = "grant_type=refresh_token&refresh_token=" +
                     URLEncoder.encode(auth.refreshToken(), StandardCharsets.UTF_8);
@@ -460,8 +456,11 @@ class HxTokenManager {
                     .timeout(config.getTokenRefreshTimeout())
                     .build();
 
-            final HttpResponse<String> response = refreshHttpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            final HttpResponse<String> response = refreshHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
             log.trace("Token refresh response for key {}: [{}]", key, response.statusCode());
+            // Same parsing the JDK client applies with a cookie handler; only cookies
+            // set on an intermediate redirect response are not seen
+            cookieManager.put(response.uri(), response.headers().map());
 
             if (response.statusCode() == 200) {
                 final HxAuth newAuth = extractAuthFromResponse(response, cookieManager, auth);
@@ -478,6 +477,32 @@ class HxTokenManager {
         } catch (Exception e) {
             log.error("Error refreshing JWT token for key {}: {}", key, e.getMessage(), e);
             return null;
+        }
+    }
+
+    /**
+     * Returns the shared HTTP client used for token refresh requests, creating it on first use.
+     * Reusing one client avoids starting (and leaking until GC) a selector thread and worker
+     * pool per refresh.
+     *
+     * @return the shared refresh {@link HttpClient}
+     */
+    private HttpClient refreshHttpClient() {
+        HttpClient result = refreshHttpClient;
+        if (result != null) {
+            return result;
+        }
+        synchronized (this) {
+            if (refreshHttpClient == null) {
+                final HttpClient.Builder builder = HttpClient.newBuilder()
+                        .version(HttpClient.Version.HTTP_1_1)
+                        .followRedirects(HttpClient.Redirect.NORMAL)
+                        .connectTimeout(config.getTokenRefreshTimeout());
+                // inherit the proxy configuration of the enclosing HxClient
+                config.applyProxySettings(builder);
+                refreshHttpClient = builder.build();
+            }
+            return refreshHttpClient;
         }
     }
 
