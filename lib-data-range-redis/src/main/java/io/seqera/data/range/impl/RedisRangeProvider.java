@@ -59,6 +59,13 @@ public class RedisRangeProvider implements RangeProvider {
         }
     }
 
+    @Override
+    public long size(String key) {
+        try (Jedis conn = pool.getResource()) {
+            return conn.zcard(key);
+        }
+    }
+
     private static final String SCRIPT = """
         local elements = redis.call('ZRANGEBYSCORE', KEYS[1], ARGV[1], ARGV[2], 'LIMIT', ARGV[3], ARGV[4])
         if #elements > 0 then

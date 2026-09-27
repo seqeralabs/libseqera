@@ -39,4 +39,10 @@ public interface RangeProvider {
     boolean addIfLess(String key, String member, double score);
 
     List<String> getRange(String key, double min, double max, int count, boolean remove);
+
+    /**
+     * @return the number of members in the sorted set at {@code key},
+     *         or {@code 0} when the key does not exist
+     */
+    long size(String key);
 }
