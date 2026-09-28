@@ -1,5 +1,11 @@
 # micronaut-cache-redis changelog
 
+0.4.1
+- Fix `keys()` and `invalidateAll()` reaching other caches' keys when a cache name contains `SCAN MATCH`
+  glob characters: the name is now escaped, so `user?` no longer matches (and clears) cache `users`
+- Refuse a cache name containing `:` at startup: `<cacheName>:` is the key namespace, so `foo:bar`'s keys
+  would fall in cache `foo`'s namespace and be listed and cleared by it
+
 0.4.0
 - Add `ListableCache`, the key-listing capability Micronaut's `SyncCache` lacks: `keys()` returns the
   keys a cache holds, without the cache-name prefix

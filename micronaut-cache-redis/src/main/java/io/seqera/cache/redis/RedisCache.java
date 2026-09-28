@@ -68,6 +68,9 @@ public class RedisCache implements SyncCache<JedisPool>, ListableCache, AutoClos
 
     private static final Logger log = LoggerFactory.getLogger(RedisCache.class);
 
+    /** The characters {@code SCAN MATCH} reads as glob syntax. */
+    private static final String GLOB_CHARS = "\\*?[]";
+
     private final JedisPool jedisPool;
     private final ObjectSerializer keySerializer;
     private final ObjectSerializer valueSerializer;
@@ -99,6 +102,12 @@ public class RedisCache implements SyncCache<JedisPool>, ListableCache, AutoClos
     ) {
         if (redisCacheConfiguration == null) {
             throw new IllegalArgumentException("Redis cache configuration cannot be null");
+        }
+        // A cache's keys live under "<cacheName>:", so "foo:bar"'s keys would fall in cache "foo"'s namespace
+        // and be listed and cleared by it — a key "foo:bar:k" is ambiguous, which escaping cannot resolve
+        if (redisCacheConfiguration.getCacheName().contains(":")) {
+            throw new ConfigurationException("Redis cache name '" + redisCacheConfiguration.getCacheName()
+                    + "' must not contain ':' - it separates the cache name from the key in Redis");
         }
 
         this.jedisPool = jedisPool;
@@ -369,7 +378,23 @@ public class RedisCache implements SyncCache<JedisPool>, ListableCache, AutoClos
      * @return The key pattern
      */
     protected String getKeysPattern() {
-        return getName() + ":*";
+        return keysPattern(getName());
+    }
+
+    /**
+     * The {@code SCAN MATCH} pattern for a cache's keys. {@code MATCH} is a glob, so the characters it
+     * treats as syntax are escaped and the cache name matches literally — unescaped, a cache named
+     * {@code user?} would also match the keys of {@code users}, and {@code invalidateAll()} would delete them.
+     */
+    static String keysPattern(String cacheName) {
+        final StringBuilder pattern = new StringBuilder(cacheName.length() + 2);
+        for (char c : cacheName.toCharArray()) {
+            if (GLOB_CHARS.indexOf(c) >= 0) {
+                pattern.append('\\');
+            }
+            pattern.append(c);
+        }
+        return pattern.append(":*").toString();
     }
 
     /**
