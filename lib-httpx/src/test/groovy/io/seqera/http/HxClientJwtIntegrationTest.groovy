@@ -447,6 +447,7 @@ class HxClientJwtIntegrationTest extends Specification {
         and: 'user-a cookies do not leak into user-b refresh'
         second.accessToken() == INITIAL_JWT
         second.refreshToken() == 'refresh-b'
+        wireMockServer.verify(1, postRequestedFor(urlEqualTo('/oauth/json')).withoutHeader('Cookie'))
         and:
         client != null
         manager.@refreshHttpClient.is(client)

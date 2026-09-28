@@ -485,7 +485,7 @@ class HxTokenManager {
     /**
      * Sends a token refresh request, retrying it once on a network error. The shared refresh
      * client may pick a pooled connection the server closed while idle, and the JDK client does
-     * not retry a POST on its own. Timeouts are not retried, so a refresh still gives up after
+     * not retry a POST on its own. Timeouts are not retried; each attempt is bounded by
      * {@code tokenRefreshTimeout}.
      *
      * @param request the token refresh request
