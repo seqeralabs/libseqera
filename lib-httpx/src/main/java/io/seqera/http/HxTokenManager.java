@@ -17,6 +17,7 @@
 
 package io.seqera.http;
 
+import java.io.IOException;
 import java.net.CookieManager;
 import java.net.HttpCookie;
 import java.net.URI;
@@ -24,6 +25,7 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.CompletableFuture;
@@ -456,7 +458,7 @@ class HxTokenManager {
                     .timeout(config.getTokenRefreshTimeout())
                     .build();
 
-            final HttpResponse<String> response = refreshHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+            final HttpResponse<String> response = sendRefreshRequest(request);
             log.trace("Token refresh response for key {}: [{}]", key, response.statusCode());
             // Same parsing the JDK client applies with a cookie handler; only cookies
             // set on an intermediate redirect response are not seen
@@ -477,6 +479,26 @@ class HxTokenManager {
         } catch (Exception e) {
             log.error("Error refreshing JWT token for key {}: {}", key, e.getMessage(), e);
             return null;
+        }
+    }
+
+    /**
+     * Sends a token refresh request, retrying it once on a network error. The shared refresh
+     * client may pick a pooled connection the server closed while idle, and the JDK client does
+     * not retry a POST on its own. Timeouts are not retried, so a refresh still gives up after
+     * {@code tokenRefreshTimeout}.
+     *
+     * @param request the token refresh request
+     * @return the refresh response
+     */
+    private HttpResponse<String> sendRefreshRequest(HttpRequest request) throws IOException, InterruptedException {
+        try {
+            return refreshHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (HttpTimeoutException e) {
+            throw e;
+        } catch (IOException e) {
+            log.debug("Token refresh request to {} failed ({}), retrying once", request.uri(), e.getMessage());
+            return refreshHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
         }
     }
 
