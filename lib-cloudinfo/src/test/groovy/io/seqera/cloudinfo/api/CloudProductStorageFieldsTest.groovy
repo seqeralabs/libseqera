@@ -79,7 +79,7 @@ class CloudProductStorageFieldsTest extends Specification {
 
         then:
         nc.quotaFamily == 'StandardNCADSA100v4Family'
-        nc.ephemeralOSDiskSupported == Boolean.TRUE
+        nc.ephemeralOSDiskSupported
         nc.supportedEphemeralOSDiskPlacements == ['ResourceDisk', 'CacheDisk']
         nc.cachedDiskBytes == 274877906944L
         nc.nvmeDiskSizeInMiB == 915527L
@@ -89,12 +89,12 @@ class CloudProductStorageFieldsTest extends Specification {
         nc.hyperVGenerations == ['V2']
         nc.diskControllerTypes == null
         nc.maxDataDiskCount == 8L
-        nc.premiumIO == Boolean.TRUE
-        nc.acceleratedNetworkingEnabled == Boolean.TRUE
+        nc.premiumIO
+        nc.acceleratedNetworkingEnabled
         nc.maxNetworkInterfaces == 2L
 
-        and: 'a false boolean is omitted by cloudinfo and decodes to null'
-        e8.ephemeralOSDiskSupported == null
+        and: 'a false boolean is omitted by cloudinfo and decodes to false'
+        !e8.ephemeralOSDiskSupported
         e8.supportedEphemeralOSDiskPlacements == null
         e8.diskControllerTypes == ['NVMe']
         e8.maxDataDiskCount == 24L
@@ -116,7 +116,7 @@ class CloudProductStorageFieldsTest extends Specification {
         g2.maximumPersistentDisksSizeGb == 263168L
         g2.bootDiskTypes == ['pd-balanced', 'pd-ssd']
         g2.localSsdPartitions == null
-        g2.isSharedCpu == null
+        !g2.isSharedCpu
 
         and:
         c4.localSsdPartitions == 1L
@@ -126,7 +126,7 @@ class CloudProductStorageFieldsTest extends Specification {
         c4.bootDiskTypes == ['hyperdisk-balanced', 'hyperdisk-balanced-high-availability']
 
         and:
-        e2.isSharedCpu == Boolean.TRUE
+        e2.isSharedCpu
     }
 
     def 'isSharedCpu keeps its wire name through a Jackson round-trip'() {
@@ -139,7 +139,7 @@ class CloudProductStorageFieldsTest extends Specification {
         then:
         json.contains('"isSharedCpu":true')
         !json.contains('"sharedCpu"')
-        PRODUCT.decode(json).isSharedCpu == Boolean.TRUE
+        PRODUCT.decode(json).isSharedCpu
     }
 
     def 'a pre-0.25.0 product without any of the new fields still decodes'() {
@@ -157,8 +157,12 @@ class CloudProductStorageFieldsTest extends Specification {
         p.onDemandPrice == 0.096f
         p.features == ['sched', 'x86']
         [p.ebsMaxBandwidthMbps, p.ebsMaxThroughputMBps, p.instanceStoreGB, p.gpuMemoryMiB,
-         p.quotaFamily, p.ephemeralOSDiskSupported, p.supportedEphemeralOSDiskPlacements, p.premiumIO,
-         p.acceleratorType, p.localSsdGiB, p.attachableLocalSsdCounts, p.isSharedCpu, p.bootDiskTypes].every { it == null }
+         p.quotaFamily, p.supportedEphemeralOSDiskPlacements,
+         p.acceleratorType, p.localSsdGiB, p.attachableLocalSsdCounts, p.bootDiskTypes].every { it == null }
+        !p.ephemeralOSDiskSupported
+        !p.premiumIO
+        !p.acceleratedNetworkingEnabled
+        !p.isSharedCpu
     }
 
     def 'equals and hashCode include the new fields'() {

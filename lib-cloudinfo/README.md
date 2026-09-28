@@ -88,16 +88,17 @@ HTTP 400; the resulting `CloudInfoException` exposes the accepted tokens via
 ### Storage Prices
 
 Fetch the on-demand block-storage (disk) prices of a region. Only `amazon`,
-`azure` and `google` serve them. CloudInfo responds 404 for an enabled provider
-without storage prices, for a known region not scraped yet, and on backends
-older than 0.25.0; that is returned as an empty `Optional` so callers can fall
-back to their own prices. An unknown provider or region is rejected with 400,
-and that and any other failure throws `CloudInfoException`.
+`azure` and `google` serve them. For an enabled provider without storage
+prices, or a known region not scraped yet, CloudInfo answers 404 with an
+RFC 7807 problem body, which is returned as an empty `Optional` so callers can
+fall back to their own prices. Any other 404 (a backend older than 0.25.0, a
+wrong endpoint, a proxy), an unknown provider or region (400), and any other
+failure throw `CloudInfoException`.
 
 ```java
 Optional<StoragePrices> prices = client.getStoragePrices("amazon", "us-east-1");
 
-prices.flatMap(p -> p.getVolumes().stream()
+prices.flatMap(p -> p.getVolumes().stream()   // never null
         .filter(v -> "gp3".equals(v.getVolumeType()))
         .findFirst())
     .ifPresent(gp3 -> {
@@ -129,8 +130,9 @@ GPU facts, under each cloud's own field names:
   `maximumPersistentDisksSizeGb`, `isSharedCpu`, `bootDiskTypes`
 
 All are `null` when the provider doesn't report them, and on older backends.
-CloudInfo omits booleans when they are false, so a `null` `Boolean` means
-"false or not reported"; test with `Boolean.TRUE.equals(...)`.
+The flags (`ephemeralOSDiskSupported`, `premiumIO`,
+`acceleratedNetworkingEnabled`, `isSharedCpu`) are primitive `boolean`s:
+CloudInfo omits them when false, so an absent flag reads as `false`.
 
 ### Custom Configuration
 

@@ -128,4 +128,19 @@ class StoragePricesTest extends Specification {
         a.hashCode() == b.hashCode()
         a != load('storage-google-us-central1.json')
     }
+
+    def 'a null or absent volumes list decodes to an empty, mutable list'() {
+        expect:
+        ENCODER.decode(json).volumes == []
+
+        when:
+        def prices = ENCODER.decode(json)
+        prices.volumes.add(new VolumePrice(volumeType: 'gp3'))
+
+        then:
+        prices.volumes*.volumeType == ['gp3']
+
+        where:
+        json << ['{"source":"aws-pricing-api","volumes":null}', '{"source":"aws-pricing-api"}']
+    }
 }

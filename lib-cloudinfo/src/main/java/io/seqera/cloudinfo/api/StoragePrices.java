@@ -18,6 +18,7 @@
 
 package io.seqera.cloudinfo.api;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -36,8 +37,11 @@ public class StoragePrices {
      * products endpoint).
      */
     private String scrapingTime;
-    /** One entry per volume type, sorted by volume type. */
-    private List<VolumePrice> volumes;
+    /**
+     * One entry per volume type, sorted by volume type. Never null: CloudInfo
+     * sends {@code "volumes":null} for an empty region, which becomes an empty list.
+     */
+    private List<VolumePrice> volumes = new ArrayList<>();
 
     public StoragePrices() {
     }
@@ -63,7 +67,7 @@ public class StoragePrices {
     }
 
     public void setVolumes(List<VolumePrice> volumes) {
-        this.volumes = volumes;
+        this.volumes = volumes != null ? volumes : new ArrayList<>();
     }
 
     @Override

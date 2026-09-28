@@ -23,12 +23,18 @@ import java.util.Objects;
 /**
  * Cloudinfo API error body. The /families endpoint returns it with HTTP 400 when
  * a requested feature token is unknown or not lowercase; validCapabilities then
- * lists the accepted tokens. Both fields are null for other error shapes.
+ * lists the accepted tokens. Other endpoints answer with an RFC 7807 problem
+ * ({type, title, status, detail}), of which status and detail are kept. Fields
+ * absent from the body are null.
  */
 public class ErrorResponse {
 
     private String error;
     private List<String> validCapabilities;
+    /** RFC 7807 problem status, e.g. 404 when /storage has no prices for the region. */
+    private Integer status;
+    /** RFC 7807 problem detail, e.g. which path parameter failed validation. */
+    private String detail;
 
     public ErrorResponse() {
     }
@@ -49,22 +55,41 @@ public class ErrorResponse {
         this.validCapabilities = validCapabilities;
     }
 
+    public Integer getStatus() {
+        return status;
+    }
+
+    public void setStatus(Integer status) {
+        this.status = status;
+    }
+
+    public String getDetail() {
+        return detail;
+    }
+
+    public void setDetail(String detail) {
+        this.detail = detail;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ErrorResponse that = (ErrorResponse) o;
         return Objects.equals(error, that.error)
-                && Objects.equals(validCapabilities, that.validCapabilities);
+                && Objects.equals(validCapabilities, that.validCapabilities)
+                && Objects.equals(status, that.status)
+                && Objects.equals(detail, that.detail);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(error, validCapabilities);
+        return Objects.hash(error, validCapabilities, status, detail);
     }
 
     @Override
     public String toString() {
-        return "ErrorResponse[error=" + error + ", validCapabilities=" + validCapabilities + "]";
+        return "ErrorResponse[error=" + error + ", validCapabilities=" + validCapabilities +
+                ", status=" + status + ", detail=" + detail + "]";
     }
 }

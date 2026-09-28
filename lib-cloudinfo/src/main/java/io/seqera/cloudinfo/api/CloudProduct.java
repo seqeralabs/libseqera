@@ -97,7 +97,7 @@ public class CloudProduct {
      * {@link #family} holds the normalised form.
      */
     private String quotaFamily;
-    private Boolean ephemeralOSDiskSupported;
+    private boolean ephemeralOSDiskSupported;
     /** Local disks the ephemeral OS disk can be placed on (ResourceDisk, CacheDisk, NvmeDisk). */
     private List<String> supportedEphemeralOSDiskPlacements;
     /** Size of the host cache disk, in bytes. */
@@ -116,8 +116,8 @@ public class CloudProduct {
     private List<String> diskControllerTypes;
     /** Maximum number of attached data disks. */
     private Long maxDataDiskCount;
-    private Boolean premiumIO;
-    private Boolean acceleratedNetworkingEnabled;
+    private boolean premiumIO;
+    private boolean acceleratedNetworkingEnabled;
     /** Maximum number of network interfaces. */
     private Long maxNetworkInterfaces;
 
@@ -140,7 +140,7 @@ public class CloudProduct {
     private Long maximumPersistentDisks;
     /** Maximum total size of attached persistent disks, in GB. */
     private Long maximumPersistentDisksSizeGb;
-    private Boolean isSharedCpu;
+    private boolean isSharedCpu;
     /** Disk types the machine type accepts as boot disk (curated). */
     private List<String> bootDiskTypes;
 
@@ -334,14 +334,14 @@ public class CloudProduct {
     /**
      * Azure-only. Whether the OS disk can be ephemeral.
      *
-     * <p>CloudInfo omits this field when it is false, so {@code null} means
-     * "false or not reported"; treat only {@code Boolean.TRUE} as true.
+     * <p>CloudInfo omits this field when it is false, so an absent field (false
+     * or not reported) reads as {@code false}.
      */
-    public Boolean getEphemeralOSDiskSupported() {
+    public boolean isEphemeralOSDiskSupported() {
         return ephemeralOSDiskSupported;
     }
 
-    public void setEphemeralOSDiskSupported(Boolean ephemeralOSDiskSupported) {
+    public void setEphemeralOSDiskSupported(boolean ephemeralOSDiskSupported) {
         this.ephemeralOSDiskSupported = ephemeralOSDiskSupported;
     }
 
@@ -420,28 +420,28 @@ public class CloudProduct {
     /**
      * Azure-only. Whether the size accepts Premium SSD managed disks.
      *
-     * <p>CloudInfo omits this field when it is false, so {@code null} means
-     * "false or not reported"; treat only {@code Boolean.TRUE} as true.
+     * <p>CloudInfo omits this field when it is false, so an absent field (false
+     * or not reported) reads as {@code false}.
      */
-    public Boolean getPremiumIO() {
+    public boolean isPremiumIO() {
         return premiumIO;
     }
 
-    public void setPremiumIO(Boolean premiumIO) {
+    public void setPremiumIO(boolean premiumIO) {
         this.premiumIO = premiumIO;
     }
 
     /**
      * Azure-only. Whether the size supports accelerated networking.
      *
-     * <p>CloudInfo omits this field when it is false, so {@code null} means
-     * "false or not reported"; treat only {@code Boolean.TRUE} as true.
+     * <p>CloudInfo omits this field when it is false, so an absent field (false
+     * or not reported) reads as {@code false}.
      */
-    public Boolean getAcceleratedNetworkingEnabled() {
+    public boolean isAcceleratedNetworkingEnabled() {
         return acceleratedNetworkingEnabled;
     }
 
-    public void setAcceleratedNetworkingEnabled(Boolean acceleratedNetworkingEnabled) {
+    public void setAcceleratedNetworkingEnabled(boolean acceleratedNetworkingEnabled) {
         this.acceleratedNetworkingEnabled = acceleratedNetworkingEnabled;
     }
 
@@ -504,14 +504,14 @@ public class CloudProduct {
     /**
      * Google-only. Whether this is a shared-core type (e2-micro, f1-micro, ...).
      *
-     * <p>CloudInfo omits this field when it is false, so {@code null} means
-     * "false or not reported"; treat only {@code Boolean.TRUE} as true.
+     * <p>CloudInfo omits this field when it is false, so an absent field (false
+     * or not reported) reads as {@code false}.
      */
-    public Boolean getIsSharedCpu() {
+    public boolean getIsSharedCpu() {
         return isSharedCpu;
     }
 
-    public void setIsSharedCpu(Boolean isSharedCpu) {
+    public void setIsSharedCpu(boolean isSharedCpu) {
         this.isSharedCpu = isSharedCpu;
     }
 

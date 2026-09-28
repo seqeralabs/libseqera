@@ -203,15 +203,32 @@ class CloudInfoClientMockTest extends Specification {
         prices.get().volumes[0].includedIops == 3000L
     }
 
-    def 'getStoragePrices returns empty on 404 (provider or region without storage prices)'() {
+    def 'getStoragePrices returns empty on cloudinfo\'s 404 problem (region without storage prices)'() {
         given:
         def http = Mock(HxClient)
-        def problem = '{"type":"about:blank","title":"Not Found","status":404,"detail":"no storage prices for region"}'
+        def problem = '{"type":"about:blank","title":"Not Found","status":404,"detail":"storage prices not yet cached"}'
         http.sendAsString(_) >> withStatus(404, problem)
         def client = clientWith(http)
 
         expect:
         client.getStoragePrices('alibaba', 'cn-hangzhou') == Optional.empty()
+    }
+
+    def 'getStoragePrices throws on a 404 that is not cloudinfo\'s problem body'() {
+        given: 'a backend without the endpoint, a wrong base path or a proxy'
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> withStatus(404, body)
+        def client = clientWith(http)
+
+        when:
+        client.getStoragePrices('amazon', 'us-east-1')
+
+        then:
+        def e = thrown(CloudInfoException)
+        e.statusCode == 404
+
+        where:
+        body << ['404 page not found', '<html>Not Found</html>', '{"message":"not found"}']
     }
 
     def 'getStoragePrices surfaces other error statuses as CloudInfoException'() {
@@ -260,7 +277,9 @@ class CloudInfoClientMockTest extends Specification {
     def 'getStoragePrices surfaces a 400 (unknown provider or region) as CloudInfoException'() {
         given:
         def http = Mock(HxClient)
-        http.sendAsString(_) >> withStatus(400, '{"type":"about:blank","title":"Bad Request","status":400}')
+        def problem = '{"type":"about:blank","title":"validation problem","status":400,' +
+                '"detail":"Key: \'GetRegionPathParams.Region\' Error:Field validation for \'Region\' failed on the \'region\' tag"}'
+        http.sendAsString(_) >> withStatus(400, problem)
         def client = clientWith(http)
 
         when:
@@ -269,5 +288,6 @@ class CloudInfoClientMockTest extends Specification {
         then:
         def e = thrown(CloudInfoException)
         e.statusCode == 400
+        e.message.contains("status=400: Key: 'GetRegionPathParams.Region'")
     }
 }
