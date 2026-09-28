@@ -53,6 +53,10 @@ redis:
 | `value-serializer` | Class | Custom value serializer |
 | `charset` | Charset | Character encoding for keys |
 
+Each cache stores its entries under the `<cacheName>:` key prefix, so a cache name must not contain `:`
+(refused at startup: `foo:bar`'s keys would fall in cache `foo`'s namespace). Other characters are safe,
+including those `SCAN MATCH` treats as glob syntax, which are escaped.
+
 ### Default Configuration
 
 You can set defaults for all caches:
