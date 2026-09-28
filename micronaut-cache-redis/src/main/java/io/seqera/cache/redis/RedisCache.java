@@ -27,6 +27,7 @@ import io.micronaut.core.convert.ConversionService;
 import io.micronaut.core.serialize.JdkSerializer;
 import io.micronaut.core.serialize.ObjectSerializer;
 import io.micronaut.core.type.Argument;
+import io.seqera.cache.ListableCache;
 import io.seqera.cache.redis.expiration.ConstantExpirationAfterWritePolicy;
 import io.seqera.cache.redis.expiration.ExpirationAfterWritePolicy;
 import jakarta.annotation.PreDestroy;
@@ -41,13 +42,18 @@ import redis.clients.jedis.resps.ScanResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.Charset;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /**
@@ -58,7 +64,7 @@ import java.util.function.Supplier;
  */
 @EachBean(RedisCacheConfiguration.class)
 @Requires(classes = SyncCache.class)
-public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
+public class RedisCache implements SyncCache<JedisPool>, ListableCache, AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(RedisCache.class);
 
@@ -252,35 +258,71 @@ public class RedisCache implements SyncCache<JedisPool>, AutoCloseable {
     @Override
     public void invalidateAll() {
         log.trace("Cache '{}' INVALIDATE-ALL pattern={}", getName(), getKeysPattern());
-        String pattern = getKeysPattern();
+        final int[] totalDeleted = {0};
+        scanKeys((jedis, keys) -> {
+            // Pipeline single-key DELs instead of one multi-key DEL: a multi-key DEL
+            // fails with CROSSSLOT against a cluster-mode server (e.g. AWS MemoryDB)
+            // when the scanned keys hash to different slots — even on a single-shard
+            // cluster. A pipeline sends each single-key command independently (no
+            // cross-slot check) while still flushing the whole batch in one round-trip.
+            try (Pipeline pipeline = jedis.pipelined()) {
+                for (byte[] key : keys) {
+                    pipeline.del(key);
+                }
+                pipeline.sync();
+            }
+            totalDeleted[0] += keys.size();
+            log.trace("Cache '{}' INVALIDATE-ALL deleted {} keys in this batch", getName(), keys.size());
+        });
+        log.trace("Cache '{}' INVALIDATE-ALL completed, total keys deleted: {}", getName(), totalDeleted[0]);
+    }
+
+    /**
+     * The keys currently held by this cache, without the {@code <cacheName>:} prefix the default key
+     * serializer adds. Walks the same key space {@link #invalidateAll()} does, with {@code SCAN}, so
+     * it is weakly consistent: a key present for the whole call is returned, one written, removed or
+     * expiring during it may or may not be. On a cluster-mode server {@code SCAN} only sees the keys of
+     * the node the connection reaches — complete on a single shard, partial on several.
+     *
+     * @return the keys, de-duplicated ({@code SCAN} can return a key more than once)
+     */
+    @Override
+    public Set<String> keys() {
+        log.trace("Cache '{}' KEYS pattern={}", getName(), getKeysPattern());
+        final String prefix = getName() + ":";
+        final Charset charset = redisCacheConfiguration.getCharset();
+        final Set<String> result = new LinkedHashSet<>();
+        scanKeys((jedis, keys) -> {
+            for (byte[] key : keys) {
+                result.add(stripPrefix(new String(key, charset), prefix));
+            }
+        });
+        return Collections.unmodifiableSet(result);
+    }
+
+    /**
+     * Walk every key matching {@link #getKeysPattern()} with {@code SCAN}, handing each non-empty batch
+     * to {@code action} together with the connection that scanned it.
+     */
+    private void scanKeys(BiConsumer<Jedis, List<byte[]>> action) {
+        final ScanParams params = new ScanParams()
+                .match(getKeysPattern())
+                .count(invalidateScanCount.intValue());
         try (Jedis jedis = jedisPool.getResource()) {
-            ScanParams params = new ScanParams()
-                    .match(pattern)
-                    .count(invalidateScanCount.intValue());
             String cursor = ScanParams.SCAN_POINTER_START;
-            int totalDeleted = 0;
             do {
-                ScanResult<byte[]> scanResult = jedis.scan(cursor.getBytes(redisCacheConfiguration.getCharset()), params);
-                List<byte[]> keys = scanResult.getResult();
+                final ScanResult<byte[]> scanResult = jedis.scan(cursor.getBytes(redisCacheConfiguration.getCharset()), params);
+                final List<byte[]> keys = scanResult.getResult();
                 if (!keys.isEmpty()) {
-                    // Pipeline single-key DELs instead of one multi-key DEL: a multi-key DEL
-                    // fails with CROSSSLOT against a cluster-mode server (e.g. AWS MemoryDB)
-                    // when the scanned keys hash to different slots — even on a single-shard
-                    // cluster. A pipeline sends each single-key command independently (no
-                    // cross-slot check) while still flushing the whole batch in one round-trip.
-                    try (Pipeline pipeline = jedis.pipelined()) {
-                        for (byte[] key : keys) {
-                            pipeline.del(key);
-                        }
-                        pipeline.sync();
-                    }
-                    totalDeleted += keys.size();
-                    log.trace("Cache '{}' INVALIDATE-ALL deleted {} keys in this batch", getName(), keys.size());
+                    action.accept(jedis, keys);
                 }
                 cursor = scanResult.getCursor();
             } while (!ScanParams.SCAN_POINTER_START.equals(cursor));
-            log.trace("Cache '{}' INVALIDATE-ALL completed, total keys deleted: {}", getName(), totalDeleted);
         }
+    }
+
+    private static String stripPrefix(String key, String prefix) {
+        return key.startsWith(prefix) ? key.substring(prefix.length()) : key;
     }
 
     @NonNull

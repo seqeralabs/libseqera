@@ -44,6 +44,9 @@ dependencies {
     // JSpecify annotations
     compileOnly 'org.jspecify:jspecify:1.0.0'
 
+    // Caffeine: optional, only to list the keys of a Micronaut Caffeine cache (ListableCache.of)
+    compileOnly 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+
     // Groovy support for compilation
     compileOnly "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
 
@@ -52,6 +55,7 @@ dependencies {
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
     testImplementation 'org.testcontainers:testcontainers:1.21.4'
+    testImplementation 'io.micronaut.cache:micronaut-cache-caffeine:4.3.1'
 }
 
 test {
