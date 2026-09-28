@@ -160,6 +160,12 @@ ListableCache.of(cacheManager.getCache("my-cache")).ifPresent(listing -> {
 });
 ```
 
+Listed keys are strings, and the whole set is built in memory, so the listing is meant for small
+caches. A listed key reads its entry back when the cache's keys are strings: the Redis cache stores
+every key in string form, so it round-trips for any key type, while Micronaut's Caffeine cache keeps
+the caller's key object — a non-string key is listed as its `toString()`, which does not read the
+entry back, and keys with the same `toString()` are listed once.
+
 On Redis the listing uses the same `SCAN` walk as `invalidateAll()` (batch size `invalidate-scan-count`),
 which reads the whole key space and filters by the `<cacheName>:` prefix, so its cost grows with the
 total number of keys in the Redis database. It is weakly consistent with concurrent writes, and on a

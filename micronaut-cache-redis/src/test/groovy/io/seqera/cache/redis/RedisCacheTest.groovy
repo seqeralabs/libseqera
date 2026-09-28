@@ -42,6 +42,7 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
         context = ApplicationContext.run([
                 'redis.caches.test-cache.expire-after-write': '1h',
                 'redis.caches.test-cache.invalidate-scan-count': 2,
+                'redis.caches.list-cache.expire-after-write': '1h',
                 'redis.caches.list-cache.invalidate-scan-count': 2,
                 'redis.caches.list-other.expire-after-write': '1h'
         ], 'test')

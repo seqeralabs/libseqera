@@ -37,6 +37,15 @@ import io.micronaut.cache.SyncCache;
 public interface ListableCache {
 
     /**
+     * The keys currently held by the cache, in their string form, materialised as one set — intended
+     * for small caches (a registry swept periodically), not for enumerating large ones.
+     *
+     * <p>A listed key reads its entry back with {@code get(key, ...)} when the cache's keys are
+     * strings. The Redis cache always stores the string form of a key, so it round-trips for any key
+     * type; Micronaut's Caffeine cache keeps the caller's key object, so a non-string key is listed as
+     * its {@code toString()}, which does not read the entry back, and distinct keys with the same
+     * {@code toString()} are listed once.
+     *
      * @return the keys currently held by the cache, in their string form
      */
     Set<String> keys();
