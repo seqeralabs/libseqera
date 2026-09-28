@@ -12,6 +12,7 @@ A Micronaut cache implementation using the Jedis Redis driver, providing drop-in
 - Async cache operations via `AsyncCache`
 - Probabilistic early revalidation to prevent cache stampedes (opt-in)
 - Optional AES-256 encryption of cache values (per-cache)
+- Key listing (`ListableCache`), portable across this Redis cache and Micronaut's Caffeine cache
 
 ## Installation
 
@@ -19,7 +20,7 @@ Add the dependency to your `build.gradle`:
 
 ```groovy
 dependencies {
-    implementation 'io.seqera:micronaut-cache-redis:1.0.0'
+    implementation 'io.seqera:micronaut-cache-redis:0.4.0'
 }
 ```
 
@@ -143,6 +144,27 @@ public class CacheService {
     }
 }
 ```
+
+### Listing Keys
+
+Micronaut's `SyncCache` cannot enumerate its keys. `ListableCache.of(cache)` adds that capability
+without tying the caller to a backend: it returns this module's `RedisCache` itself, a view over the
+native cache for Micronaut's Caffeine cache, and `Optional.empty()` for any other cache.
+
+```java
+ListableCache.of(cacheManager.getCache("my-cache")).ifPresent(listing -> {
+    for (String key : listing.keys()) {
+        // the entry may have been removed or expired since it was listed
+        cache.get(key, MyValue.class).ifPresent(this::process);
+    }
+});
+```
+
+On Redis the listing uses the same `SCAN` walk as `invalidateAll()` (batch size `invalidate-scan-count`),
+which reads the whole key space and filters by the `<cacheName>:` prefix, so its cost grows with the
+total number of keys in the Redis database. It is weakly consistent with concurrent writes, and on a
+cluster-mode server with several shards it only sees the keys of one node. Caffeine is an optional
+dependency: add `io.micronaut.cache:micronaut-cache-caffeine` to list Caffeine caches.
 
 ### Custom Value Serializer
 

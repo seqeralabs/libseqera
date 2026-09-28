@@ -41,7 +41,9 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
     def setup() {
         context = ApplicationContext.run([
                 'redis.caches.test-cache.expire-after-write': '1h',
-                'redis.caches.test-cache.invalidate-scan-count': 2
+                'redis.caches.test-cache.invalidate-scan-count': 2,
+                'redis.caches.list-cache.invalidate-scan-count': 2,
+                'redis.caches.list-other.expire-after-write': '1h'
         ], 'test')
     }
 
@@ -160,6 +162,52 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
 
         then:
         noExceptionThrown()
+    }
+
+    def 'should list the keys held by the cache without the cache name prefix'() {
+        given:
+        def cache = context.getBean(RedisCache, Qualifiers.byName("list-cache"))
+        cache.invalidateAll()
+        cache.put("alpha", "a")
+        cache.put("beta", "b")
+
+        expect:
+        cache.keys() == ["alpha", "beta"] as Set
+    }
+
+    def 'should not list the keys of another cache'() {
+        given:
+        def cache = context.getBean(RedisCache, Qualifiers.byName("list-cache"))
+        def other = context.getBean(RedisCache, Qualifiers.byName("list-other"))
+        cache.invalidateAll()
+        other.invalidateAll()
+        cache.put("mine", "x")
+        other.put("theirs", "y")
+
+        expect:
+        cache.keys() == ["mine"] as Set
+        other.keys() == ["theirs"] as Set
+    }
+
+    def 'should list every key when the cache spans many scan pages'() {
+        given: 'a scan count of 2, so 25 keys take many SCAN round-trips'
+        def cache = context.getBean(RedisCache, Qualifiers.byName("list-cache"))
+        cache.invalidateAll()
+        for (int i = 0; i < 25; i++) {
+            cache.put("k-${i}".toString(), i)
+        }
+
+        expect:
+        cache.keys() == (0..<25).collect { "k-${it}".toString() } as Set
+    }
+
+    def 'should list no keys for an empty cache'() {
+        given:
+        def cache = context.getBean(RedisCache, Qualifiers.byName("list-cache"))
+        cache.invalidateAll()
+
+        expect:
+        cache.keys().isEmpty()
     }
 
     def 'should get with supplier when key missing'() {

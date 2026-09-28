@@ -1,5 +1,13 @@
 # micronaut-cache-redis changelog
 
+0.4.0
+- Add `ListableCache`, the key-listing capability Micronaut's `SyncCache` lacks: `keys()` returns the
+  keys a cache holds, without the cache-name prefix
+- `RedisCache` implements it with the same `SCAN` walk `invalidateAll()` uses (now shared by both);
+  weakly consistent, and on a multi-shard cluster-mode server it only sees one node's keys
+- `ListableCache.of(SyncCache)` returns the listing for this module's Redis cache or for Micronaut's
+  Caffeine cache, so callers do not depend on the backend; Caffeine is an optional dependency
+
 0.3.1
 - Fix `invalidateAll()` to pipeline single-key `DEL`s instead of a single multi-key `DEL`,
   which fails with CROSSSLOT against a cluster-mode server (e.g. AWS MemoryDB). The pipeline
