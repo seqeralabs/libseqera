@@ -19,29 +19,14 @@ package io.seqera.cache
 import io.micronaut.cache.CacheManager
 import io.micronaut.cache.SyncCache
 import io.micronaut.context.ApplicationContext
-import io.micronaut.inject.qualifiers.Qualifiers
-import io.seqera.cache.redis.RedisCache
-import io.seqera.fixtures.redis.RedisTestContainer
 import spock.lang.Specification
 
 /**
- * Tests for {@link ListableCache#of}
+ * Tests for {@link ListableCache#of} on the non-Redis backends; the Redis case is in {@code RedisCacheTest}.
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-class ListableCacheTest extends Specification implements RedisTestContainer {
-
-    def 'should return a redis cache as its own listing'() {
-        given:
-        def context = ApplicationContext.run(['redis.caches.redis-cache.expire-after-write': '1h'], 'test')
-        def cache = context.getBean(RedisCache, Qualifiers.byName("redis-cache"))
-
-        expect:
-        ListableCache.of(cache).get().is(cache)
-
-        cleanup:
-        context.close()
-    }
+class ListableCacheTest extends Specification {
 
     def 'should list the keys of a Micronaut Caffeine cache'() {
         given:

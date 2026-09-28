@@ -19,6 +19,7 @@ package io.seqera.cache.redis
 import io.micronaut.context.ApplicationContext
 import io.micronaut.core.type.Argument
 import io.micronaut.inject.qualifiers.Qualifiers
+import io.seqera.cache.ListableCache
 import io.seqera.fixtures.redis.RedisTestContainer
 import redis.clients.jedis.JedisPool
 import spock.lang.Shared
@@ -163,6 +164,14 @@ class RedisCacheTest extends Specification implements RedisTestContainer {
 
         then:
         noExceptionThrown()
+    }
+
+    def 'ListableCache.of should return the redis cache as its own listing'() {
+        given:
+        def cache = context.getBean(RedisCache, Qualifiers.byName("list-cache"))
+
+        expect:
+        ListableCache.of(cache).get().is(cache)
     }
 
     def 'should list the keys held by the cache without the cache name prefix'() {
