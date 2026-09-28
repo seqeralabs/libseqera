@@ -19,10 +19,12 @@ package io.seqera.http
 
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.time.Duration
 
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.WireMock
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration
+import com.github.tomakehurst.wiremock.http.Fault
 import spock.lang.Shared
 import spock.lang.Specification
 
@@ -415,5 +417,109 @@ class HxClientJwtIntegrationTest extends Specification {
         response.body() == 'Bearer Preserved'
         wireMockServer.verify(1, getRequestedFor(urlEqualTo('/api/bearer-preserve'))
                 .withHeader('Authorization', equalTo(tokenWithBearer)))
+    }
+
+    def 'should reuse one refresh client without leaking cookies between refreshes'() {
+        given:
+        def base = "http://localhost:${wireMockServer.port()}"
+        def manager = new HxTokenManager(HxConfig.newBuilder().build())
+
+        and: 'first refresh returns the token via cookies, second only via JSON'
+        wireMockServer.stubFor(post(urlEqualTo('/oauth/cookie'))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader('Set-Cookie', "JWT=${REFRESHED_JWT}; Path=/; HttpOnly")
+                        .withHeader('Set-Cookie', "JWT_REFRESH_TOKEN=${NEW_REFRESH_TOKEN}; Path=/; HttpOnly")))
+        wireMockServer.stubFor(post(urlEqualTo('/oauth/json'))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader('Content-Type', 'application/json')
+                        .withBody("""{"access_token":"${INITIAL_JWT}"}""")))
+
+        when:
+        def first = manager.doRefreshTokenInternal('user-a', new DefaultHxAuth('old-a', 'refresh-a', "${base}/oauth/cookie"))
+        def client = manager.@refreshHttpClient
+        def second = manager.doRefreshTokenInternal('user-b', new DefaultHxAuth('old-b', 'refresh-b', "${base}/oauth/json"))
+
+        then:
+        first.accessToken() == REFRESHED_JWT
+        first.refreshToken() == NEW_REFRESH_TOKEN
+        and: 'user-a cookies do not leak into user-b refresh'
+        second.accessToken() == INITIAL_JWT
+        second.refreshToken() == 'refresh-b'
+        wireMockServer.verify(1, postRequestedFor(urlEqualTo('/oauth/json')).withoutHeader('Cookie'))
+        and:
+        client != null
+        manager.@refreshHttpClient.is(client)
+    }
+
+    def 'should retry a token refresh once after a connection reset'() {
+        given:
+        def manager = new HxTokenManager(HxConfig.newBuilder().build())
+        def auth = new DefaultHxAuth('old', 'refresh-reset', "http://localhost:${wireMockServer.port()}/oauth/reset")
+
+        and: 'the first refresh attempt is reset, the second succeeds'
+        wireMockServer.stubFor(post(urlEqualTo('/oauth/reset'))
+                .inScenario('refresh-reset')
+                .whenScenarioStateIs('Started')
+                .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER))
+                .willSetStateTo('reset-once'))
+        wireMockServer.stubFor(post(urlEqualTo('/oauth/reset'))
+                .inScenario('refresh-reset')
+                .whenScenarioStateIs('reset-once')
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader('Content-Type', 'application/json')
+                        .withBody("""{"access_token":"${REFRESHED_JWT}","refresh_token":"${NEW_REFRESH_TOKEN}"}""")))
+
+        when:
+        def result = manager.doRefreshTokenInternal('user-reset', auth)
+
+        then:
+        result.accessToken() == REFRESHED_JWT
+        result.refreshToken() == NEW_REFRESH_TOKEN
+        and:
+        wireMockServer.verify(2, postRequestedFor(urlEqualTo('/oauth/reset')))
+    }
+
+    def 'should give up a token refresh after one retry'() {
+        given:
+        def manager = new HxTokenManager(HxConfig.newBuilder().build())
+        def auth = new DefaultHxAuth('old', 'refresh-down', "http://localhost:${wireMockServer.port()}/oauth/down")
+
+        and:
+        wireMockServer.stubFor(post(urlEqualTo('/oauth/down'))
+                .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)))
+
+        when:
+        def result = manager.doRefreshTokenInternal('user-down', auth)
+
+        then:
+        result == null
+        and:
+        wireMockServer.verify(2, postRequestedFor(urlEqualTo('/oauth/down')))
+    }
+
+    def 'should not retry a token refresh that timed out'() {
+        given:
+        def config = HxConfig.newBuilder().tokenRefreshTimeout(Duration.ofMillis(500)).build()
+        def manager = new HxTokenManager(config)
+        def auth = new DefaultHxAuth('old', 'refresh-slow', "http://localhost:${wireMockServer.port()}/oauth/slow")
+
+        and:
+        wireMockServer.stubFor(post(urlEqualTo('/oauth/slow'))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withFixedDelay(2000)
+                        .withHeader('Content-Type', 'application/json')
+                        .withBody("""{"access_token":"${REFRESHED_JWT}"}""")))
+
+        when:
+        def result = manager.doRefreshTokenInternal('user-slow', auth)
+
+        then:
+        result == null
+        and:
+        wireMockServer.verify(1, postRequestedFor(urlEqualTo('/oauth/slow')))
     }
 }
