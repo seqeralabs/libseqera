@@ -242,4 +242,32 @@ class CloudInfoClientMockTest extends Specification {
         def e = thrown(CloudInfoException)
         e.statusCode == -1
     }
+
+    def 'getStoragePrices turns a null volumes list into an empty one'() {
+        given:
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> ok('{"source":"aws-pricing-api","scrapingTime":"1790000000000","volumes":null}')
+        def client = clientWith(http)
+
+        when:
+        def prices = client.getStoragePrices('amazon', 'us-east-1')
+
+        then:
+        prices.isPresent()
+        prices.get().volumes == []
+    }
+
+    def 'getStoragePrices surfaces a 400 (unknown provider or region) as CloudInfoException'() {
+        given:
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> withStatus(400, '{"type":"about:blank","title":"Bad Request","status":400}')
+        def client = clientWith(http)
+
+        when:
+        client.getStoragePrices('amazon', 'mars-north-1')
+
+        then:
+        def e = thrown(CloudInfoException)
+        e.statusCode == 400
+    }
 }

@@ -218,10 +218,12 @@ public class CloudInfoClient {
     /**
      * Gets the on-demand block-storage (disk) prices of a region.
      *
-     * <p>Only amazon, azure and google scrape storage prices. For any other
-     * provider, or a region CloudInfo has not scraped yet, the server responds
-     * 404 and this method returns an empty {@link Optional}, so callers can fall
-     * back to their own prices.
+     * <p>Only amazon, azure and google scrape storage prices. CloudInfo responds
+     * 404 for an enabled provider that does not scrape them, for a known region
+     * not scraped yet, and on backends older than 0.25.0 (no such endpoint); this
+     * method then returns an empty {@link Optional}, so callers can fall back to
+     * their own prices. An unknown provider or region is rejected with 400 and
+     * throws.
      *
      * @param provider the cloud provider identifier (e.g., "amazon", "google", "azure")
      * @param region the region identifier (e.g., "us-east-1", "europe-west1")
@@ -251,7 +253,11 @@ public class CloudInfoClient {
                         response.statusCode());
             }
 
-            return Optional.ofNullable(STORAGE_ENCODER.decode(response.body()));
+            StoragePrices prices = STORAGE_ENCODER.decode(response.body());
+            if (prices != null && prices.getVolumes() == null) {
+                prices.setVolumes(Collections.emptyList());
+            }
+            return Optional.ofNullable(prices);
         } catch (CloudInfoException e) {
             throw e;
         } catch (Exception e) {

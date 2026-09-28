@@ -88,9 +88,11 @@ HTTP 400; the resulting `CloudInfoException` exposes the accepted tokens via
 ### Storage Prices
 
 Fetch the on-demand block-storage (disk) prices of a region. Only `amazon`,
-`azure` and `google` serve them; other providers, and regions CloudInfo has not
-scraped yet, respond 404, which is returned as an empty `Optional` so callers
-can fall back to their own prices. Any other failure throws `CloudInfoException`.
+`azure` and `google` serve them. CloudInfo responds 404 for an enabled provider
+without storage prices, for a known region not scraped yet, and on backends
+older than 0.25.0; that is returned as an empty `Optional` so callers can fall
+back to their own prices. An unknown provider or region is rejected with 400,
+and that and any other failure throws `CloudInfoException`.
 
 ```java
 Optional<StoragePrices> prices = client.getStoragePrices("amazon", "us-east-1");
