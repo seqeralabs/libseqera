@@ -1,0 +1,51 @@
+{
+  "products": [
+    {
+      "category": "General purpose",
+      "type": "m5.large",
+      "family": "m5",
+      "onDemandPrice": 0.096,
+      "spotPrice": [{"zone": "us-east-1a", "price": 0.0544}],
+      "cpusPerVm": 2,
+      "memPerVm": 8,
+      "gpusPerVm": 0,
+      "ntwPerf": "Up to 10 Gigabit",
+      "ntwPerfCategory": "high",
+      "zones": null,
+      "attributes": {"cpu": "2", "instanceTypeCategory": "General purpose", "memory": "8", "networkPerfCategory": "high"},
+      "currentGen": true,
+      "features": ["hibernation", "sched", "x86"],
+      "ebsMaxBandwidthMbps": 4750,
+      "ebsBaselineBandwidthMbps": 650,
+      "ebsMaxThroughputMBps": 593.75,
+      "ebsBaselineThroughputMBps": 81.25,
+      "ebsMaxIops": 18750,
+      "ebsBaselineIops": 3600
+    },
+    {
+      "category": "GPU instance",
+      "type": "g6.12xlarge",
+      "family": "g6",
+      "onDemandPrice": 4.6016,
+      "spotPrice": [{"zone": "us-east-1a", "price": 2.9107}],
+      "cpusPerVm": 48,
+      "memPerVm": 192,
+      "gpusPerVm": 4,
+      "ntwPerf": "40 Gigabit",
+      "ntwPerfCategory": "",
+      "zones": null,
+      "attributes": {"cpu": "48", "instanceTypeCategory": "GPU instance", "memory": "192", "networkPerfCategory": ""},
+      "currentGen": true,
+      "features": ["gpu", "l4", "nvidia", "sched", "ssd", "x86"],
+      "ebsMaxBandwidthMbps": 20000,
+      "ebsBaselineBandwidthMbps": 20000,
+      "ebsMaxThroughputMBps": 2500,
+      "ebsBaselineThroughputMBps": 2500,
+      "ebsMaxIops": 80000,
+      "ebsBaselineIops": 80000,
+      "instanceStoreGB": 3760,
+      "gpuMemoryMiB": 91552
+    }
+  ],
+  "scrapingTime": "1790000000000"
+}

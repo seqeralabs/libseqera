@@ -1,0 +1,13 @@
+{
+  "source": "gcp-cloud-billing-api",
+  "scrapingTime": "1790000000000",
+  "volumes": [
+    {"volumeType": "hyperdisk-balanced", "pricePerGBMonth": 0.08, "pricePerIopsMonth": 0.005, "pricePerMiBpsMonth": 0.04, "includedIops": 3000, "includedThroughputMiBps": 140, "maxIops": 160000, "maxThroughputMiBps": 2400, "maxSizeGiB": 65536},
+    {"volumeType": "hyperdisk-throughput", "pricePerGBMonth": 0.005, "pricePerMiBpsMonth": 0.25},
+    {"volumeType": "local-ssd", "pricePerGBMonth": 0.08,
+     "familyPricesPerGBMonth": {"c4": 0.16, "c4a": 0.12, "c4d": 0.16, "g4": 0, "h4d": 0.11313, "z3": 0.08, "z4d-highmem-highlssd": 0.1632, "z4d-highmem-standardlssd": 0.2464}},
+    {"volumeType": "pd-balanced", "pricePerGBMonth": 0.1},
+    {"volumeType": "pd-ssd", "pricePerGBMonth": 0.17},
+    {"volumeType": "pd-standard", "pricePerGBMonth": 0.04}
+  ]
+}

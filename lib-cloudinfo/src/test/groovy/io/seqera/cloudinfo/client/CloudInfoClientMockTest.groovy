@@ -180,4 +180,66 @@ class CloudInfoClientMockTest extends Specification {
         expect:
         client.getFamilies('google') == []
     }
+
+    def 'getStoragePrices hits the storage endpoint and decodes the volumes'() {
+        given:
+        def http = Mock(HxClient)
+        URI captured = null
+        def body = '{"source":"aws-pricing-api","scrapingTime":"1790000000000","volumes":[' +
+                '{"volumeType":"gp3","storageMedia":"SSD-backed","pricePerGBMonth":0.08,"pricePerIopsMonth":0.005,' +
+                '"pricePerMiBpsMonth":0.04,"includedIops":3000,"includedThroughputMiBps":125}]}'
+        http.sendAsString(_) >> { HttpRequest req -> captured = req.uri(); ok(body) }
+        def client = clientWith(http)
+
+        when:
+        def prices = client.getStoragePrices('amazon', 'us-east-1')
+
+        then:
+        captured.toString() ==
+                'https://cloudinfo.test/api/v1/providers/amazon/services/compute/regions/us-east-1/storage'
+        prices.isPresent()
+        prices.get().source == 'aws-pricing-api'
+        prices.get().volumes*.volumeType == ['gp3']
+        prices.get().volumes[0].includedIops == 3000L
+    }
+
+    def 'getStoragePrices returns empty on 404 (provider or region without storage prices)'() {
+        given:
+        def http = Mock(HxClient)
+        def problem = '{"type":"about:blank","title":"Not Found","status":404,"detail":"no storage prices for region"}'
+        http.sendAsString(_) >> withStatus(404, problem)
+        def client = clientWith(http)
+
+        expect:
+        client.getStoragePrices('alibaba', 'cn-hangzhou') == Optional.empty()
+    }
+
+    def 'getStoragePrices surfaces other error statuses as CloudInfoException'() {
+        given:
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> withStatus(500, 'boom')
+        def client = clientWith(http)
+
+        when:
+        client.getStoragePrices('amazon', 'us-east-1')
+
+        then:
+        def e = thrown(CloudInfoException)
+        e.statusCode == 500
+        e.message.contains('provider=amazon, region=us-east-1')
+    }
+
+    def 'getStoragePrices wraps an undecodable body in CloudInfoException'() {
+        given:
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> ok('not json')
+        def client = clientWith(http)
+
+        when:
+        client.getStoragePrices('amazon', 'us-east-1')
+
+        then:
+        def e = thrown(CloudInfoException)
+        e.statusCode == -1
+    }
 }

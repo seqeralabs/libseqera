@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import io.seqera.cloudinfo.api.CloudProduct;
@@ -33,6 +34,7 @@ import io.seqera.cloudinfo.api.CloudResponse;
 import io.seqera.cloudinfo.api.ErrorResponse;
 import io.seqera.cloudinfo.api.FamiliesResponse;
 import io.seqera.cloudinfo.api.ProductsQuery;
+import io.seqera.cloudinfo.api.StoragePrices;
 import io.seqera.http.HxClient;
 import io.seqera.serde.jackson.JacksonEncodingStrategy;
 import org.slf4j.Logger;
@@ -70,6 +72,9 @@ public class CloudInfoClient {
 
     private static final JacksonEncodingStrategy<FamiliesResponse> FAMILIES_ENCODER =
             new JacksonEncodingStrategy<FamiliesResponse>() {};
+
+    private static final JacksonEncodingStrategy<StoragePrices> STORAGE_ENCODER =
+            new JacksonEncodingStrategy<StoragePrices>() {};
 
     private static final JacksonEncodingStrategy<ErrorResponse> ERROR_ENCODER =
             new JacksonEncodingStrategy<ErrorResponse>() {};
@@ -207,6 +212,51 @@ public class CloudInfoClient {
         } catch (Exception e) {
             throw new CloudInfoException(
                     String.format("Failed to fetch products for provider=%s, region=%s", provider, region), e);
+        }
+    }
+
+    /**
+     * Gets the on-demand block-storage (disk) prices of a region.
+     *
+     * <p>Only amazon, azure and google scrape storage prices. For any other
+     * provider, or a region CloudInfo has not scraped yet, the server responds
+     * 404 and this method returns an empty {@link Optional}, so callers can fall
+     * back to their own prices.
+     *
+     * @param provider the cloud provider identifier (e.g., "amazon", "google", "azure")
+     * @param region the region identifier (e.g., "us-east-1", "europe-west1")
+     * @return the region's storage prices, or empty when CloudInfo has none
+     * @throws CloudInfoException if the request fails with any status other than 200 or 404
+     */
+    public Optional<StoragePrices> getStoragePrices(String provider, String region) {
+        String path = String.format("/api/v1/providers/%s/services/compute/regions/%s/storage", provider, region);
+        log.trace("CloudInfo storage: {}", path);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint + path))
+                    .GET()
+                    .timeout(Duration.ofSeconds(30))
+                    .build();
+
+            HttpResponse<String> response = httpClient.sendAsString(request);
+
+            if (response.statusCode() == 404) {
+                log.debug("CloudInfo has no storage prices for provider={}, region={}", provider, region);
+                return Optional.empty();
+            }
+            if (response.statusCode() != 200) {
+                throw new CloudInfoException(
+                        String.format("Failed to fetch storage prices for provider=%s, region=%s, status=%d", provider, region, response.statusCode()),
+                        response.statusCode());
+            }
+
+            return Optional.ofNullable(STORAGE_ENCODER.decode(response.body()));
+        } catch (CloudInfoException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CloudInfoException(
+                    String.format("Failed to fetch storage prices for provider=%s, region=%s", provider, region), e);
         }
     }
 
