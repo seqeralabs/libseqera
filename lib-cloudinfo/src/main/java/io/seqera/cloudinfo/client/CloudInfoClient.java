@@ -119,31 +119,13 @@ public class CloudInfoClient {
      * @throws CloudInfoException if the request fails
      */
     public List<CloudRegion> getRegions(String provider) {
-        String path = String.format("/api/v1/providers/%s/services/compute/regions", provider);
-        log.trace("CloudInfo regions: {}", path);
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint + path))
-                    .GET()
-                    .timeout(Duration.ofSeconds(30))
-                    .build();
-
-            HttpResponse<String> response = httpClient.sendAsString(request);
-
-            if (response.statusCode() != 200) {
-                throw new CloudInfoException(
-                        String.format("Failed to fetch regions for provider=%s, status=%d", provider, response.statusCode()),
-                        response.statusCode());
-            }
-
-            return REGIONS_ENCODER.decode(response.body());
-        } catch (CloudInfoException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new CloudInfoException(
-                    String.format("Failed to fetch regions for provider=%s", provider), e);
+        String what = String.format("regions for provider=%s", provider);
+        String url = endpoint + String.format("/api/v1/providers/%s/services/compute/regions", segment(provider));
+        HttpResponse<String> response = get(url, Duration.ofSeconds(30), what);
+        if (response.statusCode() != 200) {
+            throw apiError(what, response.statusCode(), decodeError(response));
         }
+        return decode(REGIONS_ENCODER, response, what);
     }
 
     /**
@@ -186,33 +168,18 @@ public class CloudInfoClient {
      * @throws CloudInfoException if the request fails
      */
     public List<CloudProduct> getProducts(String provider, String region, ProductsQuery query) {
-        String path = String.format("/api/v1/providers/%s/services/compute/regions/%s/products", provider, region);
-        String url = endpoint + path + buildQueryString(query);
-        log.trace("CloudInfo products: {}", url);
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .GET()
-                    .timeout(Duration.ofSeconds(60))
-                    .build();
-
-            HttpResponse<String> response = httpClient.sendAsString(request);
-
-            if (response.statusCode() != 200) {
-                throw new CloudInfoException(
-                        String.format("Failed to fetch products for provider=%s, region=%s, status=%d", provider, region, response.statusCode()),
-                        response.statusCode());
-            }
-
-            CloudResponse cloudResponse = RESPONSE_ENCODER.decode(response.body());
-            return cloudResponse.getProducts() != null ? cloudResponse.getProducts() : Collections.emptyList();
-        } catch (CloudInfoException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new CloudInfoException(
-                    String.format("Failed to fetch products for provider=%s, region=%s", provider, region), e);
+        String what = String.format("products for provider=%s, region=%s", provider, region);
+        String url = endpoint
+                + String.format("/api/v1/providers/%s/services/compute/regions/%s/products", segment(provider), segment(region))
+                + buildQueryString(query);
+        HttpResponse<String> response = get(url, Duration.ofSeconds(60), what);
+        if (response.statusCode() != 200) {
+            throw apiError(what, response.statusCode(), decodeError(response));
         }
+        CloudResponse cloudResponse = decode(RESPONSE_ENCODER, response, what);
+        return cloudResponse != null && cloudResponse.getProducts() != null
+                ? cloudResponse.getProducts()
+                : Collections.emptyList();
     }
 
     /**
@@ -232,34 +199,19 @@ public class CloudInfoClient {
      * @throws CloudInfoException if the request fails, including a 404 that is not CloudInfo's "no prices" answer
      */
     public Optional<StoragePrices> getStoragePrices(String provider, String region) {
-        String path = String.format("/api/v1/providers/%s/services/compute/regions/%s/storage", provider, region);
-        log.trace("CloudInfo storage: {}", path);
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint + path))
-                    .GET()
-                    .timeout(Duration.ofSeconds(30))
-                    .build();
-
-            HttpResponse<String> response = httpClient.sendAsString(request);
-
-            if (response.statusCode() != 200) {
-                ErrorResponse error = decodeError(response);
-                if (response.statusCode() == 404 && isNoStoragePricesProblem(error)) {
-                    log.debug("CloudInfo has no storage prices for provider={}, region={}", provider, region);
-                    return Optional.empty();
-                }
-                throw apiError(String.format("storage prices for provider=%s, region=%s", provider, region), response.statusCode(), error);
+        String what = String.format("storage prices for provider=%s, region=%s", provider, region);
+        String url = endpoint
+                + String.format("/api/v1/providers/%s/services/compute/regions/%s/storage", segment(provider), segment(region));
+        HttpResponse<String> response = get(url, Duration.ofSeconds(30), what);
+        if (response.statusCode() != 200) {
+            ErrorResponse error = decodeError(response);
+            if (response.statusCode() == 404 && isNoStoragePricesProblem(error)) {
+                log.debug("CloudInfo has no storage prices for provider={}, region={}", provider, region);
+                return Optional.empty();
             }
-
-            return Optional.ofNullable(STORAGE_ENCODER.decode(response.body()));
-        } catch (CloudInfoException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new CloudInfoException(
-                    String.format("Failed to fetch storage prices for provider=%s, region=%s", provider, region), e);
+            throw apiError(what, response.statusCode(), error);
         }
+        return Optional.ofNullable(decode(STORAGE_ENCODER, response, what));
     }
 
     /**
@@ -285,33 +237,63 @@ public class CloudInfoClient {
      * @throws CloudInfoException if the request fails
      */
     public List<String> getFamilies(String provider, List<String> features) {
-        String path = String.format("/api/v1/providers/%s/families", provider);
-        String url = endpoint + path + buildFeaturesQueryString(features);
-        log.trace("CloudInfo families: {}", url);
+        String what = String.format("families for provider=%s", provider);
+        String url = endpoint
+                + String.format("/api/v1/providers/%s/families", segment(provider))
+                + buildFeaturesQueryString(features);
+        HttpResponse<String> response = get(url, Duration.ofSeconds(60), what);
+        if (response.statusCode() != 200) {
+            throw apiError(what, response.statusCode(), decodeError(response));
+        }
+        FamiliesResponse familiesResponse = decode(FAMILIES_ENCODER, response, what);
+        return familiesResponse != null && familiesResponse.getFamilies() != null
+                ? familiesResponse.getFamilies()
+                : Collections.emptyList();
+    }
 
+    /**
+     * Sends a GET request to {@code url}, wrapping any failure to build or send
+     * it in a CloudInfoException without a status.
+     */
+    private HttpResponse<String> get(String url, Duration timeout, String what) {
+        log.trace("CloudInfo {}: {}", what, url);
         try {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .GET()
-                    .timeout(Duration.ofSeconds(60))
+                    .timeout(timeout)
                     .build();
-
-            HttpResponse<String> response = httpClient.sendAsString(request);
-
-            if (response.statusCode() != 200) {
-                throw apiError(String.format("families for provider=%s", provider), response.statusCode(), decodeError(response));
-            }
-
-            FamiliesResponse familiesResponse = FAMILIES_ENCODER.decode(response.body());
-            return familiesResponse != null && familiesResponse.getFamilies() != null
-                    ? familiesResponse.getFamilies()
-                    : Collections.emptyList();
-        } catch (CloudInfoException e) {
-            throw e;
+            return httpClient.sendAsString(request);
         } catch (Exception e) {
-            throw new CloudInfoException(
-                    String.format("Failed to fetch families for provider=%s", provider), e);
+            throw new CloudInfoException("Failed to fetch " + what, e);
         }
+    }
+
+    /**
+     * Decodes a 200 body, wrapping a malformed one in a CloudInfoException
+     * without a status.
+     */
+    private static <T> T decode(JacksonEncodingStrategy<T> encoder, HttpResponse<String> response, String what) {
+        try {
+            return encoder.decode(response.body());
+        } catch (Exception e) {
+            throw new CloudInfoException("Failed to fetch " + what, e);
+        }
+    }
+
+    /**
+     * Percent-encodes a value as a single URL path segment, so characters such
+     * as {@code ?}, {@code #}, {@code /} or a space stay part of the segment
+     * instead of changing the requested URL. The dot segments {@code .} and
+     * {@code ..} are encoded too, so they are not resolved as relative paths.
+     */
+    static String segment(String value) {
+        String encoded = URLEncoder.encode(String.valueOf(value), StandardCharsets.UTF_8)
+                .replace("+", "%20")
+                .replace("*", "%2A");
+        return ".".equals(encoded) || "..".equals(encoded)
+                ? encoded.replace(".", "%2E")
+                : encoded;
     }
 
     /**

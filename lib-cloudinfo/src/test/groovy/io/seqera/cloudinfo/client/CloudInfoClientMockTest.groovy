@@ -293,4 +293,115 @@ class CloudInfoClientMockTest extends Specification {
         e.statusCode == 400
         e.message.contains("status=400: Key: 'GetRegionPathParams.Region'")
     }
+
+    def 'every method percent-encodes provider and region as path segments'() {
+        given:
+        def http = Mock(HxClient)
+        URI captured = null
+        http.sendAsString(_) >> { HttpRequest req -> captured = req.uri(); ok(body) }
+        def client = clientWith(http)
+
+        when:
+        client."$method"(*args)
+
+        then:
+        captured.rawPath == expectedPath
+        captured.rawQuery == null
+        captured.rawFragment == null
+
+        where:
+        method             | args                   | body              | expectedPath
+        'getRegions'       | ['us?x']               | '[]'              | '/api/v1/providers/us%3Fx/services/compute/regions'
+        'getRegions'       | ['us#x']               | '[]'              | '/api/v1/providers/us%23x/services/compute/regions'
+        'getRegions'       | ['a/b']                | '[]'              | '/api/v1/providers/a%2Fb/services/compute/regions'
+        'getRegions'       | ['a b']                | '[]'              | '/api/v1/providers/a%20b/services/compute/regions'
+        'getProducts'      | ['a?x', 'us-east-1?x'] | '{"products":[]}' | '/api/v1/providers/a%3Fx/services/compute/regions/us-east-1%3Fx/products'
+        'getProducts'      | ['a#x', 'us-east-1#x'] | '{"products":[]}' | '/api/v1/providers/a%23x/services/compute/regions/us-east-1%23x/products'
+        'getProducts'      | ['a/b', 'us/east']     | '{"products":[]}' | '/api/v1/providers/a%2Fb/services/compute/regions/us%2Feast/products'
+        'getProducts'      | ['a b', 'us east']     | '{"products":[]}' | '/api/v1/providers/a%20b/services/compute/regions/us%20east/products'
+        'getStoragePrices' | ['a?x', 'us-east-1?x'] | '{}'              | '/api/v1/providers/a%3Fx/services/compute/regions/us-east-1%3Fx/storage'
+        'getStoragePrices' | ['a#x', 'us-east-1#x'] | '{}'              | '/api/v1/providers/a%23x/services/compute/regions/us-east-1%23x/storage'
+        'getStoragePrices' | ['a/b', 'us/east']     | '{}'              | '/api/v1/providers/a%2Fb/services/compute/regions/us%2Feast/storage'
+        'getStoragePrices' | ['a b', 'us east']     | '{}'              | '/api/v1/providers/a%20b/services/compute/regions/us%20east/storage'
+        'getFamilies'      | ['a?x']                | '{}'              | '/api/v1/providers/a%3Fx/families'
+        'getFamilies'      | ['a#x']                | '{}'              | '/api/v1/providers/a%23x/families'
+        'getFamilies'      | ['a/b']                | '{}'              | '/api/v1/providers/a%2Fb/families'
+        'getFamilies'      | ['a b']                | '{}'              | '/api/v1/providers/a%20b/families'
+    }
+
+    def 'escaped path segments keep the real query string intact'() {
+        given:
+        def http = Mock(HxClient)
+        URI captured = null
+        http.sendAsString(_) >> { HttpRequest req -> captured = req.uri(); ok('{"products":[]}') }
+        def client = clientWith(http)
+
+        when:
+        client.getProducts('amazon', 'us-east-1?sched=true', ProductsQuery.builder().features(['gpu']).build())
+
+        then:
+        captured.toString() ==
+                'https://cloudinfo.test/api/v1/providers/amazon/services/compute/regions/us-east-1%3Fsched%3Dtrue/products?features=gpu'
+    }
+
+    def 'getStoragePrices does not turn an escaped region into a silent empty result'() {
+        given: 'a region that used to push /storage into the query string'
+        def http = Mock(HxClient)
+        def problem = '{"type":"about:blank","title":"validation problem","status":400,"detail":"invalid region"}'
+        URI captured = null
+        http.sendAsString(_) >> { HttpRequest req -> captured = req.uri(); withStatus(400, problem) }
+        def client = clientWith(http)
+
+        when:
+        client.getStoragePrices('amazon', 'us-east-1?x')
+
+        then:
+        captured.rawPath.endsWith('/regions/us-east-1%3Fx/storage')
+        def e = thrown(CloudInfoException)
+        e.statusCode == 400
+    }
+
+    def 'dot segments are encoded so they are not resolved as relative paths'() {
+        expect:
+        CloudInfoClient.segment(value) == expected
+
+        where:
+        value       | expected
+        '.'         | '%2E'
+        '..'        | '%2E%2E'
+        'us-east-1' | 'us-east-1'
+        'eu.west'   | 'eu.west'
+        'a+b'       | 'a%2Bb'
+    }
+
+    def 'getRegions surfaces the server problem detail on error'() {
+        given:
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> withStatus(400, '{"title":"validation problem","status":400,"detail":"bad provider"}')
+        def client = clientWith(http)
+
+        when:
+        client.getRegions('bogus')
+
+        then:
+        def e = thrown(CloudInfoException)
+        e.statusCode == 400
+        e.message == 'Failed to fetch regions for provider=bogus, status=400: bad provider'
+    }
+
+    def 'a send failure is wrapped without a status'() {
+        given:
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> { throw new IOException('connection reset') }
+        def client = clientWith(http)
+
+        when:
+        client.getProducts('amazon', 'us-east-1')
+
+        then:
+        def e = thrown(CloudInfoException)
+        e.statusCode == -1
+        e.message == 'Failed to fetch products for provider=amazon, region=us-east-1'
+        e.cause instanceof IOException
+    }
 }
