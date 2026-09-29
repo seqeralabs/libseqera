@@ -228,7 +228,10 @@ class CloudInfoClientMockTest extends Specification {
         e.statusCode == 404
 
         where:
-        body << ['404 page not found', '<html>Not Found</html>', '{"message":"not found"}']
+        body << ['404 page not found', '<html>Not Found</html>', '{"message":"not found"}',
+                 // Spring Boot's default error body also carries "status":404
+                 '{"timestamp":"2026-09-29T00:00:00.000+00:00","status":404,"error":"Not Found","path":"/api/v1/providers/amazon/services/compute/regions/us-east-1/storage"}',
+                 '{"type":"about:blank","title":"Gone","status":404}']
     }
 
     def 'getStoragePrices surfaces other error statuses as CloudInfoException'() {

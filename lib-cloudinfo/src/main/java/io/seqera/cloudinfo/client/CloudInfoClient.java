@@ -220,11 +220,11 @@ public class CloudInfoClient {
      *
      * <p>Only amazon, azure and google scrape storage prices. For an enabled
      * provider that does not scrape them, or a known region not scraped yet,
-     * CloudInfo answers 404 with an RFC 7807 problem body; this method then
-     * returns an empty {@link Optional}, so callers can fall back to their own
-     * prices. Any other 404 (a backend older than 0.25.0 without the endpoint, a
-     * wrong endpoint or a proxy) throws, as does an unknown provider or region
-     * (400).
+     * CloudInfo answers 404 with an RFC 7807 problem body
+     * ({@code "title":"Not Found","status":404}); this method then returns an
+     * empty {@link Optional}, so callers can fall back to their own prices. Any
+     * other 404 (a backend older than 0.25.0 without the endpoint, a wrong
+     * endpoint or a proxy) throws, as does an unknown provider or region (400).
      *
      * @param provider the cloud provider identifier (e.g., "amazon", "google", "azure")
      * @param region the region identifier (e.g., "us-east-1", "europe-west1")
@@ -246,7 +246,7 @@ public class CloudInfoClient {
 
             if (response.statusCode() != 200) {
                 ErrorResponse error = decodeError(response);
-                if (response.statusCode() == 404 && error != null && Integer.valueOf(404).equals(error.getStatus())) {
+                if (response.statusCode() == 404 && isNoStoragePricesProblem(error)) {
                     log.debug("CloudInfo has no storage prices for provider={}, region={}", provider, region);
                     return Optional.empty();
                 }
@@ -324,6 +324,18 @@ public class CloudInfoClient {
         } catch (Exception ignore) {
             return null;
         }
+    }
+
+    /**
+     * True for cloudinfo's /storage "no prices" answer: an RFC 7807 problem with
+     * {@code "title":"Not Found","status":404}. Other JSON 404s (e.g. a proxy's
+     * Spring Boot error body, which also carries {@code "status":404} but uses
+     * {@code "error"} rather than {@code "title"}) do not match.
+     */
+    private static boolean isNoStoragePricesProblem(ErrorResponse error) {
+        return error != null
+                && Integer.valueOf(404).equals(error.getStatus())
+                && "Not Found".equals(error.getTitle());
     }
 
     /**
