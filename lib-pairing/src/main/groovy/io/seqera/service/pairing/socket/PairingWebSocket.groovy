@@ -53,6 +53,17 @@ import static io.seqera.random.LongRndKey.rndHex
 @ServerWebSocket("/pairing/{service}/token/{token}{?endpoint}")
 class PairingWebSocket {
 
+    /**
+     * Max size (in bytes) of a message received from the remote service, e.g. a {@code ProxyHttpResponse}
+     * wrapping the full body of a Platform API response.
+     *
+     * Micronaut (core >= 4.10.27) enforces {@code @OnMessage(maxPayloadLength)} on the aggregated and
+     * decompressed (permessage-deflate) message, defaulting to 64 KiB. Before that release only the
+     * compressed size of each frame was bounded, so larger responses went through. Keep this explicit
+     * and bounded to avoid closing the session with 1009 (message too big) on large responses.
+     */
+    public static final int MAX_PAYLOAD_LENGTH = 16 * 1024 * 1024
+
     @Inject
     private PairingChannel channel
 
@@ -104,7 +115,7 @@ class PairingWebSocket {
             .exceptionally(ex-> log.error("Failed to send message=${msg} - endpoint: ${endpoint} [sessionId: $session.id]"))
     }
 
-    @OnMessage
+    @OnMessage(maxPayloadLength = MAX_PAYLOAD_LENGTH)
     void onMessage(String service, String token, String endpoint, PairingMessage message, WebSocketSession session) {
         if( message instanceof PairingHeartbeat ) {
             log.trace "Receiving heartbeat - endpoint: ${endpoint} [sessionId: $session.id]"

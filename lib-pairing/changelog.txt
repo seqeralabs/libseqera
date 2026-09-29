@@ -1,5 +1,10 @@
 # lib-pairing changelog
 
+1.1.1
+- Set an explicit 16 MiB max payload length on PairingWebSocket messages. Micronaut 4.10.27+ applies
+  the default 64 KiB limit to the decompressed message, which closes the session (1009) on large
+  proxied HTTP responses
+
 1.0.0
 - Initial release of lib-pairing module extracted from Wave codebase
 - Implement PairingService with RSA key pair generation and management
