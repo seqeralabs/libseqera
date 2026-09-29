@@ -180,4 +180,117 @@ class CloudInfoClientMockTest extends Specification {
         expect:
         client.getFamilies('google') == []
     }
+
+    def 'getStoragePrices hits the storage endpoint and decodes the volumes'() {
+        given:
+        def http = Mock(HxClient)
+        URI captured = null
+        def body = '{"source":"aws-pricing-api","scrapingTime":"1790000000000","volumes":[' +
+                '{"volumeType":"gp3","storageMedia":"SSD-backed","pricePerGBMonth":0.08,"pricePerIopsMonth":0.005,' +
+                '"pricePerMiBpsMonth":0.04,"includedIops":3000,"includedThroughputMiBps":125}]}'
+        http.sendAsString(_) >> { HttpRequest req -> captured = req.uri(); ok(body) }
+        def client = clientWith(http)
+
+        when:
+        def prices = client.getStoragePrices('amazon', 'us-east-1')
+
+        then:
+        captured.toString() ==
+                'https://cloudinfo.test/api/v1/providers/amazon/services/compute/regions/us-east-1/storage'
+        prices.isPresent()
+        prices.get().source == 'aws-pricing-api'
+        prices.get().volumes*.volumeType == ['gp3']
+        prices.get().volumes[0].includedIops == 3000L
+    }
+
+    def 'getStoragePrices returns empty on cloudinfo\'s 404 problem (region without storage prices)'() {
+        given:
+        def http = Mock(HxClient)
+        def problem = '{"type":"about:blank","title":"Not Found","status":404,"detail":"storage prices not yet cached"}'
+        http.sendAsString(_) >> withStatus(404, problem)
+        def client = clientWith(http)
+
+        expect:
+        client.getStoragePrices('alibaba', 'cn-hangzhou') == Optional.empty()
+    }
+
+    def 'getStoragePrices throws on a 404 that is not cloudinfo\'s problem body'() {
+        given: 'a backend without the endpoint, a wrong base path or a proxy'
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> withStatus(404, body)
+        def client = clientWith(http)
+
+        when:
+        client.getStoragePrices('amazon', 'us-east-1')
+
+        then:
+        def e = thrown(CloudInfoException)
+        e.statusCode == 404
+
+        where:
+        body << ['404 page not found', '<html>Not Found</html>', '{"message":"not found"}',
+                 // Spring Boot's default error body also carries "status":404
+                 '{"timestamp":"2026-09-29T00:00:00.000+00:00","status":404,"error":"Not Found","path":"/api/v1/providers/amazon/services/compute/regions/us-east-1/storage"}',
+                 '{"type":"about:blank","title":"Gone","status":404}']
+    }
+
+    def 'getStoragePrices surfaces other error statuses as CloudInfoException'() {
+        given:
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> withStatus(500, 'boom')
+        def client = clientWith(http)
+
+        when:
+        client.getStoragePrices('amazon', 'us-east-1')
+
+        then:
+        def e = thrown(CloudInfoException)
+        e.statusCode == 500
+        e.message.contains('provider=amazon, region=us-east-1')
+    }
+
+    def 'getStoragePrices wraps an undecodable body in CloudInfoException'() {
+        given:
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> ok('not json')
+        def client = clientWith(http)
+
+        when:
+        client.getStoragePrices('amazon', 'us-east-1')
+
+        then:
+        def e = thrown(CloudInfoException)
+        e.statusCode == -1
+    }
+
+    def 'getStoragePrices turns a null volumes list into an empty one'() {
+        given:
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> ok('{"source":"aws-pricing-api","scrapingTime":"1790000000000","volumes":null}')
+        def client = clientWith(http)
+
+        when:
+        def prices = client.getStoragePrices('amazon', 'us-east-1')
+
+        then:
+        prices.isPresent()
+        prices.get().volumes == []
+    }
+
+    def 'getStoragePrices surfaces a 400 (unknown provider or region) as CloudInfoException'() {
+        given:
+        def http = Mock(HxClient)
+        def problem = '{"type":"about:blank","title":"validation problem","status":400,' +
+                '"detail":"Key: \'GetRegionPathParams.Region\' Error:Field validation for \'Region\' failed on the \'region\' tag"}'
+        http.sendAsString(_) >> withStatus(400, problem)
+        def client = clientWith(http)
+
+        when:
+        client.getStoragePrices('amazon', 'mars-north-1')
+
+        then:
+        def e = thrown(CloudInfoException)
+        e.statusCode == 400
+        e.message.contains("status=400: Key: 'GetRegionPathParams.Region'")
+    }
 }

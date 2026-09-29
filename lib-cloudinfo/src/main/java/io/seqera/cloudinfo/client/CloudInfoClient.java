@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import io.seqera.cloudinfo.api.CloudProduct;
@@ -33,6 +34,7 @@ import io.seqera.cloudinfo.api.CloudResponse;
 import io.seqera.cloudinfo.api.ErrorResponse;
 import io.seqera.cloudinfo.api.FamiliesResponse;
 import io.seqera.cloudinfo.api.ProductsQuery;
+import io.seqera.cloudinfo.api.StoragePrices;
 import io.seqera.http.HxClient;
 import io.seqera.serde.jackson.JacksonEncodingStrategy;
 import org.slf4j.Logger;
@@ -70,6 +72,9 @@ public class CloudInfoClient {
 
     private static final JacksonEncodingStrategy<FamiliesResponse> FAMILIES_ENCODER =
             new JacksonEncodingStrategy<FamiliesResponse>() {};
+
+    private static final JacksonEncodingStrategy<StoragePrices> STORAGE_ENCODER =
+            new JacksonEncodingStrategy<StoragePrices>() {};
 
     private static final JacksonEncodingStrategy<ErrorResponse> ERROR_ENCODER =
             new JacksonEncodingStrategy<ErrorResponse>() {};
@@ -211,6 +216,53 @@ public class CloudInfoClient {
     }
 
     /**
+     * Gets the on-demand block-storage (disk) prices of a region.
+     *
+     * <p>Only amazon, azure and google scrape storage prices. For an enabled
+     * provider that does not scrape them, or a known region not scraped yet,
+     * CloudInfo answers 404 with an RFC 7807 problem body
+     * ({@code "title":"Not Found","status":404}); this method then returns an
+     * empty {@link Optional}, so callers can fall back to their own prices. Any
+     * other 404 (a backend older than 0.25.0 without the endpoint, a wrong
+     * endpoint or a proxy) throws, as does an unknown provider or region (400).
+     *
+     * @param provider the cloud provider identifier (e.g., "amazon", "google", "azure")
+     * @param region the region identifier (e.g., "us-east-1", "europe-west1")
+     * @return the region's storage prices, or empty when CloudInfo has none
+     * @throws CloudInfoException if the request fails, including a 404 that is not CloudInfo's "no prices" answer
+     */
+    public Optional<StoragePrices> getStoragePrices(String provider, String region) {
+        String path = String.format("/api/v1/providers/%s/services/compute/regions/%s/storage", provider, region);
+        log.trace("CloudInfo storage: {}", path);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint + path))
+                    .GET()
+                    .timeout(Duration.ofSeconds(30))
+                    .build();
+
+            HttpResponse<String> response = httpClient.sendAsString(request);
+
+            if (response.statusCode() != 200) {
+                ErrorResponse error = decodeError(response);
+                if (response.statusCode() == 404 && isNoStoragePricesProblem(error)) {
+                    log.debug("CloudInfo has no storage prices for provider={}, region={}", provider, region);
+                    return Optional.empty();
+                }
+                throw apiError(String.format("storage prices for provider=%s, region=%s", provider, region), response.statusCode(), error);
+            }
+
+            return Optional.ofNullable(STORAGE_ENCODER.decode(response.body()));
+        } catch (CloudInfoException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CloudInfoException(
+                    String.format("Failed to fetch storage prices for provider=%s, region=%s", provider, region), e);
+        }
+    }
+
+    /**
      * Gets the machine families for a cloud provider.
      *
      * @param provider the cloud provider identifier (e.g., "amazon", "google", "azure")
@@ -247,7 +299,7 @@ public class CloudInfoClient {
             HttpResponse<String> response = httpClient.sendAsString(request);
 
             if (response.statusCode() != 200) {
-                throw familiesError(provider, response);
+                throw apiError(String.format("families for provider=%s", provider), response.statusCode(), decodeError(response));
             }
 
             FamiliesResponse familiesResponse = FAMILIES_ENCODER.decode(response.body());
@@ -263,25 +315,44 @@ public class CloudInfoClient {
     }
 
     /**
-     * Builds a CloudInfoException for a non-200 families response, adding the
-     * server's error message and validCapabilities when the body has that shape.
+     * Decodes a non-200 body as {@link ErrorResponse}, or returns null when it
+     * has another shape (e.g. a plain-text 404 from a proxy).
      */
-    private static CloudInfoException familiesError(String provider, HttpResponse<String> response) {
-        int status = response.statusCode();
+    private static ErrorResponse decodeError(HttpResponse<String> response) {
+        try {
+            return ERROR_ENCODER.decode(response.body());
+        } catch (Exception ignore) {
+            return null;
+        }
+    }
+
+    /**
+     * True for cloudinfo's /storage "no prices" answer: an RFC 7807 problem with
+     * {@code "title":"Not Found","status":404}. Other JSON 404s (e.g. a proxy's
+     * Spring Boot error body, which also carries {@code "status":404} but uses
+     * {@code "error"} rather than {@code "title"}) do not match.
+     */
+    private static boolean isNoStoragePricesProblem(ErrorResponse error) {
+        return error != null
+                && Integer.valueOf(404).equals(error.getStatus())
+                && "Not Found".equals(error.getTitle());
+    }
+
+    /**
+     * Builds a CloudInfoException for a non-200 response, adding the server's
+     * error message (families {@code error} or RFC 7807 {@code detail}) and
+     * validCapabilities when the body carries them.
+     */
+    private static CloudInfoException apiError(String what, int status, ErrorResponse error) {
         String detail = null;
         List<String> validCapabilities = null;
-        try {
-            ErrorResponse error = ERROR_ENCODER.decode(response.body());
-            if (error != null) {
-                detail = error.getError();
-                validCapabilities = error.getValidCapabilities();
-            }
-        } catch (Exception ignore) {
-            // body is not in the {error, validCapabilities} shape — fall back to a plain error
+        if (error != null) {
+            detail = error.getError() != null ? error.getError() : error.getDetail();
+            validCapabilities = error.getValidCapabilities();
         }
         String message = detail != null
-                ? String.format("Failed to fetch families for provider=%s, status=%d: %s", provider, status, detail)
-                : String.format("Failed to fetch families for provider=%s, status=%d", provider, status);
+                ? String.format("Failed to fetch %s, status=%d: %s", what, status, detail)
+                : String.format("Failed to fetch %s, status=%d", what, status);
         return new CloudInfoException(message, status, validCapabilities);
     }
 

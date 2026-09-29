@@ -1,0 +1,18 @@
+{
+  "source": "azure-retail-prices-api",
+  "scrapingTime": "1790000000000",
+  "volumes": [
+    {"volumeType": "PremiumV2_LRS", "storageMedia": "SSD", "pricePerGBMonth": 0.0803, "pricePerIopsMonth": 0.00511, "pricePerMiBpsMonth": 0.042100326, "includedIops": 3000, "includedThroughputMiBps": 119, "maxIops": 80000, "maxThroughputMiBps": 1907, "maxSizeGiB": 65536},
+    {"volumeType": "Premium_LRS", "storageMedia": "SSD", "maxIops": 20000, "maxThroughputMiBps": 858, "maxSizeGiB": 32767,
+     "tiers": [
+       {"tier": "P1", "sizeGiB": 4, "pricePerMonth": 0.77, "iops": 120, "throughputMiBps": 23},
+       {"tier": "P10", "sizeGiB": 128, "pricePerMonth": 19.71, "iops": 500, "throughputMiBps": 95},
+       {"tier": "P80", "sizeGiB": 32767, "pricePerMonth": 3616.8, "iops": 20000, "throughputMiBps": 858}
+     ]},
+    {"volumeType": "StandardSSD_LRS", "storageMedia": "SSD", "pricePer10kTransactions": 0.002,
+     "tiers": [{"tier": "E10", "sizeGiB": 128, "pricePerMonth": 9.6, "iops": 500, "throughputMiBps": 95}]},
+    {"volumeType": "Standard_LRS", "storageMedia": "HDD", "pricePer10kTransactions": 0.0005,
+     "tiers": [{"tier": "S10", "sizeGiB": 128, "pricePerMonth": 5.888, "iops": 500, "throughputMiBps": 57}]},
+    {"volumeType": "UltraSSD_LRS", "storageMedia": "SSD", "pricePerGBMonth": 0.11972, "pricePerIopsMonth": 0.04964, "pricePerMiBpsMonth": 0.36665557, "maxIops": 400000, "maxThroughputMiBps": 9536, "maxSizeGiB": 65536}
+  ]
+}

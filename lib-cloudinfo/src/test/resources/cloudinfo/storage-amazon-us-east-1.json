@@ -1,0 +1,11 @@
+{
+  "source": "aws-pricing-api",
+  "scrapingTime": "1790000000000",
+  "volumes": [
+    {"volumeType": "gp2", "storageMedia": "SSD-backed", "pricePerGBMonth": 0.1, "maxIops": 16000, "maxThroughputMiBps": 250, "maxSizeGiB": 16384},
+    {"volumeType": "gp3", "storageMedia": "SSD-backed", "pricePerGBMonth": 0.08, "pricePerIopsMonth": 0.005, "pricePerMiBpsMonth": 0.04, "includedIops": 3000, "includedThroughputMiBps": 125, "maxIops": 80000, "maxThroughputMiBps": 2000, "maxSizeGiB": 65536},
+    {"volumeType": "io1", "storageMedia": "SSD-backed", "pricePerGBMonth": 0.125, "pricePerIopsMonth": 0.065, "maxIops": 64000, "maxThroughputMiBps": 1000, "maxSizeGiB": 16384},
+    {"volumeType": "io2", "storageMedia": "SSD-backed", "pricePerGBMonth": 0.125, "maxIops": 256000, "maxThroughputMiBps": 4000, "maxSizeGiB": 65536},
+    {"volumeType": "standard", "storageMedia": "HDD-backed", "pricePerGBMonth": 0.05, "maxSizeGiB": 1024}
+  ]
+}
