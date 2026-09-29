@@ -285,7 +285,8 @@ public class CloudInfoClient {
      * Percent-encodes a value as a single URL path segment, so characters such
      * as {@code ?}, {@code #}, {@code /} or a space stay part of the segment
      * instead of changing the requested URL. The dot segments {@code .} and
-     * {@code ..} are encoded too, so they are not resolved as relative paths.
+     * {@code ..} are encoded too, so the client does not resolve them as
+     * relative paths (a server or proxy may still decode and normalise them).
      */
     static String segment(String value) {
         String encoded = URLEncoder.encode(String.valueOf(value), StandardCharsets.UTF_8)
