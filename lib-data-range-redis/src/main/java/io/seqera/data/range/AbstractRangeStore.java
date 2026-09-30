@@ -51,6 +51,11 @@ public abstract class AbstractRangeStore implements RangeStore {
         return getRange(min, max, count, true);
     }
 
+    @Override
+    public long size() {
+        return delegate.size(getKey());
+    }
+
     public List<String> getRange(double min, double max, int count, boolean remove) {
         List<String> result = delegate.getRange(getKey(), min, max, count, remove);
         return result != null ? result : List.of();
