@@ -345,11 +345,15 @@ class CloudInfoClientMockTest extends Specification {
     }
 
     def 'getStoragePrices does not turn an escaped region into a silent empty result'() {
-        given: 'a region that used to push /storage into the query string'
+        given: 'a server that answers "no prices" for any URL that is not the storage endpoint'
         def http = Mock(HxClient)
-        def problem = '{"type":"about:blank","title":"validation problem","status":400,"detail":"invalid region"}'
+        def noPrices = '{"type":"about:blank","title":"Not Found","status":404,"detail":"storage prices not yet cached"}'
+        def invalid = '{"type":"about:blank","title":"validation problem","status":400,"detail":"invalid region"}'
         URI captured = null
-        http.sendAsString(_) >> { HttpRequest req -> captured = req.uri(); withStatus(400, problem) }
+        http.sendAsString(_) >> { HttpRequest req ->
+            captured = req.uri()
+            captured.rawPath.endsWith('/storage') ? withStatus(400, invalid) : withStatus(404, noPrices)
+        }
         def client = clientWith(http)
 
         when:
@@ -359,6 +363,42 @@ class CloudInfoClientMockTest extends Specification {
         captured.rawPath.endsWith('/regions/us-east-1%3Fx/storage')
         def e = thrown(CloudInfoException)
         e.statusCode == 400
+    }
+
+    def 'null or empty provider and region fail fast without a request'() {
+        given:
+        def http = Mock(HxClient)
+        def client = clientWith(http)
+
+        when:
+        client."$method"(*args)
+
+        then:
+        thrown(expected)
+        0 * http.sendAsString(_)
+
+        where:
+        method             | args                      | expected
+        'getRegions'       | [null]                    | NullPointerException
+        'getRegions'       | ['']                      | IllegalArgumentException
+        'getProducts'      | ['amazon', null]          | NullPointerException
+        'getProducts'      | ['', 'us-east-1']         | IllegalArgumentException
+        'getStoragePrices' | [null, 'us-east-1']       | NullPointerException
+        'getStoragePrices' | ['amazon', '']            | IllegalArgumentException
+        'getFamilies'      | [null]                    | NullPointerException
+        'getFamilies'      | ['']                      | IllegalArgumentException
+        'getFamilies'      | ['amazon', ['gpu', null]] | NullPointerException
+    }
+
+    def 'getRegions returns an empty list for a null body'() {
+        given:
+        def http = Mock(HxClient)
+        http.sendAsString(_) >> ok('null')
+        def client = clientWith(http)
+
+        expect:
+        client.getRegions('amazon') == []
+        client.getRegionIds('amazon') == []
     }
 
     def 'dot segments are encoded so they are not resolved as relative paths'() {
@@ -372,6 +412,7 @@ class CloudInfoClientMockTest extends Specification {
         'us-east-1' | 'us-east-1'
         'eu.west'   | 'eu.west'
         'a+b'       | 'a%2Bb'
+        'a*b'       | 'a*b'
     }
 
     def 'getRegions surfaces the server problem detail on error'() {

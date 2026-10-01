@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -55,6 +56,12 @@ import org.slf4j.LoggerFactory;
  * List<CloudRegion> regions = client.getRegions("amazon");
  * List<CloudProduct> products = client.getProducts("amazon", "us-east-1");
  * }</pre>
+ *
+ * <p>Every method throws {@link NullPointerException} for a null
+ * {@code provider}, {@code region} or filter token and
+ * {@link IllegalArgumentException} for an empty {@code provider} or
+ * {@code region}, before any request is sent. Request failures throw
+ * {@link CloudInfoException}.
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
@@ -120,12 +127,9 @@ public class CloudInfoClient {
      */
     public List<CloudRegion> getRegions(String provider) {
         String what = String.format("regions for provider=%s", provider);
-        String url = endpoint + String.format("/api/v1/providers/%s/services/compute/regions", segment(provider));
-        HttpResponse<String> response = get(url, Duration.ofSeconds(30), what);
-        if (response.statusCode() != 200) {
-            throw apiError(what, response.statusCode(), decodeError(response));
-        }
-        return decode(REGIONS_ENCODER, response, what);
+        String url = path("providers", provider, "services", "compute", "regions");
+        List<CloudRegion> regions = fetch(url, Duration.ofSeconds(30), what, REGIONS_ENCODER);
+        return regions != null ? regions : Collections.emptyList();
     }
 
     /**
@@ -169,14 +173,9 @@ public class CloudInfoClient {
      */
     public List<CloudProduct> getProducts(String provider, String region, ProductsQuery query) {
         String what = String.format("products for provider=%s, region=%s", provider, region);
-        String url = endpoint
-                + String.format("/api/v1/providers/%s/services/compute/regions/%s/products", segment(provider), segment(region))
+        String url = path("providers", provider, "services", "compute", "regions", region, "products")
                 + buildQueryString(query);
-        HttpResponse<String> response = get(url, Duration.ofSeconds(60), what);
-        if (response.statusCode() != 200) {
-            throw apiError(what, response.statusCode(), decodeError(response));
-        }
-        CloudResponse cloudResponse = decode(RESPONSE_ENCODER, response, what);
+        CloudResponse cloudResponse = fetch(url, Duration.ofSeconds(60), what, RESPONSE_ENCODER);
         return cloudResponse != null && cloudResponse.getProducts() != null
                 ? cloudResponse.getProducts()
                 : Collections.emptyList();
@@ -200,8 +199,7 @@ public class CloudInfoClient {
      */
     public Optional<StoragePrices> getStoragePrices(String provider, String region) {
         String what = String.format("storage prices for provider=%s, region=%s", provider, region);
-        String url = endpoint
-                + String.format("/api/v1/providers/%s/services/compute/regions/%s/storage", segment(provider), segment(region));
+        String url = path("providers", provider, "services", "compute", "regions", region, "storage");
         HttpResponse<String> response = get(url, Duration.ofSeconds(30), what);
         if (response.statusCode() != 200) {
             ErrorResponse error = decodeError(response);
@@ -238,17 +236,23 @@ public class CloudInfoClient {
      */
     public List<String> getFamilies(String provider, List<String> features) {
         String what = String.format("families for provider=%s", provider);
-        String url = endpoint
-                + String.format("/api/v1/providers/%s/families", segment(provider))
-                + buildFeaturesQueryString(features);
-        HttpResponse<String> response = get(url, Duration.ofSeconds(60), what);
-        if (response.statusCode() != 200) {
-            throw apiError(what, response.statusCode(), decodeError(response));
-        }
-        FamiliesResponse familiesResponse = decode(FAMILIES_ENCODER, response, what);
+        String url = path("providers", provider, "families") + buildFeaturesQueryString(features);
+        FamiliesResponse familiesResponse = fetch(url, Duration.ofSeconds(60), what, FAMILIES_ENCODER);
         return familiesResponse != null && familiesResponse.getFamilies() != null
                 ? familiesResponse.getFamilies()
                 : Collections.emptyList();
+    }
+
+    /**
+     * Sends a GET request to {@code url} and decodes a 200 body with
+     * {@code encoder}; any other status throws via {@link #apiError}.
+     */
+    private <T> T fetch(String url, Duration timeout, String what, JacksonEncodingStrategy<T> encoder) {
+        HttpResponse<String> response = get(url, timeout, what);
+        if (response.statusCode() != 200) {
+            throw apiError(what, response.statusCode(), decodeError(response));
+        }
+        return decode(encoder, response, what);
     }
 
     /**
@@ -282,16 +286,36 @@ public class CloudInfoClient {
     }
 
     /**
+     * Builds {@code <endpoint>/api/v1/<segments>}, encoding every segment with
+     * {@link #segment}, so no path parameter can reach the URL unescaped.
+     */
+    private String path(String... segments) {
+        StringBuilder sb = new StringBuilder(endpoint).append("/api/v1");
+        for (String it : segments) {
+            sb.append('/').append(segment(it));
+        }
+        return sb.toString();
+    }
+
+    /**
      * Percent-encodes a value as a single URL path segment, so characters such
      * as {@code ?}, {@code #}, {@code /} or a space stay part of the segment
      * instead of changing the requested URL. The dot segments {@code .} and
      * {@code ..} are encoded too, so the client does not resolve them as
-     * relative paths (a server or proxy may still decode and normalise them).
+     * relative paths. A server or proxy may still decode {@code %2F} and dot
+     * segments before routing (cloudinfo's gin router matches on the decoded
+     * path), which then fails with a 404 rather than reaching another endpoint.
+     *
+     * @throws NullPointerException if {@code value} is null
+     * @throws IllegalArgumentException if {@code value} is empty
      */
     static String segment(String value) {
-        String encoded = URLEncoder.encode(String.valueOf(value), StandardCharsets.UTF_8)
-                .replace("+", "%20")
-                .replace("*", "%2A");
+        Objects.requireNonNull(value, "CloudInfo path parameter must not be null");
+        if (value.isEmpty()) {
+            throw new IllegalArgumentException("CloudInfo path parameter must not be empty");
+        }
+        String encoded = URLEncoder.encode(value, StandardCharsets.UTF_8)
+                .replace("+", "%20");
         return ".".equals(encoded) || "..".equals(encoded)
                 ? encoded.replace(".", "%2E")
                 : encoded;
@@ -371,7 +395,7 @@ public class CloudInfoClient {
             return;
         }
         String joined = values.stream()
-                .map(v -> URLEncoder.encode(v, StandardCharsets.UTF_8))
+                .map(v -> URLEncoder.encode(Objects.requireNonNull(v, name + " must not contain null"), StandardCharsets.UTF_8))
                 .collect(Collectors.joining(","));
         appendParam(sb, name + "=" + joined);
     }
