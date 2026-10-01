@@ -34,6 +34,6 @@ class PairingWebSocketTest extends Specification {
         then:
         annotation.maxPayloadLength() == PairingWebSocket.MAX_PAYLOAD_LENGTH
         and:
-        PairingWebSocket.MAX_PAYLOAD_LENGTH == 16 * 1024 * 1024
+        PairingWebSocket.MAX_PAYLOAD_LENGTH == 4 * 1024 * 1024
     }
 }
