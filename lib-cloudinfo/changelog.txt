@@ -1,5 +1,8 @@
 # lib-cloudinfo changelog
 
+2.2.0 - 5 Oct 2026
+- Add CloudPrice.zoneId: the provider's account-independent zone identifier that cloudinfo 0.26.0 attaches to every AWS spot price (seqeralabs/cloudinfo#101), e.g. `euw1-az1`. AWS maps AZ names to physical zones per account, so CloudPrice.zone names a zone in CloudInfo's own account and only the AZ ID can be joined with a customer's subnets (`Subnet.availabilityZoneId()`). Null for other providers and on older backends. Included in equals, hashCode and toString. Additive, no API break.
+
 2.1.1 - 29 Sep 2026
 - Percent-encode provider and region as URL path segments in every CloudInfoClient request (getRegions, getProducts, getStoragePrices, getFamilies). A value such as `us-east-1?x` no longer moves the rest of the path into the query string or fragment, so a different URL is no longer requested and getStoragePrices can no longer turn it into a silent Optional.empty(); a space no longer fails with an IllegalArgumentException before the request is sent. A server may still decode %2F and dot segments before routing (cloudinfo's gin router does), which then fails with a 404 rather than reaching another endpoint. A null or empty provider or region, or a null filter token, now fails fast with NullPointerException / IllegalArgumentException before any request, instead of requesting a `/null/` or `//` path. getRegions returns an empty list for a null body. The four methods now share one request helper: getRegions and getProducts also carry the server's problem detail in their CloudInfoException message, as getStoragePrices and getFamilies already did. No API change (closes #136).
 

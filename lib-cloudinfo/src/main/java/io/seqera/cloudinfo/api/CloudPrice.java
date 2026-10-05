@@ -29,6 +29,14 @@ public class CloudPrice {
     private Float price;
     private String zone;
 
+    /**
+     * The provider's account-independent zone identifier, e.g. the AWS AZ ID {@code euw1-az1}.
+     * AWS maps AZ names to physical zones per account, so {@link #zone} names a zone in
+     * CloudInfo's own account; join on this field to match a customer's zones. {@code null} when
+     * the provider has none or the backend predates cloudinfo 0.26.0.
+     */
+    private String zoneId;
+
     public CloudPrice() {
     }
 
@@ -53,21 +61,29 @@ public class CloudPrice {
         this.zone = zone;
     }
 
+    public String getZoneId() {
+        return zoneId;
+    }
+
+    public void setZoneId(String zoneId) {
+        this.zoneId = zoneId;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         CloudPrice that = (CloudPrice) o;
-        return Objects.equals(price, that.price) && Objects.equals(zone, that.zone);
+        return Objects.equals(price, that.price) && Objects.equals(zone, that.zone) && Objects.equals(zoneId, that.zoneId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(price, zone);
+        return Objects.hash(price, zone, zoneId);
     }
 
     @Override
     public String toString() {
-        return "CloudPrice[price=" + price + ", zone=" + zone + "]";
+        return "CloudPrice[price=" + price + ", zone=" + zone + ", zoneId=" + zoneId + "]";
     }
 }
