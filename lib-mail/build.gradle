@@ -43,7 +43,7 @@ group = 'io.seqera'
 version = "${project.file('VERSION').text.trim()}"
 
 micronaut {
-    version '4.8.3'
+    version "${micronautPlatformVersion}"
     runtime("netty")
     processing {
         incremental(true)

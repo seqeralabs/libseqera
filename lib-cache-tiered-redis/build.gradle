@@ -52,7 +52,7 @@ test {
 }
 
 micronaut {
-    version "${micronautCoreVersion}"
+    version "${micronautPlatformVersion}"
     runtime("netty")
     processing {
         incremental(true)
