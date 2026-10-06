@@ -20,6 +20,9 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+    plugins {
+        id 'io.micronaut.minimal.library' version '4.6.2'
+    }
 }
 
 plugins {
