@@ -5,7 +5,8 @@
   connections go to the shard primary found via CLUSTER SHARDS, are validated with ROLE on borrow, and
   follow the primary across failovers. Default redis.mode=standalone keeps the previous behavior
 - Add JedisConnector bean, with connect() for dedicated connections (XREAD BLOCK, SUBSCRIBE) that honor
-  redis.mode, TLS and credentials
+  redis.mode, TLS and credentials; in cluster-primary mode a failed or stale connection is retried once
+  after rediscovering the primary
 - Fix password masking in the startup log for URIs with an empty user name (rediss://:secret@host)
 
 1.2.0 - 2 Aug 2026

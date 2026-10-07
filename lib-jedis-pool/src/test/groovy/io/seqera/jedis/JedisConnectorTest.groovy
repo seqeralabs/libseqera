@@ -90,15 +90,15 @@ class JedisConnectorTest extends Specification {
         }
         // no waiting for CLUSTER SHARDS to catch up: right after a failover it still lists both nodes as
         // primary, which discovery must see through
-        and:
+        then: 'a dedicated connection, opened while the connector still points at the demoted node, retries onto the new primary'
+        connector.connect().withCloseable { JedisConnector.isPrimary(it.role()) }
+        connector.target() == new HostAndPort(ipOf(nodeB), 6379)
+
+        when: 'borrowing with an idle connection still open to the demoted node'
         pool.resource.withCloseable { it.set('k', 'v2') }
 
         then: 'the stale connection is evicted and the pool writes to the new primary'
-        connector.target() == new HostAndPort(ipOf(nodeB), 6379)
         pool.resource.withCloseable { it.get('k') } == 'v2'
-
-        and: 'dedicated connections go to the new primary too'
-        connector.connect().withCloseable { JedisConnector.isPrimary(it.role()) }
 
         cleanup:
         pool?.close()

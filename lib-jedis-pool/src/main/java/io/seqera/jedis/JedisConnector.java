@@ -104,6 +104,10 @@ public class JedisConnector {
      * Open a dedicated, non-pooled connection to {@link #target()} whose blocking commands never time
      * out. The caller owns the connection and must close it.
      *
+     * <p>In {@link RedisMode#CLUSTER_PRIMARY} mode a connection that fails, or lands on a node that is
+     * no longer the primary, is retried once after looking the primary up again, so a caller opening
+     * a connection during or just after a failover reaches the new primary instead of failing.
+     *
      * @return a connected Jedis instance
      */
     public Jedis connect() {
@@ -118,9 +122,23 @@ public class JedisConnector {
                 .ssl(clientConfig.isSsl())
                 .hostAndPortMapper(clientConfig.getHostAndPortMapper())
                 .build();
+        if (mode == RedisMode.STANDALONE) {
+            return new Jedis(seed, config);
+        }
+        try {
+            return connectPrimary(config);
+        }
+        catch (JedisConnectionException e) {
+            log.debug("Redis dedicated connection failed, retrying after primary rediscovery: {}", e.getMessage());
+            invalidate();
+            return connectPrimary(config);
+        }
+    }
+
+    private Jedis connectPrimary(JedisClientConfig config) {
         final HostAndPort node = target();
         final Jedis jedis = new Jedis(node, config);
-        if (mode == RedisMode.CLUSTER_PRIMARY && !isPrimarySafe(jedis)) {
+        if (!isPrimarySafe(jedis)) {
             jedis.close();
             invalidate();
             throw new JedisConnectionException("Redis node " + node + " is no longer the primary");
