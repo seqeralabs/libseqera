@@ -21,15 +21,17 @@ import org.apache.commons.pool2.PooledObjectFactory;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 
 /**
  * Pool object factory for {@link RedisMode#CLUSTER_PRIMARY}: creates connections to the current
- * cluster primary and validates them with {@code ROLE} instead of {@code PING}.
+ * cluster primary and validates them with a keyed probe instead of {@code PING}.
  *
  * <p>A replica answers {@code PING}, so a {@code PING} check keeps serving a connection that every
  * keyed command will reject with {@code MOVED} — including a connection to a primary demoted by a
- * failover. A failed {@code ROLE} check evicts the connection and makes the connector look the
+ * failover. A failed check evicts the connection and makes the connector look the
  * primary up again, so the pool converges on the new primary within one borrow per stale connection.
  *
  * @author Paolo Di Tommaso
@@ -46,17 +48,35 @@ class ClusterPrimaryJedisFactory implements PooledObjectFactory<Jedis> {
 
     @Override
     public PooledObject<Jedis> makeObject() {
-        return new DefaultPooledObject<>(new Jedis(connector.target(), connector.clientConfig()));
+        try {
+            return open();
+        }
+        catch (JedisConnectionException e) {
+            // the cached primary may be dead: open() invalidated it, so this retry rediscovers. Without
+            // it a pool with no idle connection to validate (minIdle=0) would keep dialling a dead node
+            log.debug("Redis connection failed, retrying after primary rediscovery: {}", e.getMessage());
+            return open();
+        }
+    }
+
+    private PooledObject<Jedis> open() {
+        final HostAndPort node = connector.target();
+        try {
+            return new NodePooledObject(new Jedis(node, connector.clientConfig()), node);
+        }
+        catch (JedisConnectionException e) {
+            connector.invalidate(node);
+            throw e;
+        }
     }
 
     @Override
     public boolean validateObject(PooledObject<Jedis> pooled) {
-        final Jedis jedis = pooled.getObject();
-        if (connector.isPrimarySafe(jedis)) {
+        if (connector.isPrimarySafe(pooled.getObject())) {
             return true;
         }
         log.debug("Evicting Redis connection - not on the primary");
-        connector.invalidate();
+        connector.invalidate(((NodePooledObject) pooled).node);
         return false;
     }
 
@@ -77,5 +97,18 @@ class ClusterPrimaryJedisFactory implements PooledObjectFactory<Jedis> {
 
     @Override
     public void passivateObject(PooledObject<Jedis> pooled) {
+    }
+
+    /**
+     * A pooled connection that remembers the node it was opened to, so a failed check invalidates the
+     * cached primary only if it is still that node.
+     */
+    private static final class NodePooledObject extends DefaultPooledObject<Jedis> {
+        private final HostAndPort node;
+
+        NodePooledObject(Jedis jedis, HostAndPort node) {
+            super(jedis);
+            this.node = node;
+        }
     }
 }

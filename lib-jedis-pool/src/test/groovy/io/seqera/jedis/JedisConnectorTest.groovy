@@ -85,13 +85,13 @@ class JedisConnectorTest extends Specification {
         when: 'the replica takes over, leaving an idle pooled connection on the demoted node'
         withNode(ipOf(nodeB)) { it.clusterFailover() }
         new PollingConditions(timeout: 30).eventually {
-            assert withNode(ipOf(nodeB)) { JedisConnector.isPrimary(it.role()) }
-            assert withNode(ipOf(nodeA)) { !JedisConnector.isPrimary(it.role()) }
+            assert withNode(ipOf(nodeB)) { JedisConnector.isPrimary(it) }
+            assert withNode(ipOf(nodeA)) { !JedisConnector.isPrimary(it) }
         }
         // no waiting for CLUSTER SHARDS to catch up: right after a failover it still lists both nodes as
         // primary, which discovery must see through
         then: 'a dedicated connection, opened while the connector still points at the demoted node, retries onto the new primary'
-        connector.connect().withCloseable { JedisConnector.isPrimary(it.role()) }
+        connector.connect().withCloseable { JedisConnector.isPrimary(it) }
         connector.target() == new HostAndPort(ipOf(nodeB), 6379)
 
         when: 'borrowing with an idle connection still open to the demoted node'
@@ -102,6 +102,58 @@ class JedisConnectorTest extends Specification {
 
         cleanup:
         pool?.close()
+    }
+
+    def 'should rediscover the primary when the cached one is unreachable and no idle connection is left'() {
+        given: 'a pool with no idle connection, whose cached primary is a dead address'
+        def connector = new JedisConnector(new HostAndPort(ipOf(nodeA), 6379), clientConfig(), RedisMode.CLUSTER_PRIMARY)
+        def pool = new JedisPoolFactory().createRedisPool(connector, 0, 10, 10, false, 2000)
+        connector.@primary.set(new HostAndPort('127.0.0.1', 1))
+
+        expect: 'the failed connection invalidates it and the retry reaches the real primary'
+        pool.resource.withCloseable { it.set('dead', 'ok') } == 'OK'
+        connector.target() in [new HostAndPort(ipOf(nodeA), 6379), new HostAndPort(ipOf(nodeB), 6379)]
+
+        cleanup:
+        pool?.close()
+    }
+
+    def 'should work for a hardened user and report a missing permission on the probe key'() {
+        given:
+        [nodeA, nodeB].each { node -> withNode(ipOf(node)) { it.aclSetUser(USER, 'on', '>secret', KEYS, '+@all', '-@dangerous') } }
+        def config = DefaultJedisClientConfig.builder().user(USER).password('secret').hostAndPortMapper(clientConfig().hostAndPortMapper).build()
+        def connector = new JedisConnector(new HostAndPort(ipOf(nodeA), 6379), config, RedisMode.CLUSTER_PRIMARY)
+
+        when:
+        def target = null
+        def error = null
+        try { target = connector.target() } catch (JedisException e) { error = e }
+
+        then:
+        (target != null) == FOUND
+        FOUND || error.cause.message.contains('NOPERM')
+
+        where:
+        USER        | KEYS        | FOUND
+        'hardened'  | '~*'        | true      // +@all -@dangerous: no ROLE, discovery still works
+        'no-probe'  | '~app:*'    | false     // no read access to the probe key: surfaced as the cause, not swallowed
+    }
+
+    def 'should invalidate the cached primary only if it is still the failed node'() {
+        given:
+        def connector = new JedisConnector(new HostAndPort('seed', 6379), DefaultJedisClientConfig.builder().build(), RedisMode.CLUSTER_PRIMARY)
+        def current = new HostAndPort('10.0.0.2', 6379)
+        connector.@primary.set(current)
+
+        when: 'a stale connection to the old primary is evicted after another caller rediscovered'
+        connector.invalidate(new HostAndPort('10.0.0.1', 6379))
+        then:
+        connector.@primary.get() == current
+
+        when: 'the current primary fails'
+        connector.invalidate(current)
+        then:
+        connector.@primary.get() == null
     }
 
     def 'should list the online primary of a single shard'() {

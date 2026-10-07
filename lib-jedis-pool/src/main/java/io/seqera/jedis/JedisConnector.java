@@ -20,6 +20,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,10 +29,11 @@ import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.exceptions.JedisException;
+import redis.clients.jedis.exceptions.JedisMovedDataException;
 import redis.clients.jedis.resps.ClusterShardInfo;
 import redis.clients.jedis.resps.ClusterShardNodeInfo;
-import redis.clients.jedis.util.SafeEncoder;
 
 /**
  * Opens connections to the Redis server named by {@code redis.uri}, honoring {@code redis.mode}.
@@ -40,7 +42,7 @@ import redis.clients.jedis.util.SafeEncoder;
  * {@link RedisMode#CLUSTER_PRIMARY} mode the URI host is only a discovery endpoint (e.g. a MemoryDB
  * {@code clustercfg.} record, which resolves to every node of the shard, replicas included): the
  * primary is looked up with {@code CLUSTER SHARDS}, cached, and looked up again after
- * {@link #invalidate()}. A standalone client cannot follow {@code MOVED}, so a connection that lands
+ * {@link #invalidate(HostAndPort)}. A standalone client cannot follow {@code MOVED}, so a connection that lands
  * on a replica fails every keyed command; this class makes sure connections land on the primary.
  *
  * <p>Pooled connections come from the {@code JedisPool} bean. Use {@link #connect()} for a dedicated
@@ -52,10 +54,16 @@ public class JedisConnector {
 
     private static final Logger log = LoggerFactory.getLogger(JedisConnector.class);
 
+    /**
+     * Key read to tell the primary from a replica. Never written: only its slot matters, and in a
+     * single-shard cluster the primary serves them all.
+     */
+    static final String PROBE_KEY = "jedis-pool:primary-probe";
+
     private final HostAndPort seed;
     private final JedisClientConfig clientConfig;
     private final RedisMode mode;
-    private volatile HostAndPort primary;
+    private final AtomicReference<HostAndPort> primary = new AtomicReference<>();
 
     /**
      * @param seed         the host in {@code redis.uri}
@@ -84,20 +92,26 @@ public class JedisConnector {
         if (mode == RedisMode.STANDALONE) {
             return seed;
         }
-        HostAndPort result = primary;
+        HostAndPort result = primary.get();
         if (result == null) {
             result = discoverPrimary();
-            primary = result;
+            primary.set(result);
         }
         return result;
     }
 
     /**
-     * Forget the cached primary, so the next connection looks it up again. Called when a connection
-     * turns out not to be on the primary, e.g. after a failover.
+     * Forget the cached primary if it is still {@code node}, so the next connection looks it up again.
+     * Called when a connection to {@code node} fails or turns out not to be on the primary. Conditional
+     * so that, after a failover, the many stale connections evicted one by one do not each throw away
+     * a primary that another caller has already rediscovered.
+     *
+     * @param node the node a connection was opened to
      */
-    public void invalidate() {
-        primary = null;
+    public void invalidate(HostAndPort node) {
+        if (primary.compareAndSet(node, null)) {
+            log.debug("Redis cluster primary {} invalidated", node);
+        }
     }
 
     /**
@@ -130,51 +144,79 @@ public class JedisConnector {
         }
         catch (JedisConnectionException e) {
             log.debug("Redis dedicated connection failed, retrying after primary rediscovery: {}", e.getMessage());
-            invalidate();
             return connectPrimary(config);
         }
     }
 
-    private Jedis connectPrimary(JedisClientConfig config) {
+    /**
+     * Connect to the current primary, invalidating it when the connection fails or lands on a replica.
+     *
+     * @param config the client config to connect with
+     * @return a connection on the primary
+     * @throws JedisConnectionException when the node is unreachable or not the primary
+     */
+    Jedis connectPrimary(JedisClientConfig config) {
         final HostAndPort node = target();
-        final Jedis jedis = new Jedis(node, config);
+        final Jedis jedis;
+        try {
+            jedis = new Jedis(node, config);
+        }
+        catch (JedisConnectionException e) {
+            invalidate(node);
+            throw e;
+        }
         if (!isPrimarySafe(jedis)) {
             jedis.close();
-            invalidate();
-            throw new JedisConnectionException("Redis node " + node + " is no longer the primary");
+            invalidate(node);
+            throw new JedisConnectionException("Redis node " + node + " is not the primary");
         }
         return jedis;
     }
 
     /**
-     * Whether the connection is on a primary, per {@code ROLE}. Exceptions count as {@code false}.
+     * Whether the connection is on the primary. Connection errors count as {@code false}; any other
+     * error, e.g. an ACL {@code NOPERM} on the probe key, is logged at WARN, as it fails every check.
      */
     boolean isPrimarySafe(Jedis jedis) {
         try {
-            return jedis.isConnected() && isPrimary(jedis.role());
+            return jedis.isConnected() && isPrimary(jedis);
         }
-        catch (Exception e) {
-            log.debug("Redis ROLE check failed: {}", e.getMessage());
+        catch (JedisConnectionException e) {
+            log.debug("Redis primary check failed: {}", e.getMessage());
+            return false;
+        }
+        catch (JedisDataException e) {
+            log.warn("Redis primary check failed - the redis user needs read access to key '{}': {}", PROBE_KEY, e.getMessage());
             return false;
         }
     }
 
-    static boolean isPrimary(List<Object> role) {
-        if (role == null || role.isEmpty()) {
+    /**
+     * Whether the connection is on the primary, by reading {@link #PROBE_KEY}. In a single-shard cluster
+     * the primary serves every slot, while a replica answers a keyed command with {@code MOVED} (no
+     * {@code READONLY} is ever sent). Unlike {@code ROLE} ({@code @admin @dangerous}) this needs only
+     * {@code @read}, so it works for hardened ACL users, and it costs one round-trip like {@code PING}.
+     *
+     * @throws JedisDataException for an error other than {@code MOVED}, e.g. {@code NOPERM}
+     */
+    static boolean isPrimary(Jedis jedis) {
+        try {
+            jedis.exists(PROBE_KEY);
+            return true;
+        }
+        catch (JedisMovedDataException e) {
             return false;
         }
-        final Object first = role.getFirst();
-        final String name = first instanceof byte[] bytes ? SafeEncoder.encode(bytes) : String.valueOf(first);
-        return "master".equals(name);
     }
 
     /**
      * Ask the discovery endpoint which node is the primary. Tries every address the endpoint resolves
-     * to, since one of them may be the node that just failed, and confirms the answer with
-     * {@code ROLE}: right after a failover {@code CLUSTER SHARDS} can still list the demoted node as a
-     * primary next to the promoted one.
+     * to, since one of them may be the node that just failed, and confirms the answer with a probe:
+     * right after a failover {@code CLUSTER SHARDS} can still list the demoted node as a primary next
+     * to the promoted one.
      */
     protected HostAndPort discoverPrimary() {
+        final List<HostAndPort> rejected = new ArrayList<>();
         JedisException last = null;
         for (HostAndPort candidate : seedAddresses()) {
             try {
@@ -187,6 +229,7 @@ public class JedisConnector {
                         log.info("Redis cluster primary is {} (discovered via {})", node, candidate);
                         return node;
                     }
+                    rejected.add(node);
                 }
             }
             catch (JedisException e) {
@@ -194,14 +237,19 @@ public class JedisConnector {
                 last = e;
             }
         }
-        throw new JedisConnectionException("Unable to discover the Redis cluster primary via " + seed, last);
+        final String detail = rejected.isEmpty() ? "" : " - not the primary: " + rejected;
+        throw new JedisConnectionException("Unable to discover the Redis cluster primary via " + seed + detail, last);
     }
 
+    /**
+     * Whether {@code node} is reachable and the primary. Errors other than connection failures, e.g.
+     * {@code NOPERM}, propagate so discovery reports them as its cause.
+     */
     private boolean confirmPrimary(HostAndPort node) {
         try (Jedis jedis = new Jedis(node, clientConfig)) {
-            return isPrimarySafe(jedis);
+            return isPrimary(jedis);
         }
-        catch (JedisException e) {
+        catch (JedisConnectionException e) {
             log.debug("Redis node {} unreachable: {}", node, e.getMessage());
             return false;
         }
