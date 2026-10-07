@@ -44,6 +44,9 @@ import redis.clients.jedis.util.JedisURIHelper;
  *
  * <p>When a {@link MeterRegistry} is available, pool metrics are automatically registered.
  *
+ * <p>With {@code redis.mode=cluster-primary} connections go to the primary of a single-shard
+ * cluster-mode server (e.g. AWS MemoryDB) and follow it across failovers — see {@link JedisConnector}.
+ *
  * @author Paolo Di Tommaso
  */
 @Factory
@@ -56,34 +59,58 @@ public class JedisPoolFactory {
     @Inject
     private MeterRegistry meterRegistry;
 
+    /**
+     * The connector every Redis connection goes through, pooled or dedicated.
+     *
+     * @param connection the {@code redis.uri}
+     * @param mode       the {@code redis.mode}: {@code standalone} (default) or {@code cluster-primary}
+     * @param timeout    connect and socket timeout, in milliseconds
+     * @param password   optional password, overriding the one in the URI
+     * @return the connector
+     */
     @Singleton
-    public JedisPool createRedisPool(
+    public JedisConnector createRedisConnector(
             @Value("${redis.uri}") String connection,
-            @Value("${redis.pool.minIdle:0}") int minIdle,
-            @Value("${redis.pool.maxIdle:10}") int maxIdle,
-            @Value("${redis.pool.maxTotal:50}") int maxTotal,
-            @Value("${redis.pool.testOnBorrow:false}") boolean testOnBorrow,
-            @Value("${redis.pool.maxWait:-1}") long maxWait,
+            @Nullable @Value("${redis.mode}") String mode,
             @Value("${redis.client.timeout:5000}") int timeout,
             @Nullable @Value("${redis.password}") String password
     ) {
         final URI uri = URI.create(connection);
         if (!JedisURIHelper.isValid(uri)) {
-            throw new InvalidURIException("Invalid Redis connection URI: " + uri);
+            throw new InvalidURIException("Invalid Redis connection URI: " + maskPassword(connection));
         }
-        final int database = JedisURIHelper.getDBIndex(uri);
+        final RedisMode redisMode = RedisMode.parse(mode);
+        if (redisMode == RedisMode.CLUSTER_PRIMARY && JedisURIHelper.getDBIndex(uri) != 0) {
+            throw new IllegalArgumentException("redis.mode=cluster-primary supports database 0 only - remove the database index from redis.uri");
+        }
+        log.info("Creating Redis connector - uri={}; mode={}; database={}; timeout={}",
+                maskPassword(connection), redisMode, JedisURIHelper.getDBIndex(uri), timeout);
+        return new JedisConnector(JedisURIHelper.getHostAndPort(uri), clientConfig(uri, password, timeout), redisMode);
+    }
 
-        log.info("Creating Redis pool - uri={}; database={}; minIdle={}; maxIdle={}; maxTotal={}; testOnBorrow={}; maxWait={}; timeout={}",
-                maskPassword(connection), database, minIdle, maxIdle, maxTotal, testOnBorrow, maxWait, timeout);
+    @Singleton
+    public JedisPool createRedisPool(
+            JedisConnector connector,
+            @Value("${redis.pool.minIdle:0}") int minIdle,
+            @Value("${redis.pool.maxIdle:10}") int maxIdle,
+            @Value("${redis.pool.maxTotal:50}") int maxTotal,
+            @Value("${redis.pool.testOnBorrow:false}") boolean testOnBorrow,
+            @Value("${redis.pool.maxWait:-1}") long maxWait
+    ) {
+        // In cluster-primary mode the borrow check is what moves the pool to a new primary after a
+        // failover, so it is always on
+        final boolean validate = testOnBorrow || connector.mode() == RedisMode.CLUSTER_PRIMARY;
+        log.info("Creating Redis pool - mode={}; minIdle={}; maxIdle={}; maxTotal={}; testOnBorrow={}; maxWait={}",
+                connector.mode(), minIdle, maxIdle, maxTotal, validate, maxWait);
 
         // Pool config
         final JedisPoolConfig config = new JedisPoolConfig();
         config.setMinIdle(minIdle);
         config.setMaxIdle(maxIdle);
         config.setMaxTotal(maxTotal);
-        // PING-validate connections on borrow so a RESP-desynced connection is evicted
+        // Validate connections on borrow so a RESP-desynced connection is evicted
         // instead of served to the next caller — see libseqera#92 / platform#11820
-        config.setTestOnBorrow(testOnBorrow);
+        config.setTestOnBorrow(validate);
         // Bound on a borrow against an exhausted pool, in milliseconds. The commons-pool2
         // default (-1) blocks INDEFINITELY: a borrower on an exhausted pool never throws,
         // which can silently freeze periodic work (e.g. a single-threaded scheduler whose
@@ -92,11 +119,10 @@ public class JedisPoolFactory {
         // the pre-existing unbounded behavior.
         config.setMaxWait(Duration.ofMillis(maxWait));
 
-        // Client config with database support
-        final JedisClientConfig clientConfig = clientConfig(uri, password, timeout);
-
         // Create the Jedis pool
-        final JedisPool pool = new JedisPool(config, JedisURIHelper.getHostAndPort(uri), clientConfig);
+        final JedisPool pool = connector.mode() == RedisMode.CLUSTER_PRIMARY
+                ? new JedisPool(config, new ClusterPrimaryJedisFactory(connector))
+                : new JedisPool(config, connector.target(), connector.clientConfig());
 
         // Bind metrics if MeterRegistry is available
         if (meterRegistry != null) {
@@ -132,9 +158,10 @@ public class JedisPoolFactory {
     }
 
     /**
-     * Masks password in URI for logging purposes.
+     * Masks the password in a URI for logging, keeping the user name. Also masks a password with an
+     * empty user name ({@code rediss://:secret@host}), which the previous pattern let through.
      */
-    private String maskPassword(String uri) {
-        return uri.replaceAll("://[^:]+:[^@]+@", "://****:****@");
+    static String maskPassword(String uri) {
+        return uri.replaceAll("://([^:@/]*):[^@]*@", "://$1:****@");
     }
 }

@@ -1,5 +1,15 @@
 # lib-jedis-pool changelog
 
+1.3.0 - 7 Oct 2026
+- Add redis.mode=cluster-primary for single-shard cluster-mode servers with replicas (e.g. AWS MemoryDB):
+  connections go to the shard primary found via CLUSTER SHARDS, are validated on borrow with a keyed
+  probe (MOVED on a replica; needs only @read, not ROLE's @admin @dangerous), and follow the primary
+  across failovers, including when the primary dies with no idle connection left to validate. Default redis.mode=standalone keeps the previous behavior
+- Add JedisConnector bean, with connect() for dedicated connections (XREAD BLOCK, SUBSCRIBE) that honor
+  redis.mode, TLS and credentials; in cluster-primary mode a failed or stale connection is retried once
+  after rediscovering the primary
+- Fix password masking in the startup log for URIs with an empty user name (rediss://:secret@host)
+
 1.2.0 - 2 Aug 2026
 - Add redis.pool.maxWait option bounding a borrow against an exhausted pool (millis);
   default -1 preserves the pre-existing unbounded blocking behavior
