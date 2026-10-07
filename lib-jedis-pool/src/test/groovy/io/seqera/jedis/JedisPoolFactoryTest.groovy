@@ -33,7 +33,8 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory(meterRegistry: Mock(MeterRegistry))
 
         when:
-        def pool = factory.createRedisPool(URI_STRING, MIN_IDLE, MAX_IDLE, MAX_TOTAL, false, -1, TIMEOUT, 'password')
+        def connector = factory.createRedisConnector(URI_STRING, null, TIMEOUT, 'password')
+        def pool = factory.createRedisPool(connector, MIN_IDLE, MAX_IDLE, MAX_TOTAL, false, -1)
 
         then:
         pool != null
@@ -75,7 +76,7 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory(meterRegistry: Mock(MeterRegistry))
 
         when:
-        factory.createRedisPool(URI_STRING, 0, 10, 50, false, -1, 5000, null)
+        factory.createRedisConnector(URI_STRING, null, 5000, null)
 
         then:
         def e = thrown(InvalidURIException)
@@ -92,7 +93,7 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory()
 
         when:
-        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, ON_BORROW, -1, 5000, null)
+        def pool = factory.createRedisPool(standalone(factory), 0, 10, 50, ON_BORROW, -1)
 
         then:
         pool.testOnBorrow == ON_BORROW
@@ -109,7 +110,7 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory()
 
         when:
-        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, false, MAX_WAIT, 5000, null)
+        def pool = factory.createRedisPool(standalone(factory), 0, 10, 50, false, MAX_WAIT)
 
         then:
         pool.maxWaitDuration == java.time.Duration.ofMillis(EXPECTED)
@@ -128,12 +129,72 @@ class JedisPoolFactoryTest extends Specification {
         def factory = new JedisPoolFactory()
 
         when:
-        def pool = factory.createRedisPool('redis://localhost:6379', 0, 10, 50, false, -1, 5000, null)
+        def pool = factory.createRedisPool(standalone(factory), 0, 10, 50, false, -1)
 
         then:
         pool != null
 
         cleanup:
         pool?.close()
+    }
+
+    def 'should always validate on borrow in cluster-primary mode'() {
+        given:
+        def factory = new JedisPoolFactory()
+        def connector = factory.createRedisConnector('rediss://scheduler@localhost:6379', 'cluster-primary', 5000, 'secret')
+
+        when:
+        def pool = factory.createRedisPool(connector, 0, 10, 50, false, -1)
+
+        then:
+        connector.mode() == RedisMode.CLUSTER_PRIMARY
+        pool.testOnBorrow
+
+        cleanup:
+        pool?.close()
+    }
+
+    def 'should reject a database index in cluster-primary mode'() {
+        when:
+        new JedisPoolFactory().createRedisConnector('redis://localhost:6379/1', 'cluster-primary', 5000, null)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def 'should mask the password in a redis uri'() {
+        expect:
+        JedisPoolFactory.maskPassword(URI_STRING) == EXPECTED
+
+        where:
+        URI_STRING                              | EXPECTED
+        'rediss://user:secret@host:6379'        | 'rediss://user:****@host:6379'
+        'rediss://:secret@host:6379'            | 'rediss://:****@host:6379'        // empty user name, leaked before 1.3.0
+        'rediss://scheduler@host:6379'          | 'rediss://scheduler@host:6379'    // no password, nothing to mask
+        'redis://host:6379/1'                   | 'redis://host:6379/1'
+    }
+
+    def 'should parse the redis mode'() {
+        expect:
+        RedisMode.parse(VALUE) == EXPECTED
+
+        where:
+        VALUE             | EXPECTED
+        null              | RedisMode.STANDALONE
+        'standalone'      | RedisMode.STANDALONE
+        'cluster-primary' | RedisMode.CLUSTER_PRIMARY
+        'CLUSTER_PRIMARY' | RedisMode.CLUSTER_PRIMARY
+    }
+
+    def 'should reject an unknown redis mode'() {
+        when:
+        RedisMode.parse('cluster')
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    private static JedisConnector standalone(JedisPoolFactory factory) {
+        factory.createRedisConnector('redis://localhost:6379', null, 5000, null)
     }
 }
