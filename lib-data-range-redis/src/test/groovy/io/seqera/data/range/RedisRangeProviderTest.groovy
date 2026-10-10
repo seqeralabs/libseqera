@@ -141,4 +141,23 @@ class RedisRangeProviderTest extends Specification implements RedisTestContainer
         provider.getRange('addIfLess', 50, 50, 10, false) == ['x']
     }
 
+    def 'size should return the number of members in the key'() {
+        expect: 'missing key'
+        provider.size('size-foo') == 0
+
+        when:
+        provider.add('size-foo', 'x', 1)
+        provider.add('size-foo', 'y', 2)
+        provider.add('size-foo', 'x', 3)
+        provider.add('size-bar', 'z', 1)
+        then: 're-adding a member does not grow the count'
+        provider.size('size-foo') == 2
+        provider.size('size-bar') == 1
+
+        when:
+        provider.getRange('size-foo', 0, 10, 1, true)
+        then:
+        provider.size('size-foo') == 1
+    }
+
 }
