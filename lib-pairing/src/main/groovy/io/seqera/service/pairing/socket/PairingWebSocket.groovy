@@ -28,6 +28,7 @@ import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.websocket.CloseReason
 import io.micronaut.websocket.WebSocketSession
 import io.micronaut.websocket.annotation.OnClose
+import io.micronaut.websocket.annotation.OnError
 import io.micronaut.websocket.annotation.OnMessage
 import io.micronaut.websocket.annotation.OnOpen
 import io.micronaut.websocket.annotation.ServerWebSocket
@@ -152,6 +153,27 @@ class PairingWebSocket {
     void onClose(String service, String token, String endpoint, WebSocketSession session) {
         log.debug "Closing pairing session - endpoint: ${endpoint} [sessionId: $session.id]"
         channel.unregisterClient(service, endpoint, session.id)
+    }
+
+    /**
+     * Handle errors raised on the pairing session.
+     *
+     * Without this handler Micronaut logs any exception at ERROR level with the full stack trace,
+     * including the I/O errors raised when the remote peer vanishes without closing the socket
+     * (e.g. {@code Connection timed out} or {@code No route to host} after a pod restart). Those are
+     * expected connection drops: log them in a single line and keep ERROR for unexpected failures.
+     *
+     * Micronaut does not close the session after a non-reactive {@code @OnError} handler returns,
+     * therefore the session is closed here as Micronaut's default handler does.
+     */
+    @OnError
+    void onError(String service, String token, String endpoint, WebSocketSession session, Throwable error) {
+        if( error instanceof IOException )
+            log.info "Pairing session connection lost - endpoint: ${endpoint}; cause: ${error.message} [sessionId: $session.id]"
+        else
+            log.error("Unexpected error on pairing session - endpoint: ${endpoint} [sessionId: $session.id]", error)
+        if( session.isOpen() )
+            session.close(CloseReason.INTERNAL_ERROR)
     }
 
     protected boolean isLicenseTokenValid(String token, String endpoint) {
