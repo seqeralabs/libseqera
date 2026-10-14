@@ -17,10 +17,15 @@
 
 package io.seqera.service.pairing.socket
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import io.micronaut.websocket.CloseReason
 import io.micronaut.websocket.WebSocketSession
 import io.micronaut.websocket.annotation.OnMessage
 import io.seqera.service.pairing.socket.msg.PairingMessage
+import org.slf4j.LoggerFactory
 import spock.lang.Specification
 
 class PairingWebSocketTest extends Specification {
@@ -69,5 +74,27 @@ class PairingWebSocketTest extends Specification {
         _ * session.getId() >> 'session-1'
         1 * session.isOpen() >> false
         0 * session.close(_)
+    }
+
+    def 'should log connection drops at INFO and unexpected errors at ERROR' () {
+        given:
+        def logger = (Logger) LoggerFactory.getLogger(PairingWebSocket)
+        def appender = new ListAppender<ILoggingEvent>()
+        appender.start()
+        logger.addAppender(appender)
+
+        when:
+        new PairingWebSocket().onError('tower', 'token', 'http://foo.com', Mock(WebSocketSession), ERROR)
+
+        then:
+        appender.list*.level == [LEVEL]
+
+        cleanup:
+        logger.detachAppender(appender)
+
+        where:
+        ERROR                                   | LEVEL
+        new IOException('No route to host')     | Level.INFO
+        new IllegalStateException('Unexpected') | Level.ERROR
     }
 }

@@ -163,7 +163,7 @@ class PairingWebSocket {
      * (e.g. {@code Connection timed out} or {@code No route to host} after a pod restart). Those are
      * expected connection drops: log them in a single line and keep ERROR for unexpected failures.
      *
-     * Micronaut does not close the session after a non-reactive {@code @OnError} handler returns,
+     * Micronaut does not close the session after a {@code void} {@code @OnError} handler returns,
      * therefore the session is closed here as Micronaut's default handler does.
      */
     @OnError
