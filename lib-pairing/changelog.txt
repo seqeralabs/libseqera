@@ -1,5 +1,10 @@
 # lib-pairing changelog
 
+1.1.2
+- Handle PairingWebSocket errors with an @OnError handler: peer connection drops (IOException, e.g.
+  Connection timed out, No route to host) are logged as a single INFO line instead of an ERROR with
+  a full stack trace; the session is still closed on error [83d1c96]
+
 1.1.1
 - Set an explicit 4 MiB max payload length on PairingWebSocket messages. Micronaut 4.10.27+ applies
   the default 64 KiB limit to the decompressed message, which closes the session (1009) on large
