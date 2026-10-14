@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-jedis-pool:1.3.0'
+    implementation 'io.seqera:lib-jedis-pool:1.3.1'
 }
 ```
 
@@ -62,7 +62,8 @@ the shard, replicas included. A standalone client that lands on a replica gets `
 command, and a replica still answers `PING`. With `redis.mode: cluster-primary`:
 
 - the host in `redis.uri` is used only to discover the shard primary (`CLUSTER SHARDS`, each candidate
-  confirmed with a probe);
+  confirmed with a probe). Only shards that own slots count: around a failover the reply can list the
+  failed primary as an extra shard with no slots (MemoryDB does, while it recovers the node);
 - pooled connections are validated on every borrow (`testOnBorrow` is forced on) by reading a probe key,
   `jedis-pool:primary-probe`: the primary answers, a replica answers `MOVED`. After a failover stale
   connections are evicted and new ones go to the new primary;
@@ -70,7 +71,8 @@ command, and a replica still answers `PING`. With `redis.mode: cluster-primary`:
 
 Constraints: a single shard only, database 0 only, and no cross-slot multi-key commands. The Redis user
 needs `@slow` (for `CLUSTER SHARDS`) and read access to the probe key; `@admin`/`@dangerous` are not needed.
-Commands in flight during a failover (a few seconds) fail and must be retried by the caller.
+Commands issued during a failover fail until the server has promoted the replica (40 s in a forced
+MemoryDB failover) and must be retried by the caller.
 
 ```yaml
 redis:

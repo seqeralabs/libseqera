@@ -220,13 +220,13 @@ public class JedisConnector {
         JedisException last = null;
         for (HostAndPort candidate : seedAddresses()) {
             try {
-                final List<HostAndPort> primaries;
+                final List<ClusterShardInfo> shards;
                 try (Jedis jedis = new Jedis(candidate, clientConfig)) {
-                    primaries = primariesOf(jedis.clusterShards(), clientConfig.isSsl());
+                    shards = jedis.clusterShards();
                 }
-                for (HostAndPort node : primaries) {
+                for (HostAndPort node : primariesOf(shards, clientConfig.isSsl())) {
                     if (confirmPrimary(node)) {
-                        log.info("Redis cluster primary is {} (discovered via {})", node, candidate);
+                        log.info("Redis cluster primary is {} (discovered via {}{})", node, candidate, shards.size() > 1 ? "; reply " + describe(shards) : "");
                         return node;
                     }
                     rejected.add(node);
@@ -274,25 +274,78 @@ public class JedisConnector {
 
     /**
      * The online nodes a {@code CLUSTER SHARDS} reply lists as primary, for a single-shard cluster.
-     * Usually one; briefly two right after a failover.
+     * Usually one; briefly more around a failover, which the caller tells apart with a probe.
+     *
+     * <p>Only a shard that owns slots holds data, so the cluster is single-shard as long as at most one
+     * shard owns slots. Around a failover the reply can carry entries that own none: MemoryDB lists the
+     * failed primary as a shard of its own while it is being recovered, and Redis 7.2 can report the
+     * shard with no slots right after a takeover. Their primaries are still candidates, after those of
+     * the shard that owns the slots.
      *
      * @param shards the reply
      * @param ssl    whether connections use TLS, which selects {@code tls-port} when the node reports one
-     * @return the primaries' addresses
-     * @throws JedisException when the cluster has more than one shard, or no online primary
+     * @return the primaries' addresses, those of the shard that owns the slots first
+     * @throws JedisException when more than one shard owns slots, or no shard has an online primary
      */
     static List<HostAndPort> primariesOf(List<ClusterShardInfo> shards, boolean ssl) {
-        if (shards == null || shards.size() != 1) {
-            throw new JedisException("redis.mode=cluster-primary requires a single-shard cluster - found " + (shards == null ? 0 : shards.size()) + " shards");
+        final List<ClusterShardInfo> reply = shards != null ? shards : List.of();
+        final List<ClusterShardInfo> owning = reply.stream().filter(JedisConnector::ownsSlots).toList();
+        if (owning.size() > 1) {
+            throw new JedisException("redis.mode=cluster-primary requires a single-shard cluster - found " + owning.size() + " shards owning slots: " + describe(reply));
         }
-        final List<HostAndPort> result = new ArrayList<>(1);
-        for (ClusterShardNodeInfo node : shards.getFirst().getNodes()) {
-            if ("master".equals(node.getRole()) && "online".equals(node.getHealth())) {
-                result.add(new HostAndPort(hostOf(node), portOf(node, ssl)));
+        final List<HostAndPort> result = new ArrayList<>(2);
+        owning.forEach(shard -> addOnlinePrimaries(shard, ssl, result));
+        reply.stream().filter(shard -> !ownsSlots(shard)).forEach(shard -> addOnlinePrimaries(shard, ssl, result));
+        if (result.isEmpty()) {
+            throw new JedisConnectionException("No online primary in the Redis cluster: " + describe(reply));
+        }
+        return result;
+    }
+
+    private static boolean ownsSlots(ClusterShardInfo shard) {
+        return shard.getSlots() != null && !shard.getSlots().isEmpty();
+    }
+
+    private static void addOnlinePrimaries(ClusterShardInfo shard, boolean ssl, List<HostAndPort> result) {
+        for (ClusterShardNodeInfo node : shard.getNodes()) {
+            if (!"master".equals(node.getRole()) || !"online".equals(node.getHealth())) {
+                continue;
+            }
+            final HostAndPort address = new HostAndPort(hostOf(node), portOf(node, ssl));
+            if (!result.contains(address)) {
+                result.add(address);
             }
         }
-        if (result.isEmpty()) {
-            throw new JedisConnectionException("No online primary in the Redis cluster shard");
+    }
+
+    /**
+     * A one-line summary of a {@code CLUSTER SHARDS} reply, e.g.
+     * {@code [slots=[0-16383] nodes=[10.0.0.2:6379 master online]; slots=[] nodes=[10.0.0.1:6379 master fail]]},
+     * so a rejected reply shows what the server returned.
+     */
+    static String describe(List<ClusterShardInfo> shards) {
+        final StringBuilder result = new StringBuilder("[");
+        for (ClusterShardInfo shard : shards) {
+            if (result.length() > 1) {
+                result.append("; ");
+            }
+            result.append("slots=").append(slotsOf(shard)).append(" nodes=").append(nodesOf(shard));
+        }
+        return result.append(']').toString();
+    }
+
+    private static List<String> slotsOf(ClusterShardInfo shard) {
+        final List<String> result = new ArrayList<>();
+        for (List<Long> range : shard.getSlots() != null ? shard.getSlots() : List.<List<Long>>of()) {
+            result.add(range.size() == 2 ? range.get(0) + "-" + range.get(1) : range.toString());
+        }
+        return result;
+    }
+
+    private static List<String> nodesOf(ClusterShardInfo shard) {
+        final List<String> result = new ArrayList<>();
+        for (ClusterShardNodeInfo node : shard.getNodes()) {
+            result.add(hostOf(node) + ":" + node.getPort() + " " + node.getRole() + " " + node.getHealth());
         }
         return result;
     }

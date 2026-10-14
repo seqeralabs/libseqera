@@ -30,6 +30,7 @@ import redis.clients.jedis.HostAndPortMapper
 import redis.clients.jedis.Jedis
 import redis.clients.jedis.JedisClientConfig
 import redis.clients.jedis.JedisPool
+import redis.clients.jedis.exceptions.JedisConnectionException
 import redis.clients.jedis.exceptions.JedisException
 import redis.clients.jedis.resps.ClusterShardInfo
 import redis.clients.jedis.resps.ClusterShardNodeInfo
@@ -175,6 +176,50 @@ class JedisConnectorTest extends Specification {
         thrown(JedisException)
     }
 
+    def 'should refuse a cluster whose slots are split across shards, and report the reply'() {
+        when:
+        JedisConnector.primariesOf([
+                shard([[0L, 8191L]], node('master', '10.0.0.1', 6379, null)),
+                shard([[8192L, 16383L]], node('master', '10.0.0.2', 6379, null))], false)
+
+        then:
+        def e = thrown(JedisException)
+        e.message.contains('found 2 shards owning slots')
+        e.message.contains('slots=[0-8191] nodes=[10.0.0.1:6379 master online]')
+    }
+
+    def 'should see through the extra shard MemoryDB lists for a failed primary during recovery'() {
+        given: 'the promoted primary owns every slot, the old one is listed as a shard of its own with none'
+        def reply = [
+                shard([], node('master', '10.0.0.1', 6379, null, OLD_HEALTH)),
+                shard([[0L, 16383L]], node('master', '10.0.0.2', 6379, null))]
+
+        expect: 'the promoted primary comes first; the old one stays a candidate only while reported online'
+        JedisConnector.primariesOf(reply, false) == EXPECTED.collect { new HostAndPort(it, 6379) }
+
+        where:
+        OLD_HEALTH | EXPECTED
+        'fail'     | ['10.0.0.2']
+        'online'   | ['10.0.0.2', '10.0.0.1']
+    }
+
+    def 'should keep the primaries of a shard reported with no slots right after a takeover'() {
+        given: 'Redis 7.2, the replica having taken over from an unreachable primary'
+        def reply = [shard([], node('master', '10.0.0.1', 6379, null), node('master', '10.0.0.2', 6379, null))]
+
+        expect: 'both are candidates, for the probe to tell apart'
+        JedisConnector.primariesOf(reply, false) == [new HostAndPort('10.0.0.1', 6379), new HostAndPort('10.0.0.2', 6379)]
+    }
+
+    def 'should report the reply when no shard has an online primary'() {
+        when:
+        JedisConnector.primariesOf([shard([[0L, 16383L]], node('master', '10.0.0.1', 6379, null, 'fail'), node('replica', '10.0.0.2', 6379, null))], false)
+
+        then:
+        def e = thrown(JedisConnectionException)
+        e.message == 'No online primary in the Redis cluster: [slots=[0-16383] nodes=[10.0.0.1:6379 master fail, 10.0.0.2:6379 replica online]]'
+    }
+
     // -- helpers
 
     private GenericContainer clusterNode() {
@@ -210,12 +255,16 @@ class JedisConnectorTest extends Specification {
     }
 
     private static ClusterShardInfo shard(ClusterShardNodeInfo... nodes) {
-        new ClusterShardInfo([(ClusterShardInfo.SLOTS): [[0L, 16383L]], (ClusterShardInfo.NODES): nodes as List])
+        shard([[0L, 16383L]], nodes)
     }
 
-    private static ClusterShardNodeInfo node(String role, String ip, long port, Long tlsPort) {
+    private static ClusterShardInfo shard(List<List<Long>> slots, ClusterShardNodeInfo... nodes) {
+        new ClusterShardInfo([(ClusterShardInfo.SLOTS): slots, (ClusterShardInfo.NODES): nodes as List])
+    }
+
+    private static ClusterShardNodeInfo node(String role, String ip, long port, Long tlsPort, String health = 'online') {
         final map = [(ClusterShardNodeInfo.ID): ip, (ClusterShardNodeInfo.ENDPOINT): ip, (ClusterShardNodeInfo.IP): ip,
-                     (ClusterShardNodeInfo.PORT): port, (ClusterShardNodeInfo.ROLE): role, (ClusterShardNodeInfo.HEALTH): 'online']
+                     (ClusterShardNodeInfo.PORT): port, (ClusterShardNodeInfo.ROLE): role, (ClusterShardNodeInfo.HEALTH): health]
         if (tlsPort != null) {
             map[ClusterShardNodeInfo.TLS_PORT] = tlsPort
         }
