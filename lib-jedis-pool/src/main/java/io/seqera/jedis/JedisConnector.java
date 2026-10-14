@@ -28,12 +28,11 @@ import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisClientConfig;
+import redis.clients.jedis.exceptions.JedisClusterException;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.exceptions.JedisMovedDataException;
-import redis.clients.jedis.resps.ClusterShardInfo;
-import redis.clients.jedis.resps.ClusterShardNodeInfo;
 
 /**
  * Opens connections to the Redis server named by {@code redis.uri}, honoring {@code redis.mode}.
@@ -41,7 +40,7 @@ import redis.clients.jedis.resps.ClusterShardNodeInfo;
  * <p>In {@link RedisMode#STANDALONE} mode every connection goes to the URI host. In
  * {@link RedisMode#CLUSTER_PRIMARY} mode the URI host is only a discovery endpoint (e.g. a MemoryDB
  * {@code clustercfg.} record, which resolves to every node of the shard, replicas included): the
- * primary is looked up with {@code CLUSTER SHARDS}, cached, and looked up again after
+ * primary is found by probing those nodes, cached, and looked up again after
  * {@link #invalidate(HostAndPort)}. A standalone client cannot follow {@code MOVED}, so a connection that lands
  * on a replica fails every keyed command; this class makes sure connections land on the primary.
  *
@@ -210,26 +209,22 @@ public class JedisConnector {
     }
 
     /**
-     * Ask the discovery endpoint which node is the primary. Tries every address the endpoint resolves
-     * to, since one of them may be the node that just failed, and confirms the answer with a probe:
-     * right after a failover {@code CLUSTER SHARDS} can still list the demoted node as a primary next
-     * to the promoted one.
+     * Find the primary by probing every address the discovery endpoint resolves to: the primary serves
+     * the probe key, a replica redirects it with {@code MOVED} to the primary it follows. One of the
+     * addresses may be the node that just failed, so each is tried in turn.
+     *
+     * <p>The cluster topology ({@code CLUSTER SHARDS}) is not read: around a failover it can list
+     * stale entries, e.g. MemoryDB reports the failed primary as an extra shard until it recovers
+     * (libseqera#148), while the probe answers from the node's current role.
      */
     protected HostAndPort discoverPrimary() {
-        final List<HostAndPort> rejected = new ArrayList<>();
         JedisException last = null;
         for (HostAndPort candidate : seedAddresses()) {
             try {
-                final List<HostAndPort> primaries;
-                try (Jedis jedis = new Jedis(candidate, clientConfig)) {
-                    primaries = primariesOf(jedis.clusterShards(), clientConfig.isSsl());
-                }
-                for (HostAndPort node : primaries) {
-                    if (confirmPrimary(node)) {
-                        log.info("Redis cluster primary is {} (discovered via {})", node, candidate);
-                        return node;
-                    }
-                    rejected.add(node);
+                final HostAndPort node = probe(candidate);
+                if (node != null) {
+                    log.info("Redis cluster primary is {} (discovered via {})", node, candidate);
+                    return node;
                 }
             }
             catch (JedisException e) {
@@ -237,25 +232,45 @@ public class JedisConnector {
                 last = e;
             }
         }
-        final String detail = rejected.isEmpty() ? "" : " - not the primary: " + rejected;
-        throw new JedisConnectionException("Unable to discover the Redis cluster primary via " + seed + detail, last);
+        throw new JedisConnectionException("Unable to discover the Redis cluster primary via " + seed, last);
     }
 
     /**
-     * Whether {@code node} is reachable and the primary. Errors other than connection failures, e.g.
-     * {@code NOPERM}, propagate so discovery reports them as its cause.
+     * The primary as seen from {@code node}: the node itself when it serves the probe key, else the
+     * node its {@code MOVED} points to, once confirmed. {@code null} when neither is usable.
+     */
+    private HostAndPort probe(HostAndPort node) {
+        try (Jedis jedis = new Jedis(node, clientConfig)) {
+            jedis.exists(PROBE_KEY);
+            return node;
+        }
+        catch (JedisMovedDataException e) {
+            return confirmPrimary(e.getTargetNode()) ? e.getTargetNode() : null;
+        }
+        catch (JedisConnectionException | JedisClusterException e) {
+            log.debug("Redis node {} not usable: {}", node, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Whether {@code node} is reachable and the primary. Errors other than connection failures and
+     * cluster-state errors ({@code CLUSTERDOWN}), e.g. {@code NOPERM}, propagate.
      */
     private boolean confirmPrimary(HostAndPort node) {
         try (Jedis jedis = new Jedis(node, clientConfig)) {
             return isPrimary(jedis);
         }
-        catch (JedisConnectionException e) {
-            log.debug("Redis node {} unreachable: {}", node, e.getMessage());
+        catch (JedisConnectionException | JedisClusterException e) {
+            log.debug("Redis node {} not usable: {}", node, e.getMessage());
             return false;
         }
     }
 
-    private List<HostAndPort> seedAddresses() {
+    /**
+     * The addresses the discovery endpoint resolves to, or the endpoint itself when it resolves to one.
+     */
+    protected List<HostAndPort> seedAddresses() {
         try {
             final InetAddress[] addresses = InetAddress.getAllByName(seed.getHost());
             if (addresses.length > 1) {
@@ -270,47 +285,6 @@ public class JedisConnector {
             log.debug("Unable to resolve Redis host {}: {}", seed.getHost(), e.getMessage());
         }
         return List.of(seed);
-    }
-
-    /**
-     * The online nodes a {@code CLUSTER SHARDS} reply lists as primary, for a single-shard cluster.
-     * Usually one; briefly two right after a failover.
-     *
-     * @param shards the reply
-     * @param ssl    whether connections use TLS, which selects {@code tls-port} when the node reports one
-     * @return the primaries' addresses
-     * @throws JedisException when the cluster has more than one shard, or no online primary
-     */
-    static List<HostAndPort> primariesOf(List<ClusterShardInfo> shards, boolean ssl) {
-        if (shards == null || shards.size() != 1) {
-            throw new JedisException("redis.mode=cluster-primary requires a single-shard cluster - found " + (shards == null ? 0 : shards.size()) + " shards");
-        }
-        final List<HostAndPort> result = new ArrayList<>(1);
-        for (ClusterShardNodeInfo node : shards.getFirst().getNodes()) {
-            if ("master".equals(node.getRole()) && "online".equals(node.getHealth())) {
-                result.add(new HostAndPort(hostOf(node), portOf(node, ssl)));
-            }
-        }
-        if (result.isEmpty()) {
-            throw new JedisConnectionException("No online primary in the Redis cluster shard");
-        }
-        return result;
-    }
-
-    private static String hostOf(ClusterShardNodeInfo node) {
-        final String endpoint = node.getEndpoint();
-        // Redis reports '?' when the preferred endpoint type is unknown
-        return endpoint != null && !endpoint.isEmpty() && !"?".equals(endpoint) ? endpoint : node.getIp();
-    }
-
-    private static int portOf(ClusterShardNodeInfo node, boolean ssl) {
-        final Long tlsPort = node.getTlsPort();
-        final Long port = node.getPort();
-        if (ssl && tlsPort != null && tlsPort > 0) {
-            return tlsPort.intValue();
-        }
-        // a TLS-only node reports just 'tls-port'
-        return port != null && port > 0 ? port.intValue() : tlsPort.intValue();
     }
 
     @Override

@@ -31,8 +31,6 @@ import redis.clients.jedis.Jedis
 import redis.clients.jedis.JedisClientConfig
 import redis.clients.jedis.JedisPool
 import redis.clients.jedis.exceptions.JedisException
-import redis.clients.jedis.resps.ClusterShardInfo
-import redis.clients.jedis.resps.ClusterShardNodeInfo
 
 /**
  * Tests for {@link JedisConnector} and {@link ClusterPrimaryJedisFactory}, against a real single-shard
@@ -88,8 +86,7 @@ class JedisConnectorTest extends Specification {
             assert withNode(ipOf(nodeB)) { JedisConnector.isPrimary(it) }
             assert withNode(ipOf(nodeA)) { !JedisConnector.isPrimary(it) }
         }
-        // no waiting for CLUSTER SHARDS to catch up: right after a failover it still lists both nodes as
-        // primary, which discovery must see through
+        // no waiting for the cluster topology to settle: discovery relies on each node's current role
         then: 'a dedicated connection, opened while the connector still points at the demoted node, retries onto the new primary'
         connector.connect().withCloseable { JedisConnector.isPrimary(it) }
         connector.target() == new HostAndPort(ipOf(nodeB), 6379)
@@ -156,25 +153,6 @@ class JedisConnectorTest extends Specification {
         connector.@primary.get() == null
     }
 
-    def 'should list the online primary of a single shard'() {
-        expect:
-        JedisConnector.primariesOf([shard(node('replica', '10.0.0.2', 6379, null), node('master', '10.0.0.1', 6379, TLS_PORT))], SSL) == [new HostAndPort('10.0.0.1', EXPECTED_PORT)]
-
-        where:
-        SSL   | TLS_PORT | EXPECTED_PORT
-        false | null     | 6379
-        true  | null     | 6379
-        true  | 6380     | 6380
-    }
-
-    def 'should refuse a cluster with more than one shard'() {
-        when:
-        JedisConnector.primariesOf([shard(node('master', '10.0.0.1', 6379, null)), shard(node('master', '10.0.0.2', 6379, null))], false)
-
-        then:
-        thrown(JedisException)
-    }
-
     // -- helpers
 
     private GenericContainer clusterNode() {
@@ -207,18 +185,5 @@ class JedisConnectorTest extends Specification {
 
     private static boolean replicaInSync(List<Object> role) {
         role.size() >= 4 && new String(role[0] as byte[]) == 'slave' && new String(role[3] as byte[]) == 'connected'
-    }
-
-    private static ClusterShardInfo shard(ClusterShardNodeInfo... nodes) {
-        new ClusterShardInfo([(ClusterShardInfo.SLOTS): [[0L, 16383L]], (ClusterShardInfo.NODES): nodes as List])
-    }
-
-    private static ClusterShardNodeInfo node(String role, String ip, long port, Long tlsPort) {
-        final map = [(ClusterShardNodeInfo.ID): ip, (ClusterShardNodeInfo.ENDPOINT): ip, (ClusterShardNodeInfo.IP): ip,
-                     (ClusterShardNodeInfo.PORT): port, (ClusterShardNodeInfo.ROLE): role, (ClusterShardNodeInfo.HEALTH): 'online']
-        if (tlsPort != null) {
-            map[ClusterShardNodeInfo.TLS_PORT] = tlsPort
-        }
-        new ClusterShardNodeInfo(map as Map<String, Object>)
     }
 }
