@@ -17,12 +17,14 @@
 
 package io.seqera.service.pairing.socket
 
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 import groovy.transform.CompileStatic
 import groovy.transform.TupleConstructor
 import groovy.util.logging.Slf4j
+import io.micronaut.context.annotation.Value
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.scheduling.TaskExecutors
@@ -85,6 +87,13 @@ class PairingWebSocket {
     @Inject
     @Nullable
     private LicenseValidator licenseValidator
+
+    /**
+     * Max time a session that sends heartbeats may stay silent before it is unregistered and
+     * closed. Clients send a heartbeat every 50 seconds. Zero or negative disables the check.
+     */
+    @Value('${wave.pairing.heartbeat-timeout:120s}')
+    private Duration heartbeatTimeout
 
     /**
      * The last heartbeat received by each session, keyed by session id. A session is tracked
@@ -186,7 +195,7 @@ class PairingWebSocket {
      * closing a half-open socket may not fire {@code @OnClose} promptly.
      */
     protected void closeSilentSessions(Instant now) {
-        final timeout = config.heartbeatTimeout
+        final timeout = heartbeatTimeout
         if( timeout == null || timeout.isNegative() || timeout.isZero() )
             return
         final deadline = now.minus(timeout)

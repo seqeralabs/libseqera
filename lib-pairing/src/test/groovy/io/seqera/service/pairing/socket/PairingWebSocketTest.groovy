@@ -24,7 +24,6 @@ import java.util.concurrent.CompletableFuture
 import io.micronaut.websocket.CloseReason
 import io.micronaut.websocket.WebSocketSession
 import io.micronaut.websocket.annotation.OnMessage
-import io.seqera.service.pairing.PairingConfig
 import io.seqera.service.pairing.PairingRecord
 import io.seqera.service.pairing.PairingService
 import io.seqera.service.pairing.socket.msg.PairingHeartbeat
@@ -50,8 +49,7 @@ class PairingWebSocketTest extends Specification {
         given:
         def channel = Mock(PairingChannel)
         def pairing = Mock(PairingService) { getPairingRecord('tower', 'https://foo.com') >> new PairingRecord() }
-        def config = Mock(PairingConfig) { getHeartbeatTimeout() >> Duration.ofSeconds(120) }
-        def socket = new PairingWebSocket(channel: channel, pairingService: pairing, config: config)
+        def socket = new PairingWebSocket(channel: channel, pairingService: pairing, heartbeatTimeout: Duration.ofSeconds(120))
         and:
         def beating = Mock(WebSocketSession) { getId() >> 'sess-1'; sendAsync(_) >> CompletableFuture.completedFuture(null) }
 
@@ -80,7 +78,7 @@ class PairingWebSocketTest extends Specification {
         given:
         def channel = Mock(PairingChannel)
         def pairing = Mock(PairingService) { getPairingRecord('tower', 'https://foo.com') >> new PairingRecord() }
-        def socket = new PairingWebSocket(channel: channel, pairingService: pairing, config: Mock(PairingConfig))
+        def socket = new PairingWebSocket(channel: channel, pairingService: pairing, heartbeatTimeout: Duration.ofSeconds(120))
         def session = Mock(WebSocketSession) { getId() >> 'sess-1'; sendAsync(_) >> CompletableFuture.completedFuture(null) }
         and: 'the sweep picked up the entry of a first heartbeat'
         socket.onMessage('tower', 'tk', 'https://foo.com', new PairingHeartbeat(msgId: 'x'), session)
