@@ -279,4 +279,25 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
         pool?.shutdownNow()
     }
 
+    def 'should release the key lock when the loader fails' () {
+        given:
+        def cache = new MyCache(null)
+        def locks = AbstractTieredCache.getDeclaredField('locks').tap { accessible = true }.get(cache)
+        def k = UUID.randomUUID().toString()
+
+        when:
+        cache.getOrCompute(k, { throw new IllegalStateException('boom') }, Duration.ofMinutes(1))
+        then:
+        thrown(IllegalStateException)
+        and:
+        locks.isEmpty()
+
+        when:
+        def r = cache.getOrCompute(k, { new MyBean(it, 'y') }, Duration.ofMinutes(1))
+        then:
+        r == new MyBean(k, 'y')
+        and:
+        locks.isEmpty()
+    }
+
 }
