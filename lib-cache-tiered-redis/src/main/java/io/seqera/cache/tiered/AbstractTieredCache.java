@@ -20,13 +20,13 @@ package io.seqera.cache.tiered;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.github.benmanes.caffeine.cache.RemovalListener;
 import io.seqera.serde.Encodable;
 import io.seqera.serde.encode.StringEncodingStrategy;
@@ -122,7 +122,20 @@ public abstract class AbstractTieredCache<K, V extends Encodable> implements Tie
     private final StringEncodingStrategy<Entry> encoder;
     private volatile Cache<String, Entry> l1;
     private final L2TieredCache<String, String> l2;
-    private final LoadingCache<String, Lock> locks;
+    private final Lock l1Sync = new ReentrantLock();
+
+    /**
+     * Per-key lock, reference counted so that it is removed from {@link #locks}
+     * only when no thread holds or waits on it.
+     */
+    private static final class KeyLock {
+        final ReentrantLock lock = new ReentrantLock();
+        // guarded by the ConcurrentHashMap compute functions
+        int refs;
+    }
+
+    // keys are compared by equality (not identity) so that equal key instances share the same lock
+    private final ConcurrentHashMap<String, KeyLock> locks = new ConcurrentHashMap<>();
 
     protected AbstractTieredCache(L2TieredCache<String, String> l2, StringEncodingStrategy<Entry> encoder) {
         if (l2 == null) {
@@ -130,14 +143,21 @@ public abstract class AbstractTieredCache<K, V extends Encodable> implements Tie
         }
         this.l2 = l2;
         this.encoder = encoder;
-        this.locks = Caffeine.newBuilder()
-                .maximumSize(5_000)
-                .weakKeys()
-                .build(this::createLock);
     }
 
-    private Lock createLock(String key) {
-        return new ReentrantLock();
+    private KeyLock acquireLock(String key) {
+        final KeyLock result = locks.compute(key, (k, v) -> {
+            final KeyLock lock = v != null ? v : new KeyLock();
+            lock.refs++;
+            return lock;
+        });
+        result.lock.lock();
+        return result;
+    }
+
+    private void releaseLock(String key, KeyLock lock) {
+        lock.lock.unlock();
+        locks.computeIfPresent(key, (k, v) -> --v.refs == 0 ? null : v);
     }
 
     private Cache<String, Entry> getL1() {
@@ -145,8 +165,7 @@ public abstract class AbstractTieredCache<K, V extends Encodable> implements Tie
             return l1;
         }
 
-        final Lock sync = locks.get("sync-l1");
-        sync.lock();
+        l1Sync.lock();
         try {
             if (l1 != null) {
                 return l1;
@@ -159,7 +178,7 @@ public abstract class AbstractTieredCache<K, V extends Encodable> implements Tie
                     .build();
             return l1;
         } finally {
-            sync.unlock();
+            l1Sync.unlock();
         }
     }
 
@@ -264,8 +283,7 @@ public abstract class AbstractTieredCache<K, V extends Encodable> implements Tie
             return value;
         }
 
-        final Lock sync = locks.get(key);
-        sync.lock();
+        final KeyLock sync = acquireLock(key);
         try {
             value = l1Get(key);
             if (value != null) {
@@ -307,7 +325,7 @@ public abstract class AbstractTieredCache<K, V extends Encodable> implements Tie
             }
             return value;
         } finally {
-            sync.unlock();
+            releaseLock(key, sync);
         }
     }
 

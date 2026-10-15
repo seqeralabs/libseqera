@@ -18,6 +18,10 @@
 package io.seqera.cache.tiered
 
 import java.time.Duration
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.adapters.PolymorphicJsonAdapterFactory
@@ -241,6 +245,38 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
 
         then:
         thrown(IllegalArgumentException)
+    }
+
+    def 'should compute once for concurrent calls with equal but distinct key instances' () {
+        given:
+        def cache = new MyCache(null)
+        def N = 16
+        def count = new AtomicInteger()
+        def start = new CountDownLatch(1)
+        def pool = Executors.newFixedThreadPool(N)
+        and:
+        def base = UUID.randomUUID().toString()
+
+        when:
+        def futures = (1..N).collect {
+            pool.submit({
+                start.await()
+                // build a new String instance on every call
+                def key = new String(base.toCharArray())
+                cache.getOrCompute(key, { k -> count.incrementAndGet(); sleep 200; new MyBean(k, 'x') }, Duration.ofMinutes(1))
+            } as java.util.concurrent.Callable<MyBean>)
+        }
+        start.countDown()
+        def results = futures.collect { it.get(10, TimeUnit.SECONDS) }
+
+        then:
+        count.get() == 1
+        results.every { it == new MyBean(base, 'x') }
+        and: 'locks are released once no thread uses them'
+        AbstractTieredCache.getDeclaredField('locks').tap { accessible = true }.get(cache).isEmpty()
+
+        cleanup:
+        pool?.shutdownNow()
     }
 
 }
