@@ -18,6 +18,10 @@
 package io.seqera.cache.tiered
 
 import java.time.Duration
+import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.adapters.PolymorphicJsonAdapterFactory
@@ -190,6 +194,34 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
         sleep TTL.toMillis() *2
         then:
         cache2.get(k) == null
+    }
+
+    def 'should compute a value once for concurrent calls with equal keys' () {
+        given:
+        def TTL = Duration.ofSeconds(10)
+        def store = context.getBean(RedisL2TieredCache)
+        def cache = new MyCache(store)
+        def k = UUID.randomUUID().toString()
+        def count = new AtomicInteger()
+        def start = new CountDownLatch(1)
+        def executor = Executors.newFixedThreadPool(10)
+
+        when: 'each call uses an equal but distinct key instance'
+        def futures = (1..10).collect {
+            executor.submit({
+                start.await()
+                cache.getOrCompute(new String(k), (String key)-> { count.incrementAndGet(); sleep 200; return new MyBean(key+'1', key+'2') }, TTL)
+            } as Callable<MyBean>)
+        }
+        start.countDown()
+        def results = futures.collect { it.get() }
+
+        then:
+        count.get() == 1
+        results.every { it == new MyBean(k+'1', k+'2') }
+
+        cleanup:
+        executor.shutdown()
     }
 
     def 'should get or compute a value with condition' () {

@@ -130,9 +130,11 @@ public abstract class AbstractTieredCache<K, V extends Encodable> implements Tie
         }
         this.l2 = l2;
         this.encoder = encoder;
+        // Keys are compared by equals(), so all callers of the same logical key share one lock.
+        // Weak values let an unused lock be collected, while a lock held or awaited by any thread
+        // stays reachable from that thread, so it is never replaced mid-compute.
         this.locks = Caffeine.newBuilder()
-                .maximumSize(5_000)
-                .weakKeys()
+                .weakValues()
                 .build(this::createLock);
     }
 
