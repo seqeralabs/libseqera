@@ -18,13 +18,16 @@
 package io.seqera.service.pairing.socket
 
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 import groovy.transform.CompileStatic
+import groovy.transform.TupleConstructor
 import groovy.util.logging.Slf4j
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
+import io.micronaut.scheduling.annotation.Scheduled
 import io.micronaut.websocket.CloseReason
 import io.micronaut.websocket.WebSocketSession
 import io.micronaut.websocket.annotation.OnClose
@@ -83,6 +86,20 @@ class PairingWebSocket {
     @Nullable
     private LicenseValidator licenseValidator
 
+    /**
+     * The last heartbeat received by each session, keyed by session id. A session is tracked
+     * from its first heartbeat, so clients that never send heartbeats are not affected.
+     */
+    private final Map<String,Heartbeat> heartbeats = new ConcurrentHashMap<>()
+
+    @TupleConstructor
+    private static class Heartbeat {
+        final String service
+        final String endpoint
+        final WebSocketSession session
+        final Instant time
+    }
+
     @OnOpen
     void onOpen(String service, String token, String endpoint, WebSocketSession session) {
         log.debug "Opening pairing session - endpoint: ${endpoint} [sessionId: $session.id]"
@@ -133,6 +150,7 @@ class PairingWebSocket {
                 session.close(CloseReason.GOING_AWAY)
                 return
             }
+            heartbeats.put(session.id, new Heartbeat(service, endpoint, session, Instant.now()))
             // send pong message
             final msg = new PairingHeartbeat(msgId:rndHex())
             session
@@ -151,7 +169,44 @@ class PairingWebSocket {
     @OnClose
     void onClose(String service, String token, String endpoint, WebSocketSession session) {
         log.debug "Closing pairing session - endpoint: ${endpoint} [sessionId: $session.id]"
+        heartbeats.remove(session.id)
         channel.unregisterClient(service, endpoint, session.id)
+    }
+
+    @Scheduled(initialDelay = '10s', fixedDelay = '10s')
+    void closeSilentSessions() {
+        closeSilentSessions(Instant.now())
+    }
+
+    /**
+     * Close the sessions with no heartbeat within the heartbeat timeout. When the connection drops
+     * without a close frame, writes to the half-open socket still succeed, so the session keeps
+     * taking messages from the outbound queue and they are lost until TCP gives up, which can take
+     * minutes. The session is unregistered first so it stops taking messages right away, since
+     * closing a half-open socket may not fire {@code @OnClose} promptly.
+     */
+    protected void closeSilentSessions(Instant now) {
+        final timeout = config.heartbeatTimeout
+        if( timeout == null || timeout.isNegative() || timeout.isZero() )
+            return
+        final deadline = now.minus(timeout)
+        heartbeats.values()
+                .findAll { Heartbeat it -> it.time.isBefore(deadline) }
+                .each { Heartbeat it -> closeSilent(it) }
+    }
+
+    private void closeSilent(Heartbeat beat) {
+        // skip when a newer heartbeat replaced this entry in the meantime
+        if( !heartbeats.remove(beat.session.id, beat) )
+            return
+        log.info "Closing silent pairing session - no heartbeat since ${beat.time} - endpoint: ${beat.endpoint} [sessionId: ${beat.session.id}]"
+        channel.unregisterClient(beat.service, beat.endpoint, beat.session.id)
+        try {
+            beat.session.close(CloseReason.GOING_AWAY)
+        }
+        catch (Throwable e) {
+            log.debug "Unable to close silent pairing session ${beat.session.id} - cause: ${e.message}"
+        }
     }
 
     protected boolean isLicenseTokenValid(String token, String endpoint) {

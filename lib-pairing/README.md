@@ -25,7 +25,7 @@ Or when published to Maven:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-pairing:1.1.2'
+    implementation 'io.seqera:lib-pairing:1.2.0'
 }
 ```
 

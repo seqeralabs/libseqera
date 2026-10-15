@@ -1,5 +1,11 @@
 # lib-pairing changelog
 
+1.2.0
+- Close pairing sessions with no heartbeat within PairingConfig#getHeartbeatTimeout (default 120s):
+  a connection dropped without a close frame left a half-open session registered, silently taking
+  and losing outbound messages until TCP gave up. The session is unregistered right away and closed
+  with GOING_AWAY so the client reconnects. Sessions that never sent a heartbeat are not affected
+
 1.1.2
 - Handle PairingWebSocket errors with an @OnError handler: peer connection drops (IOException, e.g.
   Connection timed out, No route to host) are logged as a single INFO line instead of an ERROR with

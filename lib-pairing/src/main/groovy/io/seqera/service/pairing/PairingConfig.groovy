@@ -63,4 +63,14 @@ interface PairingConfig {
      * Default: empty list
      */
     List<String> getDenyHosts()
+
+    /**
+     * Max time a pairing session that sends heartbeats may stay silent before it is considered
+     * dead, then unregistered and closed. Sessions that never sent a heartbeat are not affected.
+     * Zero or negative disables the check.
+     * Default: 120 seconds (clients send a heartbeat every 50 seconds)
+     */
+    default Duration getHeartbeatTimeout() {
+        return Duration.ofSeconds(120)
+    }
 }
