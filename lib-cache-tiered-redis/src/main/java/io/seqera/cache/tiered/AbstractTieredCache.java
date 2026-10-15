@@ -133,6 +133,10 @@ public abstract class AbstractTieredCache<K, V extends Encodable> implements Tie
         // Keys are compared by equals(), so all callers of the same logical key share one lock.
         // Weak values let an unused lock be collected, while a lock held or awaited by any thread
         // stays reachable from that thread, so it is never replaced mid-compute.
+        // Do not use weakKeys(): it compares keys by identity, and callers build a new key string on
+        // every call, so concurrent misses of the same key got different locks and all ran the loader.
+        // See https://github.com/seqeralabs/libseqera/issues/151
+        // and https://github.com/seqeralabs/libseqera/pull/153
         this.locks = Caffeine.newBuilder()
                 .weakValues()
                 .build(this::createLock);
