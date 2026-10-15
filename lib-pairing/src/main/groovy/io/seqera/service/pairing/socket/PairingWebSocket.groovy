@@ -195,7 +195,7 @@ class PairingWebSocket {
                 .each { Heartbeat it -> closeSilent(it) }
     }
 
-    private void closeSilent(Heartbeat beat) {
+    protected void closeSilent(Heartbeat beat) {
         // skip when a newer heartbeat replaced this entry in the meantime
         if( !heartbeats.remove(beat.session.id, beat) )
             return

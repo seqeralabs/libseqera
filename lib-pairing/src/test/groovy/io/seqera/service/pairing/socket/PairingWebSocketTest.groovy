@@ -54,9 +54,8 @@ class PairingWebSocketTest extends Specification {
         def socket = new PairingWebSocket(channel: channel, pairingService: pairing, config: config)
         and:
         def beating = Mock(WebSocketSession) { getId() >> 'sess-1'; sendAsync(_) >> CompletableFuture.completedFuture(null) }
-        def silent = Mock(WebSocketSession) { getId() >> 'sess-2' }
 
-        when: 'only the first session sends a heartbeat'
+        when: 'the session sends a heartbeat'
         socket.onMessage('tower', 'tk', 'https://foo.com', new PairingHeartbeat(msgId: 'x'), beating)
         and: 'the sweep runs before the timeout'
         socket.closeSilentSessions(Instant.now().plusSeconds(60))
@@ -66,15 +65,35 @@ class PairingWebSocketTest extends Specification {
 
         when: 'the sweep runs after the timeout'
         socket.closeSilentSessions(Instant.now().plusSeconds(121))
-        then: 'the silent session is unregistered and closed, the one that never sent a heartbeat is left alone'
+        then: 'the silent session is unregistered and closed'
         1 * channel.unregisterClient('tower', 'https://foo.com', 'sess-1')
         1 * beating.close(CloseReason.GOING_AWAY)
-        0 * silent.close(_)
 
         when: 'the sweep runs again'
         socket.closeSilentSessions(Instant.now().plusSeconds(240))
         then: 'the session is not closed twice'
         0 * channel.unregisterClient(_, _, _)
         0 * beating.close(_)
+    }
+
+    def 'should not close a session whose heartbeat was refreshed after the sweep found it silent' () {
+        given:
+        def channel = Mock(PairingChannel)
+        def pairing = Mock(PairingService) { getPairingRecord('tower', 'https://foo.com') >> new PairingRecord() }
+        def socket = new PairingWebSocket(channel: channel, pairingService: pairing, config: Mock(PairingConfig))
+        def session = Mock(WebSocketSession) { getId() >> 'sess-1'; sendAsync(_) >> CompletableFuture.completedFuture(null) }
+        and: 'the sweep picked up the entry of a first heartbeat'
+        socket.onMessage('tower', 'tk', 'https://foo.com', new PairingHeartbeat(msgId: 'x'), session)
+        def stale = socket.@heartbeats['sess-1']
+
+        when: 'a newer heartbeat replaces it before the session is closed'
+        socket.onMessage('tower', 'tk', 'https://foo.com', new PairingHeartbeat(msgId: 'y'), session)
+        socket.closeSilent(stale)
+
+        then:
+        0 * channel.unregisterClient(_, _, _)
+        0 * session.close(_)
+        and:
+        socket.@heartbeats['sess-1'] != null
     }
 }
