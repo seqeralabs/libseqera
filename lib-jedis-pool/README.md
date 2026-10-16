@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-jedis-pool:1.3.0'
+    implementation 'io.seqera:lib-jedis-pool:1.3.1'
 }
 ```
 
@@ -61,16 +61,18 @@ AWS MemoryDB (and any cluster-mode Redis) exposes a discovery endpoint that reso
 the shard, replicas included. A standalone client that lands on a replica gets `MOVED` for every keyed
 command, and a replica still answers `PING`. With `redis.mode: cluster-primary`:
 
-- the host in `redis.uri` is used only to discover the shard primary (`CLUSTER SHARDS`, each candidate
-  confirmed with a probe);
-- pooled connections are validated on every borrow (`testOnBorrow` is forced on) by reading a probe key,
-  `jedis-pool:primary-probe`: the primary answers, a replica answers `MOVED`. After a failover stale
+- the host in `redis.uri` is used only to discover the shard primary: each address it resolves to is
+  probed by reading the probe key, `jedis-pool:primary-probe`. The primary answers; a replica answers
+  `MOVED` to its primary, which is probed in turn. The cluster topology (`CLUSTER SHARDS`) is not read,
+  as around a failover it can list stale entries;
+- pooled connections are validated on every borrow (`testOnBorrow` is forced on) with the same probe. After a failover stale
   connections are evicted and new ones go to the new primary;
 - `JedisConnector.connect()` opens a dedicated connection to the primary for blocking commands.
 
-Constraints: a single shard only, database 0 only, and no cross-slot multi-key commands. The Redis user
-needs `@slow` (for `CLUSTER SHARDS`) and read access to the probe key; `@admin`/`@dangerous` are not needed.
-Commands in flight during a failover (a few seconds) fail and must be retried by the caller.
+Constraints: a single shard only, database 0 only, and no cross-slot multi-key commands. A multi-shard
+cluster is not detected: keys outside the shard that serves the probe key fail with `MOVED`. The Redis user
+needs only read access to the probe key. Commands issued during a failover fail until the server has
+promoted the replica and must be retried by the caller.
 
 ```yaml
 redis:
