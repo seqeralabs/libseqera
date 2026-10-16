@@ -216,12 +216,15 @@ public class JedisConnector {
      * <p>The cluster topology ({@code CLUSTER SHARDS}) is not read: around a failover it can list
      * stale entries, e.g. MemoryDB reports the failed primary as an extra shard until it recovers
      * (libseqera#148), while the probe answers from the node's current role.
+     *
+     * @throws JedisConnectionException when no address leads to the primary, listing what each one answered
      */
     protected HostAndPort discoverPrimary() {
+        final List<String> failures = new ArrayList<>();
         JedisException last = null;
         for (HostAndPort candidate : seedAddresses()) {
             try {
-                final HostAndPort node = probe(candidate);
+                final HostAndPort node = probe(candidate, failures);
                 if (node != null) {
                     log.info("Redis cluster primary is {} (discovered via {})", node, candidate);
                     return node;
@@ -229,26 +232,34 @@ public class JedisConnector {
             }
             catch (JedisException e) {
                 log.debug("Redis primary discovery via {} failed: {}", candidate, e.getMessage());
+                failures.add(candidate + ": " + e.getMessage());
                 last = e;
             }
         }
-        throw new JedisConnectionException("Unable to discover the Redis cluster primary via " + seed, last);
+        throw new JedisConnectionException("Unable to discover the Redis cluster primary via " + seed + " - " + String.join("; ", failures), last);
     }
 
     /**
      * The primary as seen from {@code node}: the node itself when it serves the probe key, else the
-     * node its {@code MOVED} points to, once confirmed. {@code null} when neither is usable.
+     * node its {@code MOVED} points to, once confirmed. {@code null} when neither is usable, after
+     * adding the reason to {@code failures}.
      */
-    private HostAndPort probe(HostAndPort node) {
+    private HostAndPort probe(HostAndPort node, List<String> failures) {
         try (Jedis jedis = new Jedis(node, clientConfig)) {
             jedis.exists(PROBE_KEY);
             return node;
         }
         catch (JedisMovedDataException e) {
-            return confirmPrimary(e.getTargetNode()) ? e.getTargetNode() : null;
+            final HostAndPort target = e.getTargetNode();
+            if (confirmPrimary(target)) {
+                return target;
+            }
+            failures.add(node + ": MOVED to " + target + ", which is not usable as the primary");
+            return null;
         }
         catch (JedisConnectionException | JedisClusterException e) {
             log.debug("Redis node {} not usable: {}", node, e.getMessage());
+            failures.add(node + ": " + e.getMessage());
             return null;
         }
     }

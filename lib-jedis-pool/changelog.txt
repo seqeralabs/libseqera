@@ -6,6 +6,7 @@
   Discovery no longer reads the topology: it probes each address of the discovery endpoint and follows a
   replica's MOVED to the primary
 - Skip a node answering CLUSTERDOWN during discovery instead of giving up on that address
+- List what each address answered in the error raised when discovery finds no primary
 - The Redis user no longer needs @slow, only read access to the probe key
 
 1.3.0 - 7 Oct 2026

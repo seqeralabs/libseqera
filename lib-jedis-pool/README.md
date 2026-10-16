@@ -69,7 +69,8 @@ command, and a replica still answers `PING`. With `redis.mode: cluster-primary`:
   connections are evicted and new ones go to the new primary;
 - `JedisConnector.connect()` opens a dedicated connection to the primary for blocking commands.
 
-Constraints: a single shard only, database 0 only, and no cross-slot multi-key commands. The Redis user
+Constraints: a single shard only, database 0 only, and no cross-slot multi-key commands. A multi-shard
+cluster is not detected: keys outside the shard that serves the probe key fail with `MOVED`. The Redis user
 needs only read access to the probe key. Commands issued during a failover fail until the server has
 promoted the replica and must be retried by the caller.
 

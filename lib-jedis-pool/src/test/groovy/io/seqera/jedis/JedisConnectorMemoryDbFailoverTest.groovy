@@ -25,6 +25,7 @@ import redis.clients.jedis.DefaultJedisClientConfig
 import redis.clients.jedis.HostAndPort
 import redis.clients.jedis.HostAndPortMapper
 import redis.clients.jedis.JedisPool
+import redis.clients.jedis.exceptions.JedisConnectionException
 
 /**
  * Replays the MemoryDB failover of libseqera#148 against two fake nodes. The promoted node's
@@ -92,6 +93,20 @@ class JedisConnectorMemoryDbFailoverTest extends Specification {
 
         expect:
         connector().target() == new HostAndPort(NEW, 6379)
+    }
+
+    def 'should report what each address answered when none leads to the primary'() {
+        given: 'OLD down, NEW promoted but not serving yet'
+        old.mode = 'down'
+        neu.mode = 'clusterdown'
+
+        when:
+        connector().target()
+
+        then:
+        def e = thrown(JedisConnectionException)
+        e.message.startsWith('Unable to discover the Redis cluster primary via clustercfg:6379 - 10.0.0.1:6379: ')
+        e.message.contains('; 10.0.0.2:6379: CLUSTERDOWN Hash slot not served')
     }
 
     // -- helpers
