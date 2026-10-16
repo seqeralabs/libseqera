@@ -49,7 +49,7 @@ trait BaseRedisTest {
 
     private static void startRedisServer() {
         log.debug "Starting Redis server"
-        redisContainer = new GenericContainer("cr.seqera.io/public/redis:7")
+        redisContainer = new GenericContainer("public.cr.seqera.io/mirror/redis:7")
                         .withExposedPorts(6379)
                         .waitingFor(Wait.forLogMessage(".*Ready to accept connections.*\\n", 1))
         redisContainer.start()
