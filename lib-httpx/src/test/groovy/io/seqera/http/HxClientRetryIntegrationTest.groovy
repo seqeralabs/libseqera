@@ -44,7 +44,7 @@ class HxClientRetryIntegrationTest extends Specification {
     WireMockServer wireMockServer
 
     def setupSpec() {
-        wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort())
+        wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort().http2PlainDisabled(true))
         wireMockServer.start()
         WireMock.configureFor("localhost", wireMockServer.port())
     }
@@ -295,7 +295,7 @@ class HxClientRetryIntegrationTest extends Specification {
                 .inScenario('connection-error')
                 .whenScenarioStateIs('Started')
                 .willReturn(aResponse()
-                        .withFault(Fault.CONNECTION_RESET_BY_PEER))
+                        .withFault(Fault.RANDOM_DATA_THEN_CLOSE))
                 .willSetStateTo('connection-ok'))
 
         wireMockServer.stubFor(get(urlEqualTo('/api/connection'))
@@ -370,7 +370,7 @@ class HxClientRetryIntegrationTest extends Specification {
         and: 'server always returns connection reset error'
         wireMockServer.stubFor(get(urlEqualTo('/api/persistent-io-error'))
                 .willReturn(aResponse()
-                        .withFault(Fault.CONNECTION_RESET_BY_PEER)))
+                        .withFault(Fault.RANDOM_DATA_THEN_CLOSE)))
 
         and:
         def request = HttpRequest.newBuilder()
@@ -399,7 +399,7 @@ class HxClientRetryIntegrationTest extends Specification {
         and: 'server always returns connection reset error'
         wireMockServer.stubFor(get(urlEqualTo('/api/persistent-io-error-async'))
                 .willReturn(aResponse()
-                        .withFault(Fault.CONNECTION_RESET_BY_PEER)))
+                        .withFault(Fault.RANDOM_DATA_THEN_CLOSE)))
 
         and:
         def request = HttpRequest.newBuilder()
@@ -574,7 +574,7 @@ class HxClientRetryIntegrationTest extends Specification {
         and: 'server always returns connection reset error'
         wireMockServer.stubFor(get(urlEqualTo('/api/no-retry-condition'))
                 .willReturn(aResponse()
-                        .withFault(Fault.CONNECTION_RESET_BY_PEER)))
+                        .withFault(Fault.RANDOM_DATA_THEN_CLOSE)))
 
         and:
         def request = HttpRequest.newBuilder()
@@ -603,7 +603,7 @@ class HxClientRetryIntegrationTest extends Specification {
         and: 'server always returns connection reset error'
         wireMockServer.stubFor(get(urlEqualTo('/api/subclass-no-retry'))
                 .willReturn(aResponse()
-                        .withFault(Fault.CONNECTION_RESET_BY_PEER)))
+                        .withFault(Fault.RANDOM_DATA_THEN_CLOSE)))
 
         and:
         def request = HttpRequest.newBuilder()
@@ -743,7 +743,7 @@ class HxClientRetryIntegrationTest extends Specification {
 
         and: 'a connection reset — an IOException the default condition does retry'
         wireMockServer.stubFor(post(urlEqualTo('/api/per-request-post'))
-                .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)))
+                .willReturn(aResponse().withFault(Fault.RANDOM_DATA_THEN_CLOSE)))
 
         and:
         def request = HttpRequest.newBuilder()
@@ -768,7 +768,7 @@ class HxClientRetryIntegrationTest extends Specification {
 
         and:
         wireMockServer.stubFor(post(urlEqualTo('/api/per-request-async'))
-                .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)))
+                .willReturn(aResponse().withFault(Fault.RANDOM_DATA_THEN_CLOSE)))
 
         and:
         def request = HttpRequest.newBuilder()

@@ -27,7 +27,11 @@ dependencies {
     api project(':lib-util-net')
     implementation 'com.google.code.gson:gson:2.10.1'
 
-    testImplementation 'com.github.tomakehurst:wiremock:3.0.1'
+    testImplementation 'org.wiremock:wiremock-jetty12:3.13.2'
+    // WireMock 3.13.2 pins Jetty 12.0.30; lift to a release that fixes
+    // CVE-2026-10050 (jetty-security) and CVE-2026-6790 (jetty-server)
+    testImplementation platform('org.eclipse.jetty:jetty-bom:12.0.40')
+    testImplementation platform('org.eclipse.jetty.ee10:jetty-ee10-bom:12.0.40')
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
