@@ -44,7 +44,7 @@ class HxClientCombinedIntegrationTest extends Specification {
     static final String REFRESHED_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJyZWZyZXNoZWQiLCJuYW1lIjoiUmVmcmVzaGVkIFRva2VuIiwiaWF0IjoxNTE2MjM5MDIyfQ.signature2'
 
     def setupSpec() {
-        wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort())
+        wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort().http2PlainDisabled(true))
         wireMockServer.start()
         WireMock.configureFor("localhost", wireMockServer.port())
     }

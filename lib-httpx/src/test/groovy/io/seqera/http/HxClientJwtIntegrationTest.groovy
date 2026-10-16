@@ -46,7 +46,7 @@ class HxClientJwtIntegrationTest extends Specification {
     static final String NEW_REFRESH_TOKEN = 'new_refresh_token_12345'
 
     def setupSpec() {
-        wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort())
+        wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort().http2PlainDisabled(true))
         wireMockServer.start()
         WireMock.configureFor("localhost", wireMockServer.port())
     }
