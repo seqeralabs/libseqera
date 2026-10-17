@@ -61,6 +61,12 @@ public class LocalRangeProvider implements RangeProvider {
     }
 
     @Override
+    public long size(String key) {
+        final Map<String, Double> map = store.get(key);
+        return map != null ? map.size() : 0;
+    }
+
+    @Override
     public List<String> getRange(String key, double min, double max, int count, boolean remove) {
         Map<String, Double> map = store.getOrDefault(key, new HashMap<>());
         List<String> result = new ArrayList<>();

@@ -128,4 +128,26 @@ class LocalRangeProviderTest extends Specification {
         !r4
         provider.getRange('foo', 50, 50, 10, false) == ['x']
     }
+
+    def 'size should return the number of members in the key'() {
+        given:
+        def provider = new LocalRangeProvider()
+
+        expect: 'missing key'
+        provider.size('foo') == 0
+
+        when:
+        provider.add('foo', 'x', 1)
+        provider.add('foo', 'y', 2)
+        provider.add('foo', 'x', 3)
+        provider.add('bar', 'z', 1)
+        then: 're-adding a member does not grow the count'
+        provider.size('foo') == 2
+        provider.size('bar') == 1
+
+        when:
+        provider.getRange('foo', 0, 10, 1, true)
+        then:
+        provider.size('foo') == 1
+    }
 }
