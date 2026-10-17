@@ -140,6 +140,9 @@ public class HxClient {
     private final HxConfig config;
     private final HxTokenManager tokenManager;
 
+    // Shared by all anonymous Bearer token requests and created on first use
+    private volatile HttpClient anonymousTokenClient;
+
     /**
      * Creates a new HxClient with the specified HttpClient and configuration.
      * 
@@ -935,10 +938,7 @@ public class HxClient {
                     .timeout(config.getTokenRefreshTimeout())
                     .build();
             
-            HttpClient.Builder tokenClientBuilder = HttpClient.newBuilder();
-            config.applyProxySettings(tokenClientBuilder);
-            HttpClient tokenClient = tokenClientBuilder.build();
-            HttpResponse<String> tokenResponse = tokenClient.send(tokenRequest, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> tokenResponse = anonymousTokenClient().send(tokenRequest, HttpResponse.BodyHandlers.ofString());
             
             if (tokenResponse.statusCode() == 200) {
                 // Parse JSON response to extract token
@@ -962,8 +962,31 @@ public class HxClient {
         } catch (Exception e) {
             log.warn("Failed to get anonymous Bearer token: {}", e.getMessage());
         }
-        
+
         return null;
+    }
+
+    /**
+     * Returns the shared HTTP client used for anonymous Bearer token requests, creating it on
+     * first use. Reusing one client avoids starting (and leaking until GC) a selector thread and
+     * worker pool per request.
+     *
+     * @return the shared anonymous token {@link HttpClient}
+     */
+    private HttpClient anonymousTokenClient() {
+        HttpClient result = anonymousTokenClient;
+        if (result != null) {
+            return result;
+        }
+        synchronized (this) {
+            if (anonymousTokenClient == null) {
+                final HttpClient.Builder builder = HttpClient.newBuilder();
+                // inherit the proxy configuration of the enclosing HxClient
+                config.applyProxySettings(builder);
+                anonymousTokenClient = builder.build();
+            }
+            return anonymousTokenClient;
+        }
     }
 
     /**

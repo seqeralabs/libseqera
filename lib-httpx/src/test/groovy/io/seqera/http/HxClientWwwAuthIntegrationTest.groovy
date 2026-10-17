@@ -106,6 +106,52 @@ class HxClientWwwAuthIntegrationTest extends Specification {
         wireMockServer.verify(1, getRequestedFor(urlPathEqualTo('/token')))
     }
 
+    def "should reuse one HTTP client for anonymous Bearer token requests"() {
+        given: 'endpoint returns 401 with Bearer challenge pointing to local token endpoint'
+        wireMockServer.stubFor(get(urlEqualTo('/v2/repo/manifests/latest'))
+                .withHeader('Authorization', absent())
+                .willReturn(aResponse()
+                        .withStatus(401)
+                        .withHeader('WWW-Authenticate',
+                                "Bearer realm=\"${baseUrl()}/token\",service=\"registry.example.com\"")))
+
+        and: 'token endpoint returns anonymous token'
+        wireMockServer.stubFor(get(urlPathEqualTo('/token'))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader('Content-Type', 'application/json')
+                        .withBody('{"token": "anon-token-123"}')))
+
+        and: 'endpoint succeeds with Bearer token'
+        wireMockServer.stubFor(get(urlEqualTo('/v2/repo/manifests/latest'))
+                .withHeader('Authorization', equalTo('Bearer anon-token-123'))
+                .willReturn(aResponse()
+                        .withStatus(200)))
+
+        and:
+        def config = HxConfig.newBuilder()
+                .wwwAuthentication(true)
+                .build()
+        def client = HxClient.newBuilder().config(config).build()
+        def request = HttpRequest.newBuilder()
+                .uri(URI.create("${baseUrl()}/v2/repo/manifests/latest"))
+                .GET()
+                .build()
+
+        when:
+        def first = client.send(request, HttpResponse.BodyHandlers.ofString())
+        def tokenClient = client.@anonymousTokenClient
+        def second = client.send(request, HttpResponse.BodyHandlers.ofString())
+
+        then: 'each request fetches a token through the same client'
+        first.statusCode() == 200
+        second.statusCode() == 200
+        wireMockServer.verify(2, getRequestedFor(urlPathEqualTo('/token')))
+        and:
+        tokenClient != null
+        client.@anonymousTokenClient.is(tokenClient)
+    }
+
     def "should handle WWW-Authenticate challenge with callback providing Basic credentials"() {
         given: 'endpoint returns 401 with Basic challenge'
         wireMockServer.stubFor(get(urlEqualTo('/api/data'))
