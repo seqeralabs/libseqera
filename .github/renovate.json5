@@ -1,0 +1,73 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+
+  // Renovate runs self-hosted from seqeralabs/renovate-runner, which sets the
+  // bot identity, semantic "chore:" commits, the weekly GitHub Actions window
+  // and a 5-day cooldown before a new release is proposed. Rules here are
+  // merged after those and take precedence.
+  //
+  // A dependency bump doesn't publish anything by itself: a module is only
+  // released when its VERSION file is bumped in a [release] PR.
+
+  // Setting enabledManagers here replaces renovate-runner's actions-only
+  // default, so github-actions has to be listed to keep workflow updates.
+  // Versions are hard-coded in each module's build.gradle and in the buildSrc
+  // convention plugins; the Micronaut versions are properties in
+  // gradle.properties, which the gradle manager resolves and bumps in place
+  // (micronautPlatformVersion through the `micronaut { version … }` block).
+  enabledManagers: ["gradle", "github-actions"],
+
+  packageRules: [
+    {
+      // Majors usually need a migration (Micronaut 5, Groovy 5+, Jedis 8, …)
+      // and may drop Java 17, which the non-Micronaut libraries still target:
+      // wait for approval on the Dependency Dashboard.
+      matchManagers: ["gradle"],
+      matchUpdateTypes: ["major"],
+      dependencyDashboardApproval: true,
+    },
+    {
+      // Micronaut core, test and platform must be bumped together (see
+      // gradle.properties): one PR for all three properties.
+      matchManagers: ["gradle"],
+      matchPackageNames: ["io.micronaut:*", "io.micronaut.test:*", "io.micronaut.platform:*"],
+      groupName: "micronaut",
+    },
+    {
+      // Spock publishes one artifact per Groovy line (2.3-groovy-4.0,
+      // 2.3-groovy-5.0, …). Keep the -groovy-X.Y suffix fixed so Spock follows
+      // the Groovy line in use instead of jumping to another one.
+      matchManagers: ["gradle"],
+      matchPackageNames: ["org.spockframework:*"],
+      versionCompatibility: "^(?<version>.+)-(?<compatibility>groovy-.+)$",
+      groupName: "spock",
+    },
+
+    // ---- Artifacts released in lockstep: one PR per family ----
+    {
+      matchManagers: ["gradle"],
+      matchPackageNames: ["org.apache.groovy:*"],
+      groupName: "groovy",
+    },
+    {
+      matchManagers: ["gradle"],
+      matchPackageNames: ["ch.qos.logback:*"],
+      groupName: "logback",
+    },
+    {
+      matchManagers: ["gradle"],
+      matchPackageNames: ["org.slf4j:*"],
+      groupName: "slf4j",
+    },
+    {
+      matchManagers: ["gradle"],
+      matchPackageNames: ["com.squareup.moshi:*"],
+      groupName: "moshi",
+    },
+    {
+      matchManagers: ["gradle"],
+      matchPackageNames: ["com.fasterxml.jackson.core:*", "com.fasterxml.jackson.datatype:*", "com.fasterxml.jackson.module:*"],
+      groupName: "jackson",
+    },
+  ],
+}
