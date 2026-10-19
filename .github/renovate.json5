@@ -6,6 +6,12 @@
   // and a 5-day cooldown before a new release is proposed. Rules here are
   // merged after those and take precedence.
   //
+  // These are published libraries: a dependency declared in an api or
+  // implementation scope ends up in the module's POM, and Gradle conflict
+  // resolution in Platform, Wave, … picks the highest version it sees. A
+  // library should declare the oldest version it works with, so published
+  // dependencies only get patch PRs here (see the rules below).
+  //
   // A dependency bump doesn't publish anything by itself: a module is only
   // released when its VERSION file is bumped in a [release] PR.
 
@@ -15,23 +21,88 @@
   // convention plugins; the Micronaut versions are properties in
   // gradle.properties, which the gradle manager resolves and bumps in place
   // (micronautPlatformVersion through the `micronaut { version … }` block).
-  enabledManagers: ["gradle", "github-actions"],
+  // gradle-wrapper keeps Gradle itself in step with the plugin bumps.
+  enabledManagers: ["gradle", "gradle-wrapper", "github-actions"],
+
+  // One batch a week, on the Monday run. `schedule` alone only gates branch
+  // creation; updateNotScheduled: false also stops open PRs from being
+  // rebased (and re-running CI) on every nightly run. Security updates keep
+  // renovate-runner's "at any time" schedule.
+  schedule: ["* * * * 1"],
+  updateNotScheduled: false,
+  prConcurrentLimit: 5,
 
   packageRules: [
     {
-      // Majors usually need a migration (Micronaut 5, Groovy 5+, Jedis 8, …)
+      // Majors usually need a migration (Micronaut 5, Jedis 8, Gradle 9, …)
       // and may drop Java 17, which the non-Micronaut libraries still target:
       // wait for approval on the Dependency Dashboard.
-      matchManagers: ["gradle"],
+      matchManagers: ["gradle", "gradle-wrapper"],
       matchUpdateTypes: ["major"],
       dependencyDashboardApproval: true,
     },
     {
-      // Micronaut core, test and platform must be bumped together (see
-      // gradle.properties): one PR for all three properties.
+      // Minors of published dependencies (see the top of this file) wait for
+      // approval on the Dependency Dashboard, so only patches open PRs. The
+      // gradle manager doesn't record the configuration (api, implementation,
+      // testImplementation, …), so the test-only exceptions are listed by
+      // package in the next rule.
       matchManagers: ["gradle"],
-      matchPackageNames: ["io.micronaut:*", "io.micronaut.test:*", "io.micronaut.platform:*"],
+      matchUpdateTypes: ["minor"],
+      dependencyDashboardApproval: true,
+    },
+    {
+      // Only used in test, testFixtures or compileOnly scopes, which don't
+      // reach the published POM: minors open PRs directly. Remove a package
+      // from this list once a module declares it as api or implementation.
+      matchManagers: ["gradle"],
+      matchPackageNames: [
+        "cglib:cglib-nodep",
+        "io.micrometer:micrometer-core",
+        "org.jetbrains:annotations",
+        "org.jspecify:jspecify",
+        "org.objenesis:objenesis",
+        "org.spockframework:*",
+        "org.subethamail:subethasmtp",
+        "org.testcontainers:*",
+      ],
+      matchUpdateTypes: ["minor"],
+      dependencyDashboardApproval: false,
+    },
+
+    // ---- Micronaut ----
+    {
+      // micronautCoreVersion, micronautTestVersion and micronaut-cache follow
+      // what the micronaut-platform BOM ships, which Renovate can't resolve:
+      // it would move each to its own latest release, ahead of the BOM. Only
+      // the platform is bumped here; align core, test and cache by hand in the
+      // same PR to the versions in its BOM.
+      matchManagers: ["gradle"],
+      matchPackageNames: ["io.micronaut:*", "io.micronaut.test:*", "io.micronaut.cache:*"],
+      enabled: false,
+    },
+    {
+      // The platform and the Micronaut Gradle plugin move together (Micronaut
+      // 5 needs plugin 5).
+      matchManagers: ["gradle"],
+      matchPackageNames: ["io.micronaut.platform:*"],
       groupName: "micronaut",
+    },
+    {
+      matchManagers: ["gradle"],
+      matchDepNames: ["io.micronaut.minimal.library"],
+      groupName: "micronaut",
+    },
+
+    // ---- Groovy and Spock ----
+    {
+      // A new Groovy line needs the matching Spock -groovy-X.Y artifact, which
+      // Renovate can't move together with Groovy (see the Spock rule below):
+      // a Groovy major is a manual migration.
+      matchManagers: ["gradle"],
+      matchPackageNames: ["org.apache.groovy:*"],
+      matchUpdateTypes: ["major"],
+      enabled: false,
     },
     {
       // Spock publishes one artifact per Groovy line (2.3-groovy-4.0,
