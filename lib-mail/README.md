@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-mail:1.3.0'
+    implementation 'io.seqera:lib-mail:1.3.2'
 }
 ```
 

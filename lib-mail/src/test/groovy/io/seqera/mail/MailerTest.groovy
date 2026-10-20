@@ -367,6 +367,8 @@ class MailerTest extends Specification {
         mailer.stripHtml('1 < 10 > 5') == '1 < 10 > 5'
         mailer.stripHtml('<h1>1 < 5</h1>') == '1 < 5'
         mailer.stripHtml('<h1>Big title</h1><p>Hello <b>world</b></p>') == 'Big title\nHello world'
+        mailer.stripHtml('Line1<br>Line2<br/>Line3') == 'Line1\nLine2\nLine3'
+        mailer.stripHtml('Tom &amp; Jerry') == 'Tom & Jerry'
     }
 
 
