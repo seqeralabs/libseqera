@@ -36,8 +36,8 @@ dependencies {
 
     // Optional Micrometer instrumentation. Consumers that pass a non-null
     // MeterRegistry to AbstractWorkQueue must provide micrometer-core at runtime.
-    compileOnly        "io.micrometer:micrometer-core:1.12.4"
-    testImplementation "io.micrometer:micrometer-core:1.12.4"
+    compileOnly        "io.micrometer:micrometer-core:1.15.12"
+    testImplementation "io.micrometer:micrometer-core:1.15.12"
 
     // Groovy dependencies only for tests
     testImplementation "org.apache.groovy:groovy:4.0.31"

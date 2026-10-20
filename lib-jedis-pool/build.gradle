@@ -29,13 +29,13 @@ dependencies {
     implementation 'redis.clients:jedis:5.1.4'
 
     compileOnly "io.micronaut:micronaut-inject:${micronautCoreVersion}"
-    compileOnly "io.micrometer:micrometer-core:1.12.4"
+    compileOnly "io.micrometer:micrometer-core:1.15.12"
     implementation "org.slf4j:slf4j-api:2.0.12"
 
     testImplementation "org.apache.groovy:groovy:4.0.31"
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
-    testImplementation "io.micrometer:micrometer-core:1.12.4"
+    testImplementation "io.micrometer:micrometer-core:1.15.12"
     testImplementation testFixtures(project(':lib-fixtures-redis'))
     testImplementation 'org.testcontainers:testcontainers:1.21.4'
 }

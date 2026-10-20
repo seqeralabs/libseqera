@@ -36,7 +36,7 @@ dependencies {
     implementation "io.micronaut:micronaut-runtime:${micronautCoreVersion}"
 
     // Groovy dependencies only for tests
-    testImplementation "io.micrometer:micrometer-core:1.12.4"
+    testImplementation "io.micrometer:micrometer-core:1.15.12"
     testImplementation "org.apache.groovy:groovy:4.0.31"
     testImplementation "org.apache.groovy:groovy-nio:4.0.31"
     testImplementation "org.apache.groovy:groovy-templates:4.0.31"
