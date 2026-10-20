@@ -111,13 +111,14 @@ class CloudInfoClientTest extends Specification {
         fpga.every { AcceleratorFeatures.hasFpga(it.features) }
     }
 
-    def 'should return all products for a provider without a sched allowlist'() {
+    def 'should filter products with sched=true to a subset for google'() {
         given:
-        // sched is a curated allowlist configured only for amazon; a provider
-        // without one (google) treats the sched filter as unknown/no-op and
-        // returns all products. Only sched behaves this way: derived features
-        // such as nvme/ssd genuinely narrow the result, so they are not asserted
-        // here (see the amazon nvme=true subset test above).
+        // sched is a curated allowlist of Scheduler-supported families maintained by
+        // the CloudInfo service. Which providers have one, and what it contains, is
+        // service configuration that changes without a client release (google used to
+        // have none and returned every product; it now excludes TPU and shared-core
+        // types). Assert the filter is a subset like the nvme test above, not a
+        // specific count.
         def query = ProductsQuery.builder().sched(true).build()
 
         when:
@@ -125,6 +126,9 @@ class CloudInfoClientTest extends Specification {
         def filtered = client.getProducts('google', 'us-central1', query)
 
         then:
-        filtered.size() == all.size()
+        filtered.size() > 0
+        filtered.size() <= all.size()
+        def allTypes = all*.type as Set
+        filtered.every { allTypes.contains(it.type) }
     }
 }
