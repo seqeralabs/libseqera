@@ -64,6 +64,10 @@ dependencies {
     testImplementation project(':lib-retry')
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
     testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
+    // micronaut-test imports micronaut-core-bom 4.10.7, whose jackson-bom 2.19.2 constraint
+    // lifts lib-serde-jackson's pin on this test classpath into the CVE-2026-89407 /
+    // CVE-2026-89425 range. A higher BOM wins the constraint; 2.21.7 is the fixed release.
+    testImplementation platform('com.fasterxml.jackson:jackson-bom:2.21.7')
     testImplementation 'org.apache.groovy:groovy'
     testImplementation 'com.github.f4b6a3:tsid-creator:5.2.6'
     testImplementation 'org.junit.jupiter:junit-jupiter-api'
