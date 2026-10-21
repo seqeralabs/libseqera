@@ -30,7 +30,7 @@ dependencies {
     implementation "org.apache.groovy:groovy-nio:4.0.31"
     implementation "org.apache.groovy:groovy-templates:4.0.31"
     api "com.sun.mail:javax.mail:1.6.2"
-    api "org.jsoup:jsoup:1.15.3"
+    api "org.jsoup:jsoup:1.23.2"
     implementation("io.micronaut:micronaut-runtime:${micronautCoreVersion}")
     implementation project(':lib-commons-io')
 
