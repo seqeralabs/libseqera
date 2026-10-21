@@ -32,7 +32,6 @@ dependencies {
 
     testImplementation "org.apache.groovy:groovy:4.0.31"
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
-    testImplementation "io.micronaut.test:micronaut-test-spock:${micronautTestVersion}"
 }
 
 test {
