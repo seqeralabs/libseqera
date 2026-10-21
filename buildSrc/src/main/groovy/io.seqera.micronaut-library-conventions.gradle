@@ -37,3 +37,11 @@ tasks.withType(GroovyCompile).configureEach {
     sourceCompatibility = '25'
     targetCompatibility = '25'
 }
+
+dependencies {
+    // micronaut-test-spock imports micronaut-core-bom 4.10.7 into every test classpath; any
+    // core artifact that nothing else requests at the project version silently resolves to
+    // 4.10.7 (see Dependabot #19 on micronaut-context, #114/#115 on its jackson-bom).
+    // Importing the project's own core BOM keeps all core modules at micronautCoreVersion.
+    testImplementation platform("io.micronaut:micronaut-core-bom:${micronautCoreVersion}")
+}
