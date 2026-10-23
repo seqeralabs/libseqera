@@ -165,20 +165,38 @@ public class CloudInfoClient {
      * equivalent to {@link #getProducts(String, String)} and all products are
      * returned. Unknown filters for a provider are ignored server-side.
      *
+     * <p>The GPU filters need cloudinfo 0.30.0. An older backend ignores them and
+     * returns every product, so a GPU-filtered response holding a product without
+     * {@code gpuModel} is rejected rather than returned unfiltered.
+     *
      * @param provider the cloud provider identifier (e.g., "amazon", "google", "azure")
      * @param region the region identifier (e.g., "us-east-1", "europe-west1")
      * @param query optional filters to apply to the request; may be {@code null}
      * @return list of compute products with pricing
-     * @throws CloudInfoException if the request fails
+     * @throws CloudInfoException if the request fails, or GPU filters are set and the backend doesn't apply them
      */
     public List<CloudProduct> getProducts(String provider, String region, ProductsQuery query) {
         String what = String.format("products for provider=%s, region=%s", provider, region);
         String url = path("providers", provider, "services", "compute", "regions", region, "products")
                 + buildQueryString(query);
         CloudResponse cloudResponse = fetch(url, Duration.ofSeconds(60), what, RESPONSE_ENCODER);
-        return cloudResponse != null && cloudResponse.getProducts() != null
+        List<CloudProduct> products = cloudResponse != null && cloudResponse.getProducts() != null
                 ? cloudResponse.getProducts()
                 : Collections.emptyList();
+        // on 0.30.0 every product passing a GPU filter has a gpuModel; one without means the filters were ignored
+        if (hasGpuFilter(query) && products.stream().anyMatch(p -> p.getGpuModel() == null)) {
+            throw new CloudInfoException(String.format(
+                    "Failed to fetch %s: the backend ignored the GPU filters, cloudinfo 0.30.0 or later is required", what), -1);
+        }
+        return products;
+    }
+
+    private static boolean hasGpuFilter(ProductsQuery query) {
+        return query != null
+                && ((query.getGpuModels() != null && !query.getGpuModels().isEmpty())
+                || query.getMinGpuCapability() != null
+                || query.getCuda() != null
+                || query.getMinGpuMemoryGB() != null);
     }
 
     /**

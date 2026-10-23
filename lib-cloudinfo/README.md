@@ -63,6 +63,9 @@ return an empty result for that filter.
   target (`?cuda=12.4`).
 - `minGpuMemoryGB(Long)` — keep only products with at least this many GB per
   GPU; a fractional GPU counts its share of the card (`?minGpuMemoryGB=40`).
+
+  The GPU filters need cloudinfo 0.30.0. A backend older than that ignores them,
+  so `getProducts` throws `CloudInfoException` rather than return unfiltered products.
 - `sched(boolean)` / `nvme(boolean)` — the original boolean filters, retained
   for backward compatibility (`sched=true` ≡ `features=sched`, `nvme=true` ≡
   `features=ssd`). Prefer `features(...)` for new code.

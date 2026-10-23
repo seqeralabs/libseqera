@@ -29,7 +29,7 @@ import java.util.Objects;
  * sched/nvme - the original boolean filters, kept for backward compatibility
  * (the backend treats sched=true as features=sched and nvme=true as features=ssd).
  * gpuModels, minGpuCapability, cuda, minGpuMemoryGB - GPU filters, from cloudinfo
- * 0.30.0; an older backend ignores them and returns every product.
+ * 0.30.0; an older backend ignores them, and CloudInfoClient.getProducts then throws.
  *
  * Value-based equals/hashCode make instances safe as map or cache keys. Any new
  * field must be added to both; ProductsQueryTest guards this by reflection.
