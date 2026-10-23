@@ -72,6 +72,16 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
         protected String getName() { return 'foo' }
     }
 
+    static class MyL1TtlCache extends MyCache {
+
+        MyL1TtlCache(L2TieredCache<String,String> l2) {
+            super(l2)
+        }
+
+        @Override
+        protected Duration getL1Ttl() { return Duration.ofMillis(200) }
+    }
+
     @Shared
     ApplicationContext context
 
@@ -166,6 +176,50 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
         sleep TTL.toMillis() *2
         then:
         cache1.get(k) == null
+    }
+
+    def 'should serve a value rewritten by another instance once the L1 TTL passes' () {
+        given:
+        def TTL = Duration.ofMinutes(1)
+        def store = context.getBean(RedisL2TieredCache)
+        def reader = new MyL1TtlCache(store)
+        def writer = new MyCache(store)
+        and:
+        def k = UUID.randomUUID().toString()
+
+        when:
+        writer.put(k, new MyBean('x','1'), TTL)
+        then:
+        reader.get(k) == new MyBean('x','1')
+
+        when: 'another instance rewrites the value'
+        writer.put(k, new MyBean('x','2'), TTL)
+        then: 'the reader serves its L1 copy until the L1 TTL passes'
+        reader.get(k) == new MyBean('x','1')
+
+        when:
+        sleep 400
+        then: 'then reads the new value from L2'
+        reader.get(k) == new MyBean('x','2')
+    }
+
+    def 'should keep serving the L1 copy without an L1 TTL' () {
+        given:
+        def TTL = Duration.ofMinutes(1)
+        def store = context.getBean(RedisL2TieredCache)
+        def reader = new MyCache(store)
+        def writer = new MyCache(store)
+        and:
+        def k = UUID.randomUUID().toString()
+
+        when:
+        writer.put(k, new MyBean('x','1'), TTL)
+        reader.get(k)
+        and:
+        writer.put(k, new MyBean('x','2'), TTL)
+        sleep 400
+        then:
+        reader.get(k) == new MyBean('x','1')
     }
 
     def 'should get or compute a value' () {

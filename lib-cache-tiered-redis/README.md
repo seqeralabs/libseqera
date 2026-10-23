@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-cache-tiered-redis:1.1.1'
+    implementation 'io.seqera:lib-cache-tiered-redis:1.2.0'
 }
 ```
 
@@ -56,6 +56,20 @@ public class UserCache extends AbstractTieredCache<String, User> {
     protected String getName() {
         return "user-cache";
     }
+}
+```
+
+### L1 TTL
+
+By default an L1 entry lives as long as the value's TTL, so an instance holding a key in L1 does
+not see a newer value another instance writes to L2 until that TTL passes. When values are
+rewritten during their lifetime, for example refreshed periodically under a long TTL, override
+`getL1Ttl()` to bound how long a value is served from L1 before it is read again from L2:
+
+```java
+@Override
+protected Duration getL1Ttl() {
+    return Duration.ofMinutes(5);
 }
 ```
 

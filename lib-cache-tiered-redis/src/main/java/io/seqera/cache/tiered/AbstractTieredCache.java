@@ -158,11 +158,15 @@ public abstract class AbstractTieredCache<K, V extends Encodable> implements Tie
                 return l1;
             }
 
-            log.info("Cache '{}' config - prefix={}; max-size: {}", getName(), getPrefix(), getMaxSize());
-            l1 = Caffeine.newBuilder()
+            final Duration l1Ttl = getL1Ttl();
+            log.info("Cache '{}' config - prefix={}; max-size: {}; l1-ttl: {}", getName(), getPrefix(), getMaxSize(), l1Ttl);
+            final Caffeine<String, Entry> builder = Caffeine.newBuilder()
                     .maximumSize(getMaxSize())
-                    .removalListener(createRemovalListener())
-                    .build();
+                    .removalListener(createRemovalListener());
+            if (l1Ttl != null) {
+                builder.expireAfterWrite(l1Ttl);
+            }
+            l1 = builder.build();
             return l1;
         } finally {
             sync.unlock();
@@ -175,6 +179,21 @@ public abstract class AbstractTieredCache<K, V extends Encodable> implements Tie
      * @return the maximum number of entries in the L1 cache
      */
     protected abstract int getMaxSize();
+
+    /**
+     * Returns how long a value may be served from the L1 (local) cache before it is read
+     * again from the L2 cache, regardless of the value's own TTL.
+     *
+     * <p>Without it an L1 entry lives as long as the value's TTL, so a value another instance
+     * writes to L2 is not seen by an instance holding the key in L1 until that TTL passes. Set it
+     * when values are rewritten during their lifetime (e.g. refreshed periodically under a long
+     * TTL): an instance then sees the new value within this duration.</p>
+     *
+     * @return the maximum L1 lifetime of an entry, or {@code null} to bound it by the value's TTL only (default)
+     */
+    protected Duration getL1Ttl() {
+        return null;
+    }
 
     /**
      * Returns the name of this cache for logging and identification purposes.
