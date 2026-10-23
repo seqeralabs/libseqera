@@ -79,7 +79,7 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
         }
 
         @Override
-        protected Duration getL1Ttl() { return Duration.ofMillis(200) }
+        protected Duration getL1Ttl() { return Duration.ofSeconds(1) }
     }
 
     @Shared
@@ -198,7 +198,7 @@ class AbstractTieredCacheTest extends Specification implements RedisTestContaine
         reader.get(k) == new MyBean('x','1')
 
         when:
-        sleep 400
+        sleep 1500
         then: 'then reads the new value from L2'
         reader.get(k) == new MyBean('x','2')
     }

@@ -189,6 +189,9 @@ public abstract class AbstractTieredCache<K, V extends Encodable> implements Tie
      * when values are rewritten during their lifetime (e.g. refreshed periodically under a long
      * TTL): an instance then sees the new value within this duration.</p>
      *
+     * <p>{@code Duration.ZERO} disables L1 for this cache: every read goes to L2 and nothing is
+     * served from L1.</p>
+     *
      * @return the maximum L1 lifetime of an entry, or {@code null} to bound it by the value's TTL only (default)
      */
     protected Duration getL1Ttl() {
