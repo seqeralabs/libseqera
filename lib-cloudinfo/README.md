@@ -10,7 +10,7 @@ Add the dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-cloudinfo:2.2.0'
+    implementation 'io.seqera:lib-cloudinfo:2.3.0'
 }
 ```
 
@@ -54,6 +54,15 @@ return an empty result for that filter.
 - `families(List<String>)` — keep only products in the given machine families
   or matching the given instance-type names. Serialised as
   `?families=m5d,c5.large`.
+- `gpuModels(List<String>)` — keep only products whose canonical `gpuModel` is
+  **any** of the given IDs. Serialised as `?gpuModel=nvidia-t4,nvidia-l4`.
+- `minGpuCapability(String)` — keep only products whose NVIDIA CUDA compute
+  capability is at least this `major.minor` version (`?minGpuCapability=8.0`
+  keeps Ampere and newer).
+- `cuda(String)` — keep only products whose GPU this CUDA toolkit release can
+  target (`?cuda=12.4`).
+- `minGpuMemoryGB(Long)` — keep only products with at least this many GB per
+  GPU; a fractional GPU counts its share of the card (`?minGpuMemoryGB=40`).
 - `sched(boolean)` / `nvme(boolean)` — the original boolean filters, retained
   for backward compatibility (`sched=true` ≡ `features=sched`, `nvme=true` ≡
   `features=ssd`). Prefer `features(...)` for new code.
@@ -133,6 +142,41 @@ All are `null` when the provider doesn't report them, and on older backends.
 The flags (`ephemeralOSDiskSupported`, `premiumIO`,
 `acceleratedNetworkingEnabled`, `isSharedCpu`) are primitive `boolean`s:
 CloudInfo omits them when false, so an absent flag reads as `false`.
+
+### GPU Model, Capability and Memory
+
+From cloudinfo 0.30.0, every GPU product carries cloud-neutral GPU facts, so
+the same GPU can be asked for on every provider without a per-cloud table:
+
+| Field | Example | Meaning |
+|-------|---------|---------|
+| `gpuModel` | `nvidia-a10g` | Canonical GPU model ID, the same on every provider. Memory appears in the ID only for models sold in several sizes (`nvidia-a100-40gb`, `nvidia-a100-80gb`). |
+| `gpuVendor` | `nvidia` | `nvidia` or `amd`. |
+| `gpuCapability` | `8.6` | NVIDIA CUDA compute capability. Compare numerically: `10.0` is above `9.0`. |
+| `gpuArch` | `ampere` | Architecture of the capability. |
+| `gpuCudaMin` / `gpuCudaMax` | `11.1` / null | CUDA toolkit releases that can target the GPU; `gpuCudaMax` is null while still supported (K80 has `11.8`). |
+| `gpuMemoryGB` | `24` | Memory of one whole GPU as the vendor states it. A fractional GPU still reports the whole card. |
+
+All are `null` for CPU-only, TPU, Inferentia and Trainium types, for GPUs not
+mapped yet, and on older backends. The CUDA fields are `null` for AMD GPUs and
+for parts whose chip is not disclosed. `gpuMemoryMiB` stays the provider's own
+total for the instance; from 0.30.0 it is derived as
+`gpusPerVm x gpuMemoryGB x 1024` where the provider reports none (Azure).
+
+```java
+ProductsQuery query = ProductsQuery.builder()
+    .gpuModels(List.of("nvidia-a100-80gb", "nvidia-h100"))
+    .cuda("12.4")
+    .minGpuMemoryGB(40L)
+    .build();
+
+for (CloudProduct p : client.getProducts("google", "us-central1", query)) {
+    // p.getGpuModel(), p.getGpuCapability(), p.getGpuMemoryGB(), ...
+}
+```
+
+The CUDA range is what the toolkit supports, not what the driver of a given
+machine image provides.
 
 ### Custom Configuration
 

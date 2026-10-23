@@ -109,6 +109,42 @@ class CloudInfoClientMockTest extends Specification {
         q.contains('/products?sched=true&nvme=true&features=gpu&families=p4d')
     }
 
+    def 'getProducts serializes the GPU filters'() {
+        given:
+        def http = Mock(HxClient)
+        URI captured = null
+        http.sendAsString(_) >> { HttpRequest req -> captured = req.uri(); ok('{"products":[]}') }
+        def client = clientWith(http)
+        def query = ProductsQuery.builder()
+                .features(['gpu'])
+                .gpuModels(['nvidia-a100-80gb', 'nvidia-h100'])
+                .minGpuCapability('8.0')
+                .cuda('12.4')
+                .minGpuMemoryGB(40L)
+                .build()
+
+        when:
+        client.getProducts('amazon', 'us-east-1', query)
+
+        then:
+        captured.toString().endsWith(
+                '/products?features=gpu&gpuModel=nvidia-a100-80gb,nvidia-h100&minGpuCapability=8.0&cuda=12.4&minGpuMemoryGB=40')
+    }
+
+    def 'getProducts percent-encodes the GPU filter values'() {
+        given:
+        def http = Mock(HxClient)
+        URI captured = null
+        http.sendAsString(_) >> { HttpRequest req -> captured = req.uri(); ok('{"products":[]}') }
+        def client = clientWith(http)
+
+        when:
+        client.getProducts('amazon', 'us-east-1', ProductsQuery.builder().cuda('12.4&x=1').build())
+
+        then:
+        captured.toString().endsWith('/products?cuda=12.4%26x%3D1')
+    }
+
     def 'getProducts with no query emits no query string'() {
         given:
         def http = Mock(HxClient)

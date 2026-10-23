@@ -85,8 +85,51 @@ public class CloudProduct {
     private Long ebsBaselineIops;
     /** Total size of the bundled instance-store disks, in GB. */
     private Long instanceStoreGB;
-    /** Total GPU memory across every GPU of the instance, in MiB (amazon and google). */
+    /**
+     * Total GPU memory across every GPU of the instance, in MiB, as the provider
+     * reports it (amazon, google, alibaba). From cloudinfo 0.30.0, where the
+     * provider reports none (azure, retired amazon types) it is derived as
+     * {@code gpusPerVm x gpuMemoryGB x 1024}, so a fractional GPU gets its share.
+     */
     private Long gpuMemoryMiB;
+
+    /*
+     * Cross-provider GPU facts, from cloudinfo 0.30.0 (seqeralabs/cloudinfo#130,
+     * #132); null for CPU-only, TPU, Inferentia and Trainium types, for GPUs not
+     * mapped yet, and on older backends.
+     */
+    /**
+     * Canonical cloud-neutral GPU model ID, the same on every provider:
+     * {@code <vendor>-<model>} (nvidia-t4, nvidia-h100, amd-mi300x), with the memory
+     * of one GPU only for a model that ships in several sizes (nvidia-a100-40gb,
+     * nvidia-a100-80gb). IDs are never renamed once published. Also accepted by the
+     * gpuModels filter on ProductsQuery.
+     */
+    private String gpuModel;
+    /** GPU vendor (nvidia, amd), the prefix of {@link #gpuModel}. */
+    private String gpuVendor;
+    /**
+     * NVIDIA CUDA compute capability of the GPU, as {@code major.minor} (e.g. "8.6");
+     * null for non-NVIDIA GPUs and for parts whose chip is not disclosed. Compare it
+     * numerically, not as text ("10.0" is above "9.0").
+     */
+    private String gpuCapability;
+    /** GPU architecture of {@link #gpuCapability} (kepler, ..., ampere, ada, hopper, blackwell). */
+    private String gpuArch;
+    /** First CUDA toolkit release that targets {@link #gpuCapability} (e.g. "11.8"); set whenever it is. */
+    private String gpuCudaMin;
+    /**
+     * Last CUDA toolkit release that targets {@link #gpuCapability} (e.g. "11.8" for
+     * Kepler K80); null while the current release still does. The CUDA range is
+     * what the toolkit supports, not what the driver of a machine image provides.
+     */
+    private String gpuCudaMax;
+    /**
+     * Memory of one whole GPU, in GB, as the vendor states it and the same on every
+     * provider (e.g. 24 for nvidia-a10g, although amazon reports 22 GiB in
+     * {@link #gpuMemoryMiB}). A fractional GPU still reports the whole card.
+     */
+    private Long gpuMemoryGB;
 
     /*
      * Azure-only Resource SKU capabilities, under Azure's names and units; null when the
@@ -323,6 +366,62 @@ public class CloudProduct {
         this.gpuMemoryMiB = gpuMemoryMiB;
     }
 
+    public String getGpuModel() {
+        return gpuModel;
+    }
+
+    public void setGpuModel(String gpuModel) {
+        this.gpuModel = gpuModel;
+    }
+
+    public String getGpuVendor() {
+        return gpuVendor;
+    }
+
+    public void setGpuVendor(String gpuVendor) {
+        this.gpuVendor = gpuVendor;
+    }
+
+    public String getGpuCapability() {
+        return gpuCapability;
+    }
+
+    public void setGpuCapability(String gpuCapability) {
+        this.gpuCapability = gpuCapability;
+    }
+
+    public String getGpuArch() {
+        return gpuArch;
+    }
+
+    public void setGpuArch(String gpuArch) {
+        this.gpuArch = gpuArch;
+    }
+
+    public String getGpuCudaMin() {
+        return gpuCudaMin;
+    }
+
+    public void setGpuCudaMin(String gpuCudaMin) {
+        this.gpuCudaMin = gpuCudaMin;
+    }
+
+    public String getGpuCudaMax() {
+        return gpuCudaMax;
+    }
+
+    public void setGpuCudaMax(String gpuCudaMax) {
+        this.gpuCudaMax = gpuCudaMax;
+    }
+
+    public Long getGpuMemoryGB() {
+        return gpuMemoryGB;
+    }
+
+    public void setGpuMemoryGB(Long gpuMemoryGB) {
+        this.gpuMemoryGB = gpuMemoryGB;
+    }
+
     public String getQuotaFamily() {
         return quotaFamily;
     }
@@ -550,6 +649,13 @@ public class CloudProduct {
                 Objects.equals(ebsBaselineIops, that.ebsBaselineIops) &&
                 Objects.equals(instanceStoreGB, that.instanceStoreGB) &&
                 Objects.equals(gpuMemoryMiB, that.gpuMemoryMiB) &&
+                Objects.equals(gpuModel, that.gpuModel) &&
+                Objects.equals(gpuVendor, that.gpuVendor) &&
+                Objects.equals(gpuCapability, that.gpuCapability) &&
+                Objects.equals(gpuArch, that.gpuArch) &&
+                Objects.equals(gpuCudaMin, that.gpuCudaMin) &&
+                Objects.equals(gpuCudaMax, that.gpuCudaMax) &&
+                Objects.equals(gpuMemoryGB, that.gpuMemoryGB) &&
                 Objects.equals(quotaFamily, that.quotaFamily) &&
                 Objects.equals(ephemeralOSDiskSupported, that.ephemeralOSDiskSupported) &&
                 Objects.equals(supportedEphemeralOSDiskPlacements, that.supportedEphemeralOSDiskPlacements) &&
@@ -580,6 +686,7 @@ public class CloudProduct {
                 ntwPerf, ntwPerfCategory, onDemandPrice, zones, spotPrice, attributes, features,
                 ebsMaxBandwidthMbps, ebsBaselineBandwidthMbps, ebsMaxThroughputMBps,
                 ebsBaselineThroughputMBps, ebsMaxIops, ebsBaselineIops, instanceStoreGB, gpuMemoryMiB,
+                gpuModel, gpuVendor, gpuCapability, gpuArch, gpuCudaMin, gpuCudaMax, gpuMemoryGB,
                 quotaFamily, ephemeralOSDiskSupported, supportedEphemeralOSDiskPlacements, cachedDiskBytes,
                 nvmeDiskSizeInMiB, maxResourceVolumeMB, uncachedDiskIOPS, uncachedDiskBytesPerSecond,
                 hyperVGenerations, diskControllerTypes, maxDataDiskCount, premiumIO,
@@ -612,6 +719,13 @@ public class CloudProduct {
                 ", ebsBaselineIops=" + ebsBaselineIops +
                 ", instanceStoreGB=" + instanceStoreGB +
                 ", gpuMemoryMiB=" + gpuMemoryMiB +
+                ", gpuModel=" + gpuModel +
+                ", gpuVendor=" + gpuVendor +
+                ", gpuCapability=" + gpuCapability +
+                ", gpuArch=" + gpuArch +
+                ", gpuCudaMin=" + gpuCudaMin +
+                ", gpuCudaMax=" + gpuCudaMax +
+                ", gpuMemoryGB=" + gpuMemoryGB +
                 ", quotaFamily=" + quotaFamily +
                 ", ephemeralOSDiskSupported=" + ephemeralOSDiskSupported +
                 ", supportedEphemeralOSDiskPlacements=" + supportedEphemeralOSDiskPlacements +

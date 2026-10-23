@@ -376,6 +376,10 @@ public class CloudInfoClient {
         }
         appendCsvParam(sb, "features", query.getFeatures());
         appendCsvParam(sb, "families", query.getFamilies());
+        appendCsvParam(sb, "gpuModel", query.getGpuModels());
+        appendValueParam(sb, "minGpuCapability", query.getMinGpuCapability());
+        appendValueParam(sb, "cuda", query.getCuda());
+        appendValueParam(sb, "minGpuMemoryGB", query.getMinGpuMemoryGB());
         return sb.toString();
     }
 
@@ -388,6 +392,12 @@ public class CloudInfoClient {
 
     private static void appendParam(StringBuilder sb, String param) {
         sb.append(sb.length() == 0 ? '?' : '&').append(param);
+    }
+
+    private static void appendValueParam(StringBuilder sb, String name, Object value) {
+        if (value != null) {
+            appendParam(sb, name + "=" + URLEncoder.encode(value.toString(), StandardCharsets.UTF_8));
+        }
     }
 
     private static void appendCsvParam(StringBuilder sb, String name, List<String> values) {
