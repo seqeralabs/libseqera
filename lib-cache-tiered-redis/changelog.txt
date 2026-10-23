@@ -1,5 +1,8 @@
 # lib-cache-tiered-redis changelog
 
+1.2.1 - 23 Oct 2026
+- Expose Caffeine as an api dependency, so a subclass declared as a Micronaut bean gets its bean definition generated
+
 1.2.0 - 23 Oct 2026
 - Add optional L1 TTL (getL1Ttl) so an instance sees a value rewritten in L2 by another instance
 

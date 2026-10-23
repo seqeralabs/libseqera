@@ -27,8 +27,9 @@ version = "${project.file('VERSION').text.trim()}"
 dependencies {
     api project(':lib-serde')
 
-    // Caffeine for L1 cache
-    implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+    // Caffeine for L1 cache. api: AbstractTieredCache keeps the L1 in a Caffeine-typed field, so a
+    // subclass declared as a Micronaut bean needs Caffeine to compile its bean definition
+    api 'com.github.ben-manes.caffeine:caffeine:3.1.8'
 
     // Jedis for Redis L2 cache
     implementation 'redis.clients:jedis:5.1.3'
