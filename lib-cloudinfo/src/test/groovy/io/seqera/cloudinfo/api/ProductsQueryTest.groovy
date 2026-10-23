@@ -60,6 +60,28 @@ class ProductsQueryTest extends Specification {
                 ProductsQuery.builder().features(['gpu', 'nvidia']).families(['p4d']).build()
     }
 
+    def 'equals distinguishes the GPU filters'() {
+        expect:
+        ProductsQuery.builder().gpuModels(['nvidia-t4']).minGpuCapability('8.0').cuda('12.4').minGpuMemoryGB(40L).build() ==
+                ProductsQuery.builder().gpuModels(['nvidia-t4']).minGpuCapability('8.0').cuda('12.4').minGpuMemoryGB(40L).build()
+        ProductsQuery.builder().gpuModels(['nvidia-t4']).build() != ProductsQuery.builder().gpuModels(['nvidia-l4']).build()
+        ProductsQuery.builder().minGpuCapability('8.0').build() != ProductsQuery.builder().minGpuCapability('9.0').build()
+        ProductsQuery.builder().cuda('12.4').build() != ProductsQuery.builder().cuda('11.8').build()
+        ProductsQuery.builder().minGpuMemoryGB(40L).build() != ProductsQuery.builder().minGpuMemoryGB(80L).build()
+    }
+
+    def 'gpuModels is copied, so a later change to the caller list does not leak in'() {
+        given:
+        def models = ['nvidia-t4']
+        def q = ProductsQuery.builder().gpuModels(models).build()
+
+        when:
+        models << 'nvidia-l4'
+
+        then:
+        q.gpuModels == ['nvidia-t4']
+    }
+
     def 'hashCode is consistent with equals'() {
         given:
         def a = ProductsQuery.builder().sched(true).nvme(false).build()
