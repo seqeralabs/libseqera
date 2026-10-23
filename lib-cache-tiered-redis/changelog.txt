@@ -1,5 +1,8 @@
 # lib-cache-tiered-redis changelog
 
+1.2.0 - 23 Oct 2026
+- Add optional L1 TTL (getL1Ttl) so an instance sees a value rewritten in L2 by another instance
+
 1.1.1 - 15 Oct 2026
 - Fix per-key lock not serialising concurrent computes of equal keys (#151)
 
