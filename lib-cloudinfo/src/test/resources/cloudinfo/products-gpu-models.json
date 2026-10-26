@@ -1,0 +1,148 @@
+{
+  "products": [
+    {
+      "type": "g5.xlarge",
+      "family": "g5",
+      "category": "GPU instance",
+      "cpusPerVm": 4,
+      "memPerVm": 16,
+      "gpusPerVm": 1,
+      "currentGen": true,
+      "features": [
+        "a10g",
+        "gpu",
+        "nvidia",
+        "sched",
+        "ssd",
+        "x86"
+      ],
+      "gpuMemoryMiB": 22888,
+      "gpuModel": "nvidia-a10g",
+      "gpuVendor": "nvidia",
+      "gpuCapability": "8.6",
+      "gpuArch": "ampere",
+      "gpuCudaMin": "11.1",
+      "gpuMemoryGB": 24
+    },
+    {
+      "type": "p2.xlarge",
+      "family": "p2",
+      "category": "GPU instance",
+      "cpusPerVm": 4,
+      "memPerVm": 61,
+      "gpusPerVm": 1,
+      "currentGen": true,
+      "gpuModel": "nvidia-k80",
+      "gpuVendor": "nvidia",
+      "gpuCapability": "3.7",
+      "gpuArch": "kepler",
+      "gpuCudaMin": "6.5",
+      "gpuCudaMax": "11.8"
+    },
+    {
+      "type": "m5.large",
+      "family": "m5",
+      "category": "General purpose",
+      "cpusPerVm": 2,
+      "memPerVm": 8,
+      "gpusPerVm": 0,
+      "currentGen": true,
+      "features": [
+        "hibernation",
+        "sched",
+        "x86"
+      ]
+    },
+    {
+      "type": "Standard_NV6ads_A10_v5",
+      "family": "NVADSA10v5",
+      "cpusPerVm": 6,
+      "memPerVm": 55,
+      "gpusPerVm": 0.16666666666666666,
+      "currentGen": false,
+      "features": [
+        "a10",
+        "gpu",
+        "hibernation",
+        "nvidia",
+        "sched",
+        "tempdisk",
+        "x86"
+      ],
+      "gpuModel": "nvidia-a10",
+      "gpuVendor": "nvidia",
+      "gpuCapability": "8.6",
+      "gpuArch": "ampere",
+      "gpuCudaMin": "11.1",
+      "gpuMemoryGB": 24,
+      "gpuMemoryMiB": 4096
+    },
+    {
+      "type": "a3-highgpu-8g",
+      "family": "a3",
+      "category": "General purpose",
+      "cpusPerVm": 208,
+      "memPerVm": 1872,
+      "gpusPerVm": 8,
+      "currentGen": false,
+      "features": [
+        "gpu",
+        "h100-80gb",
+        "nvidia",
+        "sched",
+        "ssd",
+        "x86"
+      ],
+      "gpuMemoryMiB": 655360,
+      "acceleratorType": "nvidia-h100-80gb",
+      "gpuModel": "nvidia-h100",
+      "gpuVendor": "nvidia",
+      "gpuCapability": "9.0",
+      "gpuArch": "hopper",
+      "gpuCudaMin": "11.8",
+      "gpuMemoryGB": 80
+    },
+    {
+      "type": "Standard_ND96isr_MI300X_v5",
+      "family": "NDISv5MI300X",
+      "cpusPerVm": 96,
+      "memPerVm": 1850,
+      "gpusPerVm": 8,
+      "currentGen": false,
+      "features": [
+        "amd",
+        "gpu",
+        "mi300x",
+        "sched",
+        "ssd",
+        "tempdisk",
+        "x86"
+      ],
+      "gpuModel": "amd-mi300x",
+      "gpuVendor": "amd",
+      "gpuMemoryGB": 192,
+      "gpuMemoryMiB": 1572864
+    },
+    {
+      "type": "ecs.gn8v.4xlarge",
+      "family": "gn8v",
+      "category": "GPU instance",
+      "cpusPerVm": 16,
+      "memPerVm": 96,
+      "gpusPerVm": 1,
+      "currentGen": false,
+      "features": [
+        "gpu",
+        "gpu-h",
+        "nvidia",
+        "sched",
+        "x86"
+      ],
+      "gpuMemoryMiB": 98304,
+      "acceleratorType": "nvidia-gpu-h",
+      "gpuModel": "nvidia-gpu-h",
+      "gpuVendor": "nvidia",
+      "gpuMemoryGB": 96
+    }
+  ]
+}
