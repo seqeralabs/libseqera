@@ -8,7 +8,7 @@ Add this dependency to your `build.gradle`:
 
 ```gradle
 dependencies {
-    implementation 'io.seqera:lib-data-range-redis:1.1.0'
+    implementation 'io.seqera:lib-data-range-redis:1.2.0'
 }
 ```
 
@@ -90,6 +90,7 @@ class ScheduledTaskService implements Runnable {
 - `add(String member, double score)` - Add an entry with a timestamp score (overwrites the existing score if the member is already present)
 - `addIfLess(String member, double score)` - Add the entry, or update its score only when the new score is strictly less than the current one; returns `true` if applied, `false` if an earlier-or-equal score was kept. Atomic on Redis via `ZADD ... LT CH`
 - `getRange(double min, double max, int count)` - Retrieve entries within a score range
+- `size()` - Return the number of entries in the store (Redis `ZCARD`), e.g. for queue-depth metrics
 
 The score typically represents epoch seconds, making it easy to schedule entries for future processing.
 

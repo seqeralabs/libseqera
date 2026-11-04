@@ -1,5 +1,10 @@
 # lib-data-range-redis changelog
 
+1.2.0 - 27 Sep 2026
+- Add `size()` to RangeStore / `size(key)` to RangeProvider — number of entries in the store, for queue-depth metrics
+- Implement on RedisRangeProvider via native `ZCARD`
+- Implement on LocalRangeProvider via in-memory map size
+
 1.1.0 - 09 May 2026
 - Add `addIfLess(member, score)` to RangeStore / RangeProvider — atomic "add or update if new score is strictly less" semantics
 - Implement on RedisRangeProvider via native `ZADD ... LT CH`

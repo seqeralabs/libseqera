@@ -43,4 +43,10 @@ public interface RangeStore {
     boolean addIfLess(String member, double score);
 
     List<String> getRange(double min, double max, int count);
+
+    /**
+     * @return the number of entries currently held in the store
+     *         (Redis {@code ZCARD}); useful for queue-depth metrics
+     */
+    long size();
 }
