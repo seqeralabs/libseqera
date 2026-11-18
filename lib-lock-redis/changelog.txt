@@ -1,5 +1,8 @@
 # lib-lock-redis changelog
 
+1.1.1
+- Release the lock key when the watchdog fails to start (e.g. the scheduler rejects the task during shutdown), instead of leaving it held until it expires
+
 1.1.0
 - Add watchdog auto-renewal that renews lock TTL at ttl/3 interval while holder is alive
 - Use atomic Lua script for ownership-checked TTL renewal

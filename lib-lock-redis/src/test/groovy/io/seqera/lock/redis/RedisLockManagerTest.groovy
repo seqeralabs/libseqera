@@ -20,6 +20,7 @@ package io.seqera.lock.redis
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -241,6 +242,24 @@ class RedisLockManagerTest extends Specification implements BaseRedisTest {
         cleanup:
         lock?.release()
         lock2?.release()
+    }
+
+    def 'should release the key when the watchdog cannot be started'() {
+        given: 'a scheduler that rejects new tasks, as during shutdown'
+        def executor = Executors.newScheduledThreadPool(1)
+        executor.shutdown()
+        def config = new LockConfig('test')
+        config.setWatchdogEnabled(true)
+        def manager = new RedisLockManager(config, jedisPool, new ScheduledExecutorTaskScheduler(executor))
+
+        when:
+        manager.tryAcquire('test-lock-rejected')
+
+        then: 'the error is propagated'
+        thrown(RejectedExecutionException)
+
+        and: 'the key is not left behind'
+        jedisPool.resource.withCloseable { it.exists('test-lock-rejected') } == false
     }
 
     def 'should work across multiple manager instances'() {

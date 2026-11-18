@@ -15,10 +15,10 @@ This module provides:
 dependencies {
     // High-level API with lib-lock abstraction (recommended)
     implementation 'io.seqera:lib-lock:1.1.0'
-    runtimeOnly 'io.seqera:lib-lock-redis:1.1.0'
+    runtimeOnly 'io.seqera:lib-lock-redis:1.1.1'
 
     // Or low-level API only
-    implementation 'io.seqera:lib-lock-redis:1.1.0'
+    implementation 'io.seqera:lib-lock-redis:1.1.1'
 }
 ```
 
