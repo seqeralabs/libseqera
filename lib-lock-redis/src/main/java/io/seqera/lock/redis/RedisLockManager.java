@@ -56,20 +56,31 @@ public class RedisLockManager implements LockManager {
     @Override
     public Lock tryAcquire(String lockKey) {
         final String instanceId = UUID.randomUUID().toString();
+        final String result;
         try (var jedis = jedisPool.getResource()) {
-            String result = jedis.set(lockKey, instanceId,
+            result = jedis.set(lockKey, instanceId,
                     new SetParams().nx().px(config.getAutoExpireDuration().toMillis()));
-            if ("OK".equals(result)) {
-                log.trace("Redis lock acquired: lockKey={}", lockKey);
-                var lock = new RedisLock(jedisPool, lockKey, instanceId);
-                if (config.isWatchdogEnabled()) {
-                    lock.startWatchdog(config.getAutoExpireDuration(), scheduler);
-                }
-                return lock;
+        }
+        if (!"OK".equals(result)) {
+            log.trace("Redis lock not available: lockKey={}", lockKey);
+            return null;
+        }
+        log.trace("Redis lock acquired: lockKey={}", lockKey);
+        var lock = new RedisLock(jedisPool, lockKey, instanceId);
+        if (config.isWatchdogEnabled()) {
+            try {
+                lock.startWatchdog(config.getAutoExpireDuration(), scheduler);
+            }
+            catch (RuntimeException e) {
+                // the key is already set but the caller never gets the lock,
+                // so release it now, otherwise it stays held until it expires
+                // (e.g. the scheduler rejects the task during shutdown)
+                log.warn("Unable to start lock watchdog, releasing lock: lockKey={}, error={}", lockKey, e.toString());
+                lock.release();
+                throw e;
             }
         }
-        log.trace("Redis lock not available: lockKey={}", lockKey);
-        return null;
+        return lock;
     }
 
     @Override
