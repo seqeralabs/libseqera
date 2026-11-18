@@ -71,11 +71,11 @@ public class RedisLockManager implements LockManager {
             try {
                 lock.startWatchdog(config.getAutoExpireDuration(), scheduler);
             }
-            catch (RuntimeException | Error e) {
+            catch (RuntimeException e) {
                 // the key is already set but the caller never gets the lock,
                 // so release it now, otherwise it stays held until it expires
                 // (e.g. the scheduler rejects the task during shutdown)
-                log.warn("Unable to start lock watchdog, releasing lock: lockKey={}", lockKey, e);
+                log.warn("Unable to start lock watchdog, releasing lock: lockKey={}, error={}", lockKey, e.toString());
                 lock.release();
                 throw e;
             }
