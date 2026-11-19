@@ -19,7 +19,6 @@ package io.seqera.service.pairing.socket.msg
 
 import groovy.transform.Canonical
 import groovy.transform.CompileStatic
-import groovy.transform.ToString
 
 /**
  * Model a remote HTTP request send via WebSocket connection
@@ -28,7 +27,6 @@ import groovy.transform.ToString
  */
 @Canonical
 @CompileStatic
-@ToString(includePackage = false, includeNames = true)
 class ProxyHttpRequest implements PairingMessage {
     String msgId
     String method
@@ -36,4 +34,14 @@ class ProxyHttpRequest implements PairingMessage {
     String auth
     String body
     Map<String, List<String>> headers
+
+    @Override
+    String toString() {
+        return "ProxyHttpRequest(msgId:$msgId" +
+                ", method:$method" +
+                ", uri:$uri" +
+                ", auth:${MessageRedact.value(auth)}" +
+                ", body:${MessageRedact.value(body)}" +
+                ", headers:${MessageRedact.headers(headers)})"
+    }
 }

@@ -34,6 +34,7 @@ dependencies {
 
     // State/Queue stores
     implementation project(':lib-lang')
+    implementation project(':lib-util-string')
     implementation project(':lib-retry')
     implementation project(':lib-data-store-state-redis')
     implementation project(':lib-data-store-future-redis')

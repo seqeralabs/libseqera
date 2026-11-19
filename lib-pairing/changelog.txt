@@ -1,5 +1,11 @@
 # lib-pairing changelog
 
+1.2.1
+- Redact the credentials carried by ProxyHttpRequest and ProxyHttpResponse in toString, so the
+  bearer, the request body and the Set-Cookie of a token refresh no longer reach the logs through
+  PairingWebSocket's "Sending/Receiving/Failed to send message=" statements
+- Redact the license token in the PairingWebSocket validation failure logs
+
 1.2.0
 - Close pairing sessions with no heartbeat within `wave.pairing.heartbeat-timeout` (default 120s):
   a connection dropped without a close frame left a half-open session registered, silently taking
