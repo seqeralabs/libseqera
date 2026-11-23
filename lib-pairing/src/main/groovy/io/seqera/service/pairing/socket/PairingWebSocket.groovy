@@ -220,28 +220,30 @@ class PairingWebSocket {
     }
 
     protected boolean isLicenseTokenValid(String token, String endpoint) {
+        // redact once, so no log statement in this method can reach for the raw token
+        final masked = StringUtils.redact(token)
         try {
             final resp = licenseValidator.checkToken(token, "tower-enterprise")
             if( !resp ) {
-                log.warn "Failed license token validation for endpoint: ${endpoint}; token: ${StringUtils.redact(token)}"
+                log.warn "Failed license token validation for endpoint: ${endpoint}; token: ${masked}"
                 return false
             }
 
             if( resp.expiration.isBefore(Instant.now()) ) {
                 // just warn about the license expiration - due not return return false
                 // to prevent the interruption of the service
-                log.warn "Expired license for customer with endpoint: ${endpoint}; token: ${StringUtils.redact(token)}"
+                log.warn "Expired license for customer with endpoint: ${endpoint}; token: ${masked}"
             }
             else {
-                log.info "Validated license for customer with endpoint: ${endpoint}; token: ${token}"
+                log.info "Validated license for customer with endpoint: ${endpoint}; token: ${masked}"
             }
             return true
         }
         catch (HttpClientResponseException e) {
-            log.error "Failed license token validation - Unexpected response for endpoint: ${endpoint}; token: ${StringUtils.redact(token)}; status: ${e.status.code}; message: ${e.message}"
+            log.error "Failed license token validation - Unexpected response for endpoint: ${endpoint}; token: ${masked}; status: ${e.status.code}; message: ${e.message}"
         }
         catch (Throwable e) {
-            log.error "Failed license token validation - Unexpected exception for endpoint: ${endpoint}; token: ${StringUtils.redact(token)} - cause: ${e.message}", e
+            log.error "Failed license token validation - Unexpected exception for endpoint: ${endpoint}; token: ${masked} - cause: ${e.message}", e
         }
         // return 'true' when it's not possible to verify the license due to expected errors
         // to prevent a valid license is rejected due to transitory failures

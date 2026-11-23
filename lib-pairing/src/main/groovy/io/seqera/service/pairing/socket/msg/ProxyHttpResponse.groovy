@@ -19,6 +19,7 @@ package io.seqera.service.pairing.socket.msg
 
 import groovy.transform.Canonical
 import groovy.transform.CompileStatic
+import io.seqera.util.string.StringUtils
 
 /**
  * Model a remote HTTP response send via WebSocket connection
@@ -35,9 +36,6 @@ class ProxyHttpResponse implements PairingMessage {
 
     @Override
     String toString() {
-        return "ProxyHttpResponse(msgId:$msgId" +
-                ", status:$status" +
-                ", body:${MessageRedact.value(body)}" +
-                ", headers:${MessageRedact.headers(headers)})"
+        return "ProxyHttpResponse(msgId:$msgId, status:$status, body:${StringUtils.redact(body)}, headers:${MessageRedact.headers(headers)})"
     }
 }

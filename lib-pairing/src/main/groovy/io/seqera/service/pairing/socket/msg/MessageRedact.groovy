@@ -38,17 +38,13 @@ class MessageRedact {
         return false
     }
 
-    static String value(String it) {
-        return it!=null ? StringUtils.redact(it) : null
-    }
-
     static Map<String,List<String>> headers(Map<String,List<String>> headers) {
         if( headers==null )
             return null
         final result = new LinkedHashMap<String,List<String>>(headers.size())
         for( Map.Entry<String,List<String>> entry : headers ) {
             result.put(entry.key, isSensitiveHeader(entry.key)
-                    ? entry.value?.collect(it -> StringUtils.redact(it))
+                    ? entry.value?.collect { StringUtils.redact(it) }
                     : entry.value)
         }
         return result

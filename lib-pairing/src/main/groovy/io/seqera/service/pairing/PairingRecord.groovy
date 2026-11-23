@@ -36,7 +36,7 @@ import groovy.transform.ToString
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Canonical
-@ToString(excludes = 'privateKey')
+@ToString(excludes = ['privateKey','token'])
 class PairingRecord {
     String service
     String endpoint
