@@ -267,7 +267,8 @@ abstract class AbstractMessageQueue<M> implements Runnable {
                             sent++
                         }
                         catch (WebSocketSessionException e) {
-                            log.warn "Unable to send message ${value} - cause: ${e.message}"
+                            // the payload is opaque here and may carry credentials - log its size, never its content
+                            log.warn "Unable to send message to ${target} (${value.length()} chars) - cause: ${e.message}"
                             // it could not manage to send the event
                             // offer back the value to be processed again
                             broker.offer(target, value)
