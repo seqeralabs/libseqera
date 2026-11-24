@@ -79,7 +79,7 @@ class RedisMessageQueue implements MessageQueue<String>  {
      */
     int length(String target) {
         try (Jedis conn = pool.getResource()) {
-            return conn.llen(target)
+            return conn.llen(target) as int
         }
     }
 }

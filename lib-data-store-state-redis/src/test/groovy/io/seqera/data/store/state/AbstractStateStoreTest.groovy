@@ -70,7 +70,7 @@ class AbstractStateStoreTest extends Specification {
 
         @Override
         protected Duration getDuration() {
-            return Duration.ofMillis(ttlMillis)
+            return Duration.ofMillis(AbstractStateStoreTest.ttlMillis)
         }
     }
 

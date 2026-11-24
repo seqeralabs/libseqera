@@ -64,13 +64,18 @@ dependencies {
 
     testImplementation 'ch.qos.logback:logback-core:1.5.25'
     testImplementation 'ch.qos.logback:logback-classic:1.5.25'
-    testImplementation "org.apache.groovy:groovy:4.0.31"
-    testImplementation "org.apache.groovy:groovy-nio:4.0.31"
-    testImplementation "org.apache.groovy:groovy-test:4.0.31"
+    testImplementation "org.apache.groovy:groovy:${groovyVersion}"
+    testImplementation "org.apache.groovy:groovy-nio:${groovyVersion}"
+    testImplementation "org.apache.groovy:groovy-test:${groovyVersion}"
     testImplementation "cglib:cglib-nodep:3.3.0"
+    // Spock 2.4 refuses cglib on Java 21+; class mocks need byte-buddy
+    testImplementation "net.bytebuddy:byte-buddy:1.18.17"
     testImplementation "org.objenesis:objenesis:3.4"
-    testImplementation "org.spockframework:spock-core:2.3-groovy-4.0"
-    testImplementation "org.spockframework:spock-junit4:2.3-groovy-4.0"
+    testImplementation "org.spockframework:spock-core:${spockVersion}"
+    testImplementation "org.spockframework:spock-junit4:${spockVersion}"
+    // Gradle 9 no longer adds the JUnit Platform launcher to the test runtime classpath.
+    // No version: it aligns with the junit-bom that Spock brings in.
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.withType(Test) {
@@ -109,6 +114,12 @@ publishing {
     publications {
         maven(MavenPublication) {
             from(components.java)
+            // Publish the resolved dependency versions, not the declared ones: Micronaut
+            // modules re-resolve the Groovy/Spock artifacts declared by the shared conventions
+            versionMapping {
+                usage('java-api') { fromResolutionOf('runtimeClasspath') }
+                usage('java-runtime') { fromResolutionResult() }
+            }
             // Suppress test fixtures capability warnings for Maven POM compatibility
             suppressPomMetadataWarningsFor('testFixturesApiElements')
             suppressPomMetadataWarningsFor('testFixturesRuntimeElements')

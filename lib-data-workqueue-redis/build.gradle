@@ -37,10 +37,10 @@ dependencies {
 
     // Groovy dependencies only for tests
     testImplementation "io.micrometer:micrometer-core:1.15.12"
-    testImplementation "org.apache.groovy:groovy:4.0.31"
-    testImplementation "org.apache.groovy:groovy-nio:4.0.31"
-    testImplementation "org.apache.groovy:groovy-templates:4.0.31"
-    testImplementation "org.apache.groovy:groovy-json:4.0.31"
+    testImplementation "org.apache.groovy:groovy:${micronautGroovyVersion}"
+    testImplementation "org.apache.groovy:groovy-nio:${micronautGroovyVersion}"
+    testImplementation "org.apache.groovy:groovy-templates:${micronautGroovyVersion}"
+    testImplementation "org.apache.groovy:groovy-json:${micronautGroovyVersion}"
     testImplementation project(':lib-random')
     testImplementation project(':lib-serde')
     testImplementation project(':lib-retry')
