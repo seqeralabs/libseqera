@@ -38,6 +38,6 @@ class ProxyHttpRequest implements PairingMessage {
 
     @Override
     String toString() {
-        return "ProxyHttpRequest(msgId:$msgId, method:$method, uri:$uri, auth:${StringUtils.redact(auth)}, body:${StringUtils.redact(body)}, headers:${MessageRedact.headers(headers)})"
+        return "ProxyHttpRequest(msgId:$msgId, method:$method, uri:${MessageRedact.uri(uri)}, auth:${StringUtils.redact(auth)}, body:${StringUtils.redact(body)}, headers:${MessageRedact.headers(headers)})"
     }
 }

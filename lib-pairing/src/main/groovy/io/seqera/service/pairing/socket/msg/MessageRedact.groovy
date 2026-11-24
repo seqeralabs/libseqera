@@ -50,4 +50,12 @@ class MessageRedact {
         return result
     }
 
+    /** Keep the path readable but mask the query string: a token can be carried as a query param */
+    static String uri(String uri) {
+        if( uri==null )
+            return null
+        final int p = uri.indexOf('?')
+        return p==-1 ? uri : uri.substring(0,p) + '?' + StringUtils.redact(uri.substring(p+1))
+    }
+
 }

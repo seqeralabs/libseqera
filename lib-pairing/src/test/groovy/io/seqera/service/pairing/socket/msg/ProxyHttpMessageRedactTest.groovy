@@ -66,6 +66,35 @@ class ProxyHttpMessageRedactTest extends Specification {
         str.contains('application/json')
     }
 
+    def 'should mask the query string of the request uri' () {
+        expect:
+        MessageRedact.uri(REQUEST_URI) == EXPECTED
+
+        where:
+        REQUEST_URI                                    | EXPECTED
+        null                                           | null
+        '/oauth/access_token'                          | '/oauth/access_token'
+        '/oauth/access_token?access_token=abc'         | '/oauth/access_token?acc****'
+        '/api/x?token=the-access-token-value'          | '/api/x?tok****'
+        '/api/x?'                                      | '/api/x?(empty)'
+    }
+
+    def 'should not expose a token carried in the request uri query string' () {
+        given:
+        def req = new ProxyHttpRequest(
+                msgId: 'msg-123',
+                method: 'GET',
+                uri: 'http://foo.com/oauth/access_token?access_token=the-access-token' )
+
+        when:
+        def str = req.toString()
+
+        then:
+        !str.contains('the-access-token')
+        and: 'the path stays readable'
+        str.contains('/oauth/access_token')
+    }
+
     def 'should match credential header names regardless of case' () {
         expect:
         MessageRedact.isSensitiveHeader(HEADER) == EXPECTED

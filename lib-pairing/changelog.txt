@@ -6,6 +6,7 @@
   PairingWebSocket's "Sending/Receiving/Failed to send message=" statements
 - Redact the license token in every PairingWebSocket validation log, the success path included
 - Exclude the license token from PairingRecord's toString, alongside the private key
+- Mask the query string of the ProxyHttpRequest uri, so a token passed as a query param is not logged
 
 1.2.0
 - Close pairing sessions with no heartbeat within `wave.pairing.heartbeat-timeout` (default 120s):
