@@ -31,7 +31,7 @@ dependencies {
     implementation "io.micronaut:micronaut-runtime:${micronautCoreVersion}"
 
     testImplementation "io.micronaut:micronaut-inject-groovy:${micronautCoreVersion}"
-    testImplementation 'org.spockframework:spock-core:2.3-groovy-4.0'
+    testImplementation "org.spockframework:spock-core:${micronautSpockVersion}"
 }
 
 test {

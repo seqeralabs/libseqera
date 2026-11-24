@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java_version: [21]
+        java_version: [25]
 
     steps:
       - name: Environment
@@ -40,7 +40,7 @@ jobs:
         uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           java-version: ${{matrix.java_version}}
-          distribution: 'adopt'
+          distribution: 'temurin'
           architecture: x64
           cache: gradle
 

@@ -28,7 +28,7 @@ plugins {
 }
 
 dependencies {
-    implementation "org.apache.groovy:groovy:4.0.31"
+    implementation "org.apache.groovy:groovy:${groovyVersion}"
 }
 
 group = 'io.seqera'
