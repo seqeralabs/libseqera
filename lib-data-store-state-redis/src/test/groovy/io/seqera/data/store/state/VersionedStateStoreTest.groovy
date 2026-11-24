@@ -89,7 +89,7 @@ class VersionedStateStoreTest extends Specification {
 
         @Override
         protected Duration getDuration() {
-            return Duration.ofMillis(ttlMillis)
+            return Duration.ofMillis(VersionedStateStoreTest.ttlMillis)
         }
     }
 

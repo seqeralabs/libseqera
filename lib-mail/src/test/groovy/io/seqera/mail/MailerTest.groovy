@@ -181,17 +181,17 @@ class MailerTest extends Specification {
         mailer.sendAll([], [:])
         then:
         0 * mailer.getTransport0() >> null
-        0 * mailer.createMessageAndSend0(_) >> null
+        0 * mailer.createMessageAndSend0(_)
 
         when:
         mailer.sendAll([m1,m2], actions)
         then:
         1 * mailer.getTransport0() >> trasp
         and:
-        1 * trasp.connect(_, _, _, _) >> null
+        1 * trasp.connect(_, _, _, _)
         and:
-        1 * mailer.createMessageAndSend0(trasp, m1, actions) >> null
-        1 * mailer.createMessageAndSend0(trasp, m2, actions) >> null
+        1 * mailer.createMessageAndSend0(trasp, m1, actions) >> {}
+        1 * mailer.createMessageAndSend0(trasp, m2, actions) >> {}
         and:
         1 * trasp.close()
     }
@@ -251,7 +251,7 @@ class MailerTest extends Specification {
 
         then:
         1 * mailer.createMimeMessage(mail) >> MSG
-        1 * provider.send(MSG, mailer) >> null
+        1 * provider.send(MSG, mailer)
     }
 
 

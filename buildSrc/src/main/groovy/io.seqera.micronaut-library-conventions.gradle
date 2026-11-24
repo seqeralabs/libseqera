@@ -45,3 +45,19 @@ dependencies {
     // Importing the project's own core BOM keeps all core modules at micronautCoreVersion.
     testImplementation platform("io.micronaut:micronaut-core-bom:${micronautCoreVersion}")
 }
+
+// SPIKE (Micronaut 5): Micronaut 5 requires Groovy 5 and Spock 2.4-groovy-5.0. Groovy 4 is
+// pinned across the build (conventions and module build files), so force the Groovy 5 line
+// for Micronaut modules only; non-Micronaut modules stay on Groovy 4.
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'org.apache.groovy') {
+            details.useVersion '5.0.8'
+            details.because 'Micronaut 5 requires Groovy 5'
+        }
+        if (details.requested.group == 'org.spockframework') {
+            details.useVersion '2.4-groovy-5.0'
+            details.because 'Spock build matching Groovy 5'
+        }
+    }
+}
