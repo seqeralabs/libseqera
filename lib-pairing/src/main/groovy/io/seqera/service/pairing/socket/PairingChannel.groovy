@@ -22,6 +22,7 @@ import java.util.concurrent.CompletableFuture
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 import io.seqera.data.queue.MessageSender
+import io.seqera.service.pairing.PairingEndpoint
 import io.seqera.service.pairing.socket.msg.PairingMessage
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
@@ -99,7 +100,8 @@ class PairingChannel {
     }
 
     private static String clientTarget(String service, String uri) {
-        final endpoint = uri.replace('http://','').replace('https://','')
+        // route every spelling of the same address to the same clients, as the pairing key does
+        final endpoint = PairingEndpoint.normalise(uri).replace('http://','').replace('https://','')
         return "${service}:${endpoint}".toString()
     }
 
