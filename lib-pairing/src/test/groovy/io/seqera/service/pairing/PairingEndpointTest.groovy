@@ -77,4 +77,22 @@ class PairingEndpointTest extends Specification {
         PairingChannel.clientTarget('tower', 'https://foo.com/api') == 'tower:foo.com/api'
         PairingChannel.clientTarget('tower', 'HTTPS://FOO.com:443/api/') == 'tower:foo.com/api'
     }
+
+    def 'should not fail routing an empty endpoint' () {
+        expect:
+        PairingChannel.clientTarget('tower', '') == 'tower:'
+        PairingChannel.clientTarget('tower', null) == 'tower:'
+    }
+
+    def 'should normalise independently of the default locale' () {
+        given:
+        def saved = Locale.getDefault()
+        Locale.setDefault(Locale.forLanguageTag('tr-TR'))
+
+        expect:
+        PairingEndpoint.normalise('HTTPS://API.acme.IO/api') == 'https://api.acme.io/api'
+
+        cleanup:
+        Locale.setDefault(saved)
+    }
 }

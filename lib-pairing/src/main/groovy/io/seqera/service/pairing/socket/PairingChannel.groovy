@@ -101,7 +101,8 @@ class PairingChannel {
 
     private static String clientTarget(String service, String uri) {
         // route every spelling of the same address to the same clients, as the pairing key does
-        final endpoint = PairingEndpoint.normalise(uri).replace('http://','').replace('https://','')
+        // an empty endpoint normalises to null: keep the 'service:' target it had before
+        final endpoint = (PairingEndpoint.normalise(uri) ?: '').replace('http://','').replace('https://','')
         return "${service}:${endpoint}".toString()
     }
 

@@ -19,6 +19,7 @@ package io.seqera.service.pairing.socket
 
 import java.time.Duration
 import java.time.Instant
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 import groovy.transform.CompileStatic
@@ -255,7 +256,8 @@ class PairingWebSocket {
         // match the canonical form, so a change of case can't slip past the list
         final target = PairingEndpoint.normalise(endpoint)
         for( String it : config.denyHosts ) {
-            if( target?.contains(it) )
+            // lowercase the entry too, or a mis-cased entry would never match the canonical form
+            if( it && target?.contains(it.toLowerCase(Locale.ROOT)) )
                 return true
         }
         return false

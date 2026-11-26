@@ -17,6 +17,8 @@
 
 package io.seqera.service.pairing
 
+import java.util.Locale
+
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 
@@ -28,6 +30,11 @@ import groovy.util.logging.Slf4j
  * default port or a trailing slash resolve to one pairing, instead of letting each spelling be
  * paired, and answered, separately.
  *
+ * <p><b>The output of {@link #normalise} is frozen.</b> It is part of persisted identities: the
+ * pairing store key here, and the private build id Wave derives from the tenant endpoint. Any
+ * change to it, however small, re-keys every existing pairing and shifts every such id. Treat a
+ * change as a breaking one and coordinate it with Wave's {@code ContainerHelper.normalisePlatformEndpoint}.
+ *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Slf4j
@@ -36,7 +43,8 @@ class PairingEndpoint {
 
     /**
      * Lowercase the scheme and host, drop the default port and any trailing slash. The path keeps
-     * its case. Rebuilding the URI also drops any user info, query string and fragment. A value
+     * its case. Lower-casing uses {@link Locale#ROOT}, so the result does not depend on the JVM
+     * default locale (e.g. a Turkish one maps {@code I} to a dotless {@code ı}). Rebuilding the URI also drops any user info, query string and fragment. A value
      * that is not an absolute URL is only trimmed.
      *
      * @param endpoint the endpoint as declared by the client
@@ -51,10 +59,10 @@ class PairingEndpoint {
             final uri = new URI(result)
             if( !uri.scheme || !uri.host )
                 return result
-            final scheme = uri.scheme.toLowerCase()
+            final scheme = uri.scheme.toLowerCase(Locale.ROOT)
             final port = uri.port == defaultPort0(scheme) ? -1 : uri.port
             final path = uri.path.replaceAll('/+$', '')
-            return new URI(scheme, null, uri.host.toLowerCase(), port, path, null, null).toString()
+            return new URI(scheme, null, uri.host.toLowerCase(Locale.ROOT), port, path, null, null).toString()
         }
         catch( URISyntaxException e ) {
             log.debug "Unable to normalise pairing endpoint: '$endpoint' - cause: ${e.message}"

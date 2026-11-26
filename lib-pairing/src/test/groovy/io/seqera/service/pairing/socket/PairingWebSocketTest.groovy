@@ -97,7 +97,7 @@ class PairingWebSocketTest extends Specification {
     }
     def 'should deny a host whatever the case of the endpoint' () {
         given:
-        def config = Mock(PairingConfig) { getDenyHosts() >> ['ngrok.app', '//localhost'] }
+        def config = Mock(PairingConfig) { getDenyHosts() >> ['ngrok.app', '//localhost', 'EVIL.COM'] }
         def socket = new PairingWebSocket(config: config)
 
         expect:
@@ -109,6 +109,12 @@ class PairingWebSocketTest extends Specification {
         'https://FOO.NGROK.APP'         | true
         'HTTP://LOCALHOST:8000'         | true
         'https://foo.com/api'           | false
+        // an upper-case entry still matches
+        'https://foo.evil.com'          | true
+        'https://FOO.EVIL.COM'          | true
+        // no endpoint
+        null                            | false
+        ''                              | false
     }
 
 }
