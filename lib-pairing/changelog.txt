@@ -6,7 +6,7 @@
   deny-host check. Spellings of one address now resolve to one pairing instead of each being
   paired, and answered, separately, and a change of case no longer slips past `denyHosts`.
   Records paired under a canonical spelling keep their key; others are re-paired on the next
-  heartbeat, which closes the session when the record is missing
+  heartbeat, which closes the session when the record is missing (#177)
 
 1.2.1
 - Redact the credentials carried by ProxyHttpRequest and ProxyHttpResponse in toString, so the
