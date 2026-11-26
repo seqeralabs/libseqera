@@ -1,5 +1,13 @@
 # lib-pairing changelog
 
+1.3.0
+- Normalise the paired endpoint (PairingEndpoint.normalise: scheme and host lowercased, default
+  port and trailing slash dropped) in the pairing store key, the channel routing target and the
+  deny-host check. Spellings of one address now resolve to one pairing instead of each being
+  paired, and answered, separately, and a change of case no longer slips past `denyHosts`.
+  Records paired under a canonical spelling keep their key; others are re-paired on the next
+  heartbeat, which closes the session when the record is missing
+
 1.2.1
 - Redact the credentials carried by ProxyHttpRequest and ProxyHttpResponse in toString, so the
   bearer, the request body and the Set-Cookie of a token refresh no longer reach the logs through

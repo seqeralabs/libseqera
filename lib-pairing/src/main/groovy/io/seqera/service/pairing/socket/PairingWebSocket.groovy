@@ -19,6 +19,7 @@ package io.seqera.service.pairing.socket
 
 import java.time.Duration
 import java.time.Instant
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 import groovy.transform.CompileStatic
@@ -38,6 +39,7 @@ import io.micronaut.websocket.annotation.OnOpen
 import io.micronaut.websocket.annotation.ServerWebSocket
 import io.seqera.service.pairing.LicenseValidator
 import io.seqera.service.pairing.PairingConfig
+import io.seqera.service.pairing.PairingEndpoint
 import io.seqera.service.pairing.PairingService
 import io.seqera.service.pairing.socket.msg.PairingHeartbeat
 import io.seqera.service.pairing.socket.msg.PairingMessage
@@ -251,8 +253,11 @@ class PairingWebSocket {
     }
 
     protected boolean isDenyHost(String endpoint) {
+        // match the canonical form, so a change of case can't slip past the list
+        final target = PairingEndpoint.normalise(endpoint)
         for( String it : config.denyHosts ) {
-            if( endpoint.contains(it) )
+            // lowercase the entry too, or a mis-cased entry would never match the canonical form
+            if( it && target?.contains(it.toLowerCase(Locale.ROOT)) )
                 return true
         }
         return false

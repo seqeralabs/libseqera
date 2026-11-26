@@ -24,6 +24,7 @@ import java.util.concurrent.CompletableFuture
 import io.micronaut.websocket.CloseReason
 import io.micronaut.websocket.WebSocketSession
 import io.micronaut.websocket.annotation.OnMessage
+import io.seqera.service.pairing.PairingConfig
 import io.seqera.service.pairing.PairingRecord
 import io.seqera.service.pairing.PairingService
 import io.seqera.service.pairing.socket.msg.PairingHeartbeat
@@ -94,4 +95,26 @@ class PairingWebSocketTest extends Specification {
         and:
         socket.@heartbeats['sess-1'] != null
     }
+    def 'should deny a host whatever the case of the endpoint' () {
+        given:
+        def config = Mock(PairingConfig) { getDenyHosts() >> ['ngrok.app', '//localhost', 'EVIL.COM'] }
+        def socket = new PairingWebSocket(config: config)
+
+        expect:
+        socket.isDenyHost(ENDPOINT) == EXPECTED
+
+        where:
+        ENDPOINT                        | EXPECTED
+        'https://foo.ngrok.app'         | true
+        'https://FOO.NGROK.APP'         | true
+        'HTTP://LOCALHOST:8000'         | true
+        'https://foo.com/api'           | false
+        // an upper-case entry still matches
+        'https://foo.evil.com'          | true
+        'https://FOO.EVIL.COM'          | true
+        // no endpoint
+        null                            | false
+        ''                              | false
+    }
+
 }

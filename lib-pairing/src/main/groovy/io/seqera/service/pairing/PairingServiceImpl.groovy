@@ -85,7 +85,8 @@ class PairingServiceImpl implements PairingService {
     }
 
     protected static String makeKey(String service, String towerEndpoint) {
-        final attrs = [service: service, towerEndpoint: towerEndpoint] as Map<String,Object>
+        // one key for every spelling of the same address, see PairingEndpoint
+        final attrs = [service: service, towerEndpoint: PairingEndpoint.normalise(towerEndpoint)] as Map<String,Object>
         return CacheKey.md5(attrs)
     }
 
